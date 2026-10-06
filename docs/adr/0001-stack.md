@@ -16,14 +16,14 @@ The data is relational: recipes ↔ ingredients ↔ products ↔ prices/deals �
 
 ## Decision
 
-| Area | Choice |
-| --- | --- |
-| Platform | Web app only, designed mobile-first |
-| Frontend | React + TypeScript, built with Vite |
-| Backend/API | Python, FastAPI |
-| Database | Postgres on Supabase |
-| Auth | Supabase Auth (email magic link + Google) |
-| Hosting | Vercel for the web app and API; Supabase for DB/auth/storage |
+| Area        | Choice                                                       |
+| ----------- | ------------------------------------------------------------ |
+| Platform    | Web app only, designed mobile-first                          |
+| Frontend    | React + TypeScript, built with Vite                          |
+| Backend/API | Python, FastAPI                                              |
+| Database    | Postgres on Supabase                                         |
+| Auth        | Supabase Auth (email magic link + Google)                    |
+| Hosting     | Vercel for the web app and API; Supabase for DB/auth/storage |
 
 ### Rationale
 
@@ -41,6 +41,7 @@ The data is relational: recipes ↔ ingredients ↔ products ↔ prices/deals �
   2. A small worker on Fly.io or Railway if jobs outgrow that.
 
   The data-source spike (TYL-13) will settle this.
+
 - **Native later, if ever:** if a native app becomes worth it, React Native/Expo can reuse the API, auth, and generated client.
 
 ## Alternatives considered

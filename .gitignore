@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+.venv/
+
+# Build output
+dist/
+dist-ssr/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+*.log
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
