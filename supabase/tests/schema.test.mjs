@@ -561,3 +561,254 @@ describe('import_recipe', () => {
     )
   })
 })
+
+describe('crawler', () => {
+  const asApi = (sql, params) =>
+    as('service_role', null, async () => (await db.query(sql, params)).rows)
+
+  async function source(domain) {
+    const { rows } = await db.query(
+      `insert into recipe_sources (name, domain, crawl_enabled)
+       values ($1, $1, true) returning id`,
+      [domain],
+    )
+    return rows[0].id
+  }
+
+  const enqueue = async (sourceId, entries) =>
+    (
+      await asApi('select crawl_enqueue($1, $2) as n', [
+        sourceId,
+        JSON.stringify(entries),
+      ])
+    )[0].n
+
+  const pageStatus = async (url) =>
+    (
+      await db.query(
+        'select status, attempts from crawl_pages where url = $1',
+        [url],
+      )
+    ).rows[0]
+
+  it('queues new URLs once and re-queues them only when lastmod moves', async () => {
+    const src = await source('queue.example')
+    const a = 'https://queue.example/a/'
+    const b = 'https://queue.example/b/'
+    assert.equal(
+      await enqueue(src, [
+        { url: a, lastmod: '2026-09-01T00:00:00Z' },
+        { url: b, lastmod: null },
+        { url: b, lastmod: null },
+        { url: '' },
+      ]),
+      2,
+    )
+
+    await db.query(
+      `update crawl_pages set status = 'imported', fetched_lastmod = lastmod where url in ($1, $2)`,
+      [a, b],
+    )
+    assert.equal(
+      await enqueue(src, [
+        { url: a, lastmod: '2026-09-01T00:00:00Z' },
+        { url: b, lastmod: null },
+      ]),
+      0,
+    )
+    assert.equal(
+      await enqueue(src, [{ url: a, lastmod: '2026-09-15T00:00:00Z' }]),
+      1,
+    )
+    assert.equal((await pageStatus(a)).status, 'pending')
+    assert.equal((await pageStatus(b)).status, 'imported')
+  })
+
+  it('never re-queues blocked or disallowed pages, and retries errors 3 times', async () => {
+    const src = await source('stubborn.example')
+    const blocked = 'https://stubborn.example/blocked/'
+    const flaky = 'https://stubborn.example/flaky/'
+    await enqueue(src, [{ url: blocked }, { url: flaky }])
+    await db.query(`update crawl_pages set status = 'blocked' where url = $1`, [
+      blocked,
+    ])
+    await db.query(
+      `update crawl_pages set status = 'error', attempts = 2 where url = $1`,
+      [flaky],
+    )
+    assert.equal(
+      await enqueue(src, [{ url: blocked, lastmod: '2026-10-01T00:00:00Z' }]),
+      1,
+    )
+    assert.equal((await pageStatus(blocked)).status, 'blocked')
+
+    await db.query(`update crawl_pages set attempts = 3 where url = $1`, [
+      flaky,
+    ])
+    assert.equal(await enqueue(src, []), 0)
+    // A real change gives an errored page a fresh start.
+    assert.equal(
+      await enqueue(src, [{ url: flaky, lastmod: '2026-10-02T00:00:00Z' }]),
+      1,
+    )
+    assert.deepEqual(await pageStatus(flaky), {
+      status: 'pending',
+      attempts: 0,
+    })
+  })
+
+  it('does not let one source claim another source’s URL', async () => {
+    const mine = await source('mine.example')
+    const theirs = await source('theirs.example')
+    const url = 'https://mine.example/x/'
+    await enqueue(mine, [{ url }])
+    await enqueue(theirs, [{ url, lastmod: '2026-10-01T00:00:00Z' }])
+    const { rows } = await db.query(
+      'select source_id, lastmod from crawl_pages where url = $1',
+      [url],
+    )
+    assert.deepEqual(rows, [{ source_id: mine, lastmod: null }])
+  })
+
+  it('refreshes a changed recipe under the same content rules', async () => {
+    await source('refresh.example')
+    const base = {
+      added_by: null,
+      source: { domain: 'refresh.example' },
+      recipe: {
+        source_url: 'https://refresh.example/chili/',
+        title: 'Chili',
+        summary: 'Their headnote',
+        instructions: ['Their step'],
+      },
+      cuisines: ['mexican'],
+      ingredients: [{ line_no: 0, raw_text: '1 can beans' }],
+    }
+    const imp = async (p) =>
+      (await asApi('select import_recipe($1) as r', [p]))[0].r
+    const first = await imp(base)
+    assert.equal(first.visibility, 'public')
+    await db.query(`update recipes set status = 'active' where id = $1`, [
+      first.recipe_id,
+    ])
+
+    const changed = {
+      ...base,
+      recipe: { ...base.recipe, title: 'Better chili' },
+      cuisines: ['american'],
+      ingredients: [
+        { line_no: 0, raw_text: '2 cans beans' },
+        { line_no: 1, raw_text: '1 onion' },
+      ],
+    }
+    const skipped = await imp(changed)
+    assert.deepEqual([skipped.created, skipped.updated], [false, false])
+
+    const refreshed = await imp({ ...changed, refresh: true })
+    assert.deepEqual(
+      [
+        refreshed.recipe_id,
+        refreshed.created,
+        refreshed.updated,
+        refreshed.status,
+      ],
+      [first.recipe_id, false, true, 'needs_review'],
+    )
+    const { rows } = await db.query(
+      `select r.title, r.summary, r.instructions,
+              (select array_agg(raw_text order by line_no) from recipe_ingredients where recipe_id = r.id) as lines,
+              (select array_agg(cuisine_slug) from recipe_cuisines where recipe_id = r.id) as cuisines
+       from recipes r where r.id = $1`,
+      [first.recipe_id],
+    )
+    assert.deepEqual(rows[0], {
+      title: 'Better chili',
+      summary: null,
+      instructions: null,
+      lines: ['2 cans beans', '1 onion'],
+      cuisines: ['american'],
+    })
+  })
+
+  it('does not refresh a hidden or removed recipe', async () => {
+    await source('hidden.example')
+    const p = {
+      source: { domain: 'hidden.example' },
+      recipe: { source_url: 'https://hidden.example/x/', title: 'X' },
+    }
+    const { recipe_id } = (await asApi('select import_recipe($1) as r', [p]))[0]
+      .r
+    await db.query(`update recipes set status = 'removed' where id = $1`, [
+      recipe_id,
+    ])
+    const r = (
+      await asApi('select import_recipe($1) as r', [
+        { ...p, recipe: { ...p.recipe, title: 'Y' }, refresh: true },
+      ])
+    )[0].r
+    assert.equal(r.updated, false)
+    assert.equal(r.status, 'removed')
+  })
+
+  it('opting a source out hides its public recipes but not private copies', async () => {
+    const src = await source('leaving.example')
+    const pub = await recipe('Leaving public', [], {
+      url: 'https://leaving.example/pub/',
+    })
+    const priv = await recipe('Leaving private', [], {
+      url: 'https://leaving.example/priv/',
+      visibility: 'private',
+      addedBy: ALICE,
+    })
+    await db.query('update recipes set source_id = $1 where id in ($2, $3)', [
+      src,
+      pub,
+      priv,
+    ])
+    const [{ n }] = await asApi('select opt_out_source($1) as n', [src])
+    assert.equal(n, 1)
+
+    const { rows } = await db.query(
+      `select (select status from recipes where id = $2) as pub,
+              (select status from recipes where id = $3) as priv,
+              s.crawl_enabled, s.opted_out_at is not null as opted_out
+       from recipe_sources s where s.id = $1`,
+      [src, pub, priv],
+    )
+    assert.deepEqual(rows[0], {
+      pub: 'hidden',
+      priv: 'active',
+      crawl_enabled: false,
+      opted_out: true,
+    })
+  })
+
+  it('keeps the crawl tables and functions away from users', async () => {
+    const src = await source('private-queue.example')
+    await enqueue(src, [{ url: 'https://private-queue.example/a/' }])
+    await db.query('insert into crawl_runs (source_id) values ($1)', [src])
+    for (const [role, user] of [
+      ['anon', null],
+      ['authenticated', ALICE],
+    ]) {
+      const counts = await as(role, user, async () => {
+        const pages = await db.query(
+          'select count(*)::int as n from crawl_pages',
+        )
+        const runs = await db.query('select count(*)::int as n from crawl_runs')
+        return [pages.rows[0].n, runs.rows[0].n]
+      })
+      assert.deepEqual(counts, [0, 0])
+      await assert.rejects(
+        as(role, user, () =>
+          db.query('select crawl_enqueue($1, $2)', [src, '[]']),
+        ),
+        /only callable by the API/,
+      )
+      await assert.rejects(
+        as(role, user, () => db.query('select opt_out_source($1)', [src])),
+        /only callable by the API/,
+      )
+    }
+  })
+})

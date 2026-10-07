@@ -1,9 +1,11 @@
 import asyncio
+import gzip
 from collections.abc import Callable
 
 import httpx2 as httpx
 import pytest
 
+from app.recipes import fetch
 from app.recipes.fetch import FetchError, Page, fetch_page
 
 Handler = Callable[[httpx.Request], httpx.Response]
@@ -101,3 +103,76 @@ class TestPublicAddressesOnly:
         with pytest.raises(FetchError) as err:
             run(site(pages=pages), "http://8.8.8.8/r")
         assert err.value.code == "invalid_url"
+
+
+@pytest.mark.usefixtures("no_dns")
+class TestCrawlerSupport:
+    def test_sitemaps_are_refused_unless_asked_for(self) -> None:
+        xml = httpx.Response(200, text="<urlset/>", headers={"content-type": "application/xml"})
+        with pytest.raises(FetchError) as err:
+            run(site(pages={"/sitemap.xml": xml}), "https://example-blog.com/sitemap.xml")
+        assert err.value.code == "not_a_recipe"
+
+        async def go() -> Page:
+            transport = httpx.MockTransport(site(pages={"/sitemap.xml": xml}))
+            async with httpx.AsyncClient(transport=transport) as client:
+                return await fetch_page(
+                    "https://example-blog.com/sitemap.xml", client, accept=("xml",)
+                )
+
+        assert asyncio.run(go()).html == "<urlset/>"
+
+    def test_a_gzip_bomb_is_cut_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(fetch, "MAX_BYTES", 1000)
+        bomb = gzip.compress(b"a" * 10_000)
+        resp = httpx.Response(200, content=bomb, headers={"content-type": "application/gzip"})
+
+        async def go() -> Page:
+            transport = httpx.MockTransport(site(pages={"/s.xml.gz": resp}))
+            async with httpx.AsyncClient(transport=transport) as client:
+                return await fetch_page(
+                    "https://example-blog.com/s.xml.gz", client, accept=("gzip",)
+                )
+
+        with pytest.raises(FetchError) as err:
+            asyncio.run(go())
+        assert err.value.code == "too_large"
+
+    def test_reads_crawl_delay_and_sitemaps_from_robots(self) -> None:
+        robots = (
+            "User-agent: SousBot\nCrawl-delay: 12\n\n"
+            "Sitemap: https://example-blog.com/sitemap_index.xml\n"
+        )
+
+        async def go() -> tuple[float | None, list[str]]:
+            transport = httpx.MockTransport(site(robots))
+            headers = {"User-Agent": fetch.user_agent()}
+            async with httpx.AsyncClient(transport=transport, headers=headers) as client:
+                url = "https://example-blog.com/"
+                return (
+                    await fetch.robots.crawl_delay(client, url),
+                    await fetch.robots.sitemaps(client, url),
+                )
+
+        assert asyncio.run(go()) == (12.0, ["https://example-blog.com/sitemap_index.xml"])
+
+
+class TestThrottle:
+    def test_a_longer_crawl_delay_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        clock = [100.0]
+        monkeypatch.setattr("app.recipes.fetch.time.monotonic", lambda: clock[0])
+        throttle = fetch.Throttle(5.0)
+        waits: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            waits.append(seconds)
+
+        monkeypatch.setattr("app.recipes.fetch.asyncio.sleep", fake_sleep)
+
+        async def go() -> None:
+            await throttle.wait("a.example", crawl_delay=12.0)
+            await throttle.wait("a.example")  # 12s after the first
+            await throttle.wait("b.example", crawl_delay=1.0)  # other host: no wait
+
+        asyncio.run(go())
+        assert waits == [12.0]

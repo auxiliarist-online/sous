@@ -90,3 +90,26 @@ def test_a_second_import_reuses_the_recipe_and_shares_it(
 def test_every_mapped_cuisine_exists_in_the_database(db: psycopg.Connection) -> None:
     known = {slug for (slug,) in db.execute("select slug from cuisines").fetchall()}
     assert set(CUISINES.values()) <= known
+
+
+def test_the_crawler_refreshes_a_changed_page(db: psycopg.Connection) -> None:
+    db.execute(
+        "insert into recipe_sources (name, domain, crawl_enabled) "
+        "values ('Example Blog', 'example-blog.com', true)"
+    )
+    first = extract_recipe(page_html(RECIPE_LD), URL)
+    created = import_draft(db, first, None)
+    assert (created["created"], created["visibility"]) == (True, "public")
+
+    changed_ld = {**RECIPE_LD, "recipeIngredient": ["2 cans black beans", "8 corn tortillas"]}
+    changed = extract_recipe(page_html(changed_ld), URL)
+    row = db.execute(
+        "select import_recipe(%s::jsonb)", [json.dumps({**changed.payload(None), "refresh": True})]
+    ).fetchone()
+    assert row is not None
+    assert (row[0]["recipe_id"], row[0]["updated"]) == (created["recipe_id"], True)
+    lines = db.execute(
+        "select raw_text from recipe_ingredients where recipe_id = %s order by line_no",
+        [created["recipe_id"]],
+    ).fetchall()
+    assert lines == [("2 cans black beans",), ("8 corn tortillas",)]

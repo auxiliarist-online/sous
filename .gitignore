@@ -33,3 +33,6 @@ supabase/.temp/
 .coverage
 .coverage.*
 htmlcov/
+
+# Recovery phrase for SousBot email
+sousbot-proton-recovery-phrase.pdf

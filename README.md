@@ -74,6 +74,18 @@ npm run test:db   # database migrations + access rules
 .venv/bin/pytest --cov   # unit tests; see apps/api/tests/README.md for integration and live tests
 ```
 
+## Crawling recipe sites
+
+The crawler (`apps/api/app/crawl`, TYL-26) seeds the catalog from approved sites, following [docs/policies/recipe-sources.md](docs/policies/recipe-sources.md). It only crawls sources with `crawl_enabled` set, which happens after the per-site check in the policy (noted in `recipe_sources.crawl_notes`). It refuses to run until `SOUSBOT_CONTACT_URL` points at the live SousBot page.
+
+```sh
+cd apps/api
+.venv/bin/python -m app.crawl                         # every approved site, 100 pages each
+.venv/bin/python -m app.crawl --source example.com --max-pages 20
+```
+
+Each run reads the site's sitemaps, queues new or changed URLs (by `lastmod`), and fetches them at most once every 5 seconds per site (longer if `robots.txt` sets `Crawl-delay`). Progress is in `crawl_pages` and `crawl_runs`. It's meant to run nightly as a batch job; where that runs is still open (ADR 0001).
+
 ## Deploying the web app (Vercel)
 
 1. In the [Vercel dashboard](https://vercel.com/new), import the `auxiliarist-online/sous` GitHub repo.
