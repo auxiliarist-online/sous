@@ -26,6 +26,10 @@ jobs:
         with:
           fetch-depth: 1
       - uses: anthropics/claude-code-action@v1
+        env:
+          # The session ends when Claude's main turn ends, which kills background
+          # sub-agents before they report back. Keep them in the foreground.
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Temporary while we debug the first reviews: print Claude's steps in the job log
