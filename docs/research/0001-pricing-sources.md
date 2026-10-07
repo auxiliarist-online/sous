@@ -61,10 +61,10 @@ Every price records where it came from, so the UI can show "~$4 (estimate)" vs. 
 - Weekly ad and digital coupons are available on its website and app (Ingles Advantage card). No public API. This spike found no confirmation of Instacart or Flipp coverage for Ingles.
 - **Plan:** baseline estimates + user overrides. Revisit weekly ad data if Ingles turns out to be a main store.
 
-### Local co-op
+### Local co-op: French Broad Food Co-op
 
-- If the co-op belongs to National Co+op Grocers (168 co-ops), it runs the **Co+op Deals** sale program with a digital flyer and app. There is no API.
-- **Plan:** user overrides; optionally enter the main Co+op Deals items by hand each cycle. Which co-op is it?
+- French Broad Food Co-op (90 Biltmore Ave, Asheville) is a **National Co+op Grocers member**, so it runs the **Co+op Deals** sale program. Its current flyer is at [deals.coop/french-broad-food-co-op](https://www.deals.coop/french-broad-food-co-op/home). There is no API, and the flyer page loads its items with JavaScript, so a plain fetch sees no prices.
+- **Plan:** user overrides; optionally enter the main Co+op Deals items by hand each cycle. Reading the flyer automatically would mean rendering the page (e.g. the Firecrawl fallback) and needs a check of deals.coop's terms first.
 
 ### Farmers markets
 
@@ -87,7 +87,7 @@ Every price records where it came from, so the UI can show "~$4 (estimate)" vs. 
 
 1. **Register a Kroger developer app** (free, needs your account) and call the Locations API near your ZIP. Confirm Harris Teeter stores come back, then pull one product's price.
 2. **Read the Kroger API terms** for caching limits, attribution/branding, and any restrictions on paid apps.
-3. **Which co-op?** Check whether it's in the Co+op Deals program.
+3. ~~Which co-op?~~ Done: French Broad Food Co-op, an NCG member with a Co+op Deals flyer (see above).
 
 ## Effects on the backlog
 
