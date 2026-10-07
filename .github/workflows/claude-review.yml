@@ -1,0 +1,40 @@
+# Automatic Claude review when a PR is opened or marked ready (TYL-39).
+# Runs on the Claude subscription via CLAUDE_CODE_OAUTH_TOKEN, so to save
+# usage it doesn't re-run on every push: comment "@claude review" for another pass.
+name: Claude review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Temporary while we debug the first reviews: print Claude's steps in the job log
+          # (private repo, collaborators only). Remove once reviews post reliably.
+          show_full_output: true
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          # The code-review plugin launches sub-agents and reads the PR with gh;
+          # allowing only the inline-comment tool makes it stop at its first step.
+          claude_args: >-
+            --allowedTools "Task,Agent,Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*)"
