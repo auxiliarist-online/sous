@@ -4,7 +4,9 @@ version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
+    "httpx2>=2.13",
     "pydantic-settings>=2.6",
+    "recipe-scrapers>=15.12,<16",
 ]
 
 [project.optional-dependencies]
