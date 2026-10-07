@@ -1,0 +1,22 @@
+{
+  "name": "sous",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @sous/web --",
+    "build": "npm run build -w @sous/web --",
+    "lint": "npm run lint -w @sous/web --",
+    "typecheck": "npm run typecheck -w @sous/web --",
+    "test": "npm run test -w @sous/web --",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9"
+  }
+}
