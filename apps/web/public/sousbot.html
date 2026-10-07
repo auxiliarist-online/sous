@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#2f6b4f" />
+    <title>SousBot · Sous</title>
+    <meta
+      name="description"
+      content="SousBot is the recipe crawler for Sous. What it collects, how it links back to your site, and how to opt out."
+    />
+    <style>
+      :root {
+        --color-bg: #faf8f4;
+        --color-text: #1f2421;
+        --color-muted: #5c655f;
+        --color-accent: #2f6b4f;
+        --color-code-bg: #efece5;
+        --space: 16px;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        line-height: 1.6;
+        color: var(--color-text);
+        background: var(--color-bg);
+        -webkit-text-size-adjust: 100%;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --color-bg: #151917;
+          --color-text: #e8ece9;
+          --color-muted: #a3aca6;
+          --color-accent: #7cc4a0;
+          --color-code-bg: #222824;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--color-bg);
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: var(--space);
+        padding-block: calc(var(--space) * 2) calc(var(--space) * 4);
+      }
+      h1 {
+        margin: 0;
+        font-size: 2rem;
+        color: var(--color-accent);
+      }
+      h2 {
+        margin: 2rem 0 0.5rem;
+        font-size: 1.2rem;
+      }
+      .lede {
+        margin: 0.5rem 0 0;
+        color: var(--color-muted);
+        font-size: 1.1rem;
+      }
+      a {
+        color: var(--color-accent);
+      }
+      code,
+      pre {
+        font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        font-size: 0.9em;
+        background: var(--color-code-bg);
+        border-radius: 4px;
+      }
+      code {
+        padding: 0.1em 0.3em;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        padding: 0.75rem 1rem;
+        overflow-x: auto;
+      }
+      ul {
+        padding-left: 1.25rem;
+      }
+      li + li {
+        margin-top: 0.35rem;
+      }
+      .contact {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      footer {
+        margin-top: 3rem;
+        color: var(--color-muted);
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>SousBot</h1>
+      <p class="lede">
+        The recipe crawler for Sous, a meal planner that helps people find
+        recipes, cook within a weekly budget, and shop for them.
+      </p>
+
+      <h2>What it does</h2>
+      <p>
+        SousBot reads recipe pages so that Sous can help people find them. Each
+        recipe in Sous shows your site's name and a prominent
+        <strong>View full recipe</strong> button that sends readers to your
+        page. Sous is meant to send people to your site, not replace it.
+      </p>
+      <p>SousBot fetches pages in two ways:</p>
+      <ul>
+        <li>
+          <strong>When a Sous user saves a recipe link.</strong> We fetch that
+          one page.
+        </li>
+        <li>
+          <strong>Catalog crawls</strong> of a small set of food blogs, using
+          each site's sitemap. Pages are only re-fetched when the sitemap shows
+          they've changed.
+        </li>
+      </ul>
+
+      <h2>What we keep</h2>
+      <ul>
+        <li>
+          The recipe's title, ingredient list, times, servings, cuisine, and its
+          link
+        </li>
+        <li>
+          The address of your recipe photo. We show it from your site and never
+          copy or re-host it.
+        </li>
+      </ul>
+      <p>What we don't keep:</p>
+      <ul>
+        <li>
+          Your instructions, headnotes or stories: readers follow the link to
+          your site for those
+        </li>
+        <li>Reviews, comments, ratings or nutrition information</li>
+      </ul>
+      <p>
+        We never use your content to train AI models. Sous's assistant answers
+        from the details listed above and always links to your page.
+      </p>
+
+      <h2>How SousBot behaves</h2>
+      <ul>
+        <li>
+          It identifies itself with this user agent:
+          <code>SousBot/0.1 (+https://&lt;this page&gt;)</code>
+        </li>
+        <li>
+          It obeys <code>robots.txt</code>, including any
+          <code>Crawl-delay</code>, and re-checks it at least daily.
+        </li>
+        <li>
+          It makes at most one request to your site every 5 seconds, and catalog
+          crawls run in small batches overnight.
+        </li>
+        <li>
+          It stops when a site returns errors or asks it to slow down (<code
+            >429</code
+          >
+          or <code>503</code>).
+        </li>
+        <li>
+          It never tries to get past logins, paywalls, CAPTCHAs or bot
+          protection, and never pretends to be a browser or another bot.
+        </li>
+      </ul>
+
+      <h2>Blocking SousBot</h2>
+      <p>
+        To stop SousBot from reading your site, add this to your
+        <code>robots.txt</code>:
+      </p>
+      <pre><code>User-agent: SousBot
+Disallow: /</code></pre>
+      <p>
+        You can also block only part of your site with a narrower
+        <code>Disallow</code> path. SousBot picks up changes within a day.
+      </p>
+
+      <h2>Opt-out and removal requests</h2>
+      <p>
+        If you'd like your recipes removed from Sous, or have any other
+        question, email us:
+      </p>
+      <p class="contact">
+        <a href="mailto:SOUSBOT_CONTACT_EMAIL">SOUSBOT_CONTACT_EMAIL</a>
+      </p>
+      <ul>
+        <li>We reply within 3 business days.</li>
+        <li>
+          A whole-site removal stops all crawling and hides your recipes from
+          Sous search and discovery within 7 days.
+        </li>
+        <li>Single recipes can also be removed on request.</li>
+      </ul>
+
+      <footer>
+        <p>Sous is an independent project. Last updated October 7, 2026.</p>
+      </footer>
+    </main>
+  </body>
+</html>
