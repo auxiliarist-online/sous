@@ -13,7 +13,9 @@ dependencies = [
 dev = [
     "httpx2>=2.13",
     "mypy>=1.13",
+    "psycopg[binary]>=3.2",
     "pytest>=8.3",
+    "pytest-cov>=6.0",
     "ruff>=0.8",
     "uvicorn[standard]>=0.32",
 ]
@@ -39,3 +41,18 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["--strict-markers", "-ra"]
+markers = [
+    "unit: fast tests with no network or database (tests/unit)",
+    "integration: need Postgres at SOUS_TEST_DATABASE_URL (tests/integration)",
+    "live: fetch real websites; run with --live (tests/live)",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true

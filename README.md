@@ -71,7 +71,7 @@ npm run test:db   # database migrations + access rules
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
 .venv/bin/mypy app tests
-.venv/bin/pytest
+.venv/bin/pytest --cov   # unit tests; see apps/api/tests/README.md for integration and live tests
 ```
 
 ## Deploying the web app (Vercel)

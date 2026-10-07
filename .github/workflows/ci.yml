@@ -26,6 +26,19 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    services:
+      # Throwaway database for tests/integration; migrations are applied by the tests.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SOUS_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SOUS_TEST_DB_FRESH: '1'
+      SOUS_TEST_REQUIRE_DB: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,7 +50,7 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy app tests
-      - run: pytest
+      - run: pytest --cov --cov-report=term
 
   db:
     runs-on: ubuntu-latest
