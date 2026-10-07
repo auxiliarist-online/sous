@@ -7,7 +7,7 @@ import pytest
 from app.pricing.estimate import Ingredient, PriceQuote, estimate_cost
 from app.pricing.units import UnknownUnitError, convert, normalize_unit
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 VALID_CONTAINS = {
     "meat", "pork", "poultry", "fish", "shellfish", "gelatin", "animal_rennet",
     "dairy", "egg", "honey", "gluten", "tree_nut", "peanut", "soy", "sesame", "alcohol",

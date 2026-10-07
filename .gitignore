@@ -28,3 +28,8 @@ __pycache__/
 
 # Supabase CLI
 supabase/.temp/
+
+# Python test artifacts
+.coverage
+.coverage.*
+htmlcov/
