@@ -25,3 +25,6 @@ __pycache__/
 !.vscode/extensions.json
 .idea/
 .DS_Store
+
+# Supabase CLI
+supabase/.temp/

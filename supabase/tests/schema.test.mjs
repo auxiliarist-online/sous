@@ -44,9 +44,12 @@ async function as(role, userId, fn) {
   }
 }
 
+// Seeded ingredients (e.g. soy sauce) are reused, with the test's categories.
 async function ingredient(name, contains = []) {
   const { rows } = await db.query(
-    'insert into ingredients (name, contains) values ($1, $2) returning id',
+    `insert into ingredients (name, contains) values ($1, $2)
+     on conflict ((lower(name))) do update set contains = excluded.contains
+     returning id`,
     [name, contains],
   )
   return rows[0].id
@@ -108,6 +111,18 @@ describe('reference data', () => {
     assert.ok(rows[0].diets >= 5)
     assert.ok(rows[0].cuisines >= 20)
     assert.equal(rows[0].ht, 'kroger_api')
+  })
+
+  it('seeds baseline prices for every seeded ingredient', async () => {
+    const { rows } = await db.query(`
+      select (select count(*) from ingredients)::int as ingredients,
+             (select count(*) from prices where source in ('baseline_bls', 'baseline_usda', 'seed'))::int as prices,
+             (select count(*) from ingredients i
+                where not exists (select 1 from prices p where p.ingredient_id = i.id))::int as unpriced
+    `)
+    assert.ok(rows[0].prices >= 100)
+    assert.equal(rows[0].prices, rows[0].ingredients)
+    assert.equal(rows[0].unpriced, 0)
   })
 
   it('rejects unknown ingredient categories', async () => {
