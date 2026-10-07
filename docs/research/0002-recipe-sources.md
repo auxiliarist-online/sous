@@ -55,6 +55,22 @@ Cookie and Kate, The Woks of Life, and Maangchi block `GPTBot`, `anthropic-ai`, 
 - The assistant answers from Sous's stored metadata and links to the source; it doesn't reproduce a blogger's instructions.
 - Offer an easy opt-out (a contact address and honoring `SousBot` rules in `robots.txt`).
 
+## Update 2026-10-07: bot protection blocks most of the list
+
+Testing TYL-8, we requested each starter site's homepage once with an honest `SousBot/0.1` user agent. **11 of 19 refused us** even though their `robots.txt` allows it. Most of them run Cloudflare bot challenges (`cf-mitigated: challenge`, the "Just a moment…" page), which stop any client that isn't a real browser or a verified bot.
+
+| Result        | Sites                                                                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Reachable (8) | Love and Lemons, Minimalist Baker, Vegan Richa, Oh She Glows, 101 Cookbooks, Just One Cookbook, RecipeTin Eats, Swasthi's                                                                                          |
+| Blocked (11)  | Cookie and Kate, Rainbow Plant Life, Feasting at Home, Veg Recipes of India, The Woks of Life, Maangchi, Budget Bytes, Serious Eats, Pinch of Yum (CloudFront), Simply Recipes, MyPlate (403, no challenge header) |
+
+The policy (TYL-27) rules out getting around these blocks: no browser user agent, no stealth proxies, no Firecrawl to bypass them. Honest options:
+
+- **Become a verified bot.** Cloudflare's verified-bots program and its signed-agent ("Web Bot Auth") standard let sites recognize and allow a well-behaved crawler. Both need a public bot page (TYL-27's contact page) and a stable, documented crawler.
+- **Ask the sites.** Bloggers can allowlist `SousBot`. A personal note with the attribution policy is a reasonable ask for a small set of favorite sites.
+- **Import from the user's own browser.** For a single recipe the user is already looking at, a bookmarklet or share target can send the page's recipe data from their browser to Sous. That's the user's own visit, so nothing is being bypassed.
+- **MyPlate** is public domain: check whether USDA publishes the recipes as a download or API before crawling.
+
 ## Libraries
 
 | Library                                                                      | License | Notes                                                                                                                                                          |

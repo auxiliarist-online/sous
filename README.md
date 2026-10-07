@@ -73,3 +73,14 @@ npm run test:db   # database migrations + access rules
 .venv/bin/mypy app tests
 .venv/bin/pytest
 ```
+
+## Deploying the web app (Vercel)
+
+1. In the [Vercel dashboard](https://vercel.com/new), import the `auxiliarist-online/sous` GitHub repo.
+2. Set **Root Directory** to `apps/web`. Vercel detects Vite; keep the default build (`npm run build`) and output (`dist`).
+3. Add the `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` environment variables.
+4. Deploy. Every merge to `main` then deploys to production, and every pull request gets a preview URL.
+
+`apps/web/vercel.json` turns on clean URLs, so `public/sousbot.html` is served at `/sousbot`. That page is SousBot's public contact and opt-out page (TYL-36). Once it's live, set `SOUSBOT_CONTACT_URL` in the API's environment to its address so the crawler's user agent links to it.
+
+The API isn't deployed yet; the web app only needs it for features that call `/api`.
