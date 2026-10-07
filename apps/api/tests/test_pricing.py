@@ -9,8 +9,8 @@ from app.pricing.units import UnknownUnitError, convert, normalize_unit
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 VALID_CONTAINS = {
-    "meat", "poultry", "fish", "shellfish", "gelatin", "dairy", "egg", "honey",
-    "gluten", "tree_nut", "peanut", "soy", "sesame",
+    "meat", "pork", "poultry", "fish", "shellfish", "gelatin", "animal_rennet",
+    "dairy", "egg", "honey", "gluten", "tree_nut", "peanut", "soy", "sesame", "alcohol",
 }  # fmt: skip
 TODAY = date(2026, 10, 6)
 
@@ -119,12 +119,18 @@ class TestBaselineData:
         for r in self.rows:
             assert normalize_unit(r["unit"]) == r["unit"], r["ingredient"]
             assert int(r["price_cents"]) > 0, r["ingredient"]
-            contains = {c for c in r["contains"].split("|") if c}
-            assert contains <= VALID_CONTAINS, r["ingredient"]
+            for column in ("contains", "may_contain"):
+                categories = {c for c in r[column].split("|") if c}
+                assert categories <= VALID_CONTAINS, r["ingredient"]
 
     def test_one_price_per_ingredient(self) -> None:
         names = [r["ingredient"] for r in self.rows]
         assert len(names) == len(set(names))
+
+    def test_pork_is_also_meat(self) -> None:
+        for r in self.rows:
+            if "pork" in r["contains"].split("|"):
+                assert "meat" in r["contains"].split("|"), r["ingredient"]
 
     def test_vegetarian_staples_are_covered(self) -> None:
         names = {r["ingredient"] for r in self.rows}

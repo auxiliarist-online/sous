@@ -1,106 +1,108 @@
-ingredient,aisle,contains,grams_per_cup,grams_per_each,source,price_cents,quantity,unit,region,as_of,source_ref,note
-corn tortillas,bakery,,,26,seed,250,30,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-flour tortillas,bakery,gluten,,45,seed,350,10,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-white bread,bakery,gluten,,,baseline_bls,181,1,lb,south,2026-08,APU0300702111,"BLS South 2025-01 $1.75, CPI-adjusted x1.031"
-butter,dairy_eggs,dairy,227,,seed,450,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-cheddar cheese,dairy_eggs,dairy,113,,baseline_bls,568,1,lb,south,2026-08,APU0300710212,"BLS South 2025-01 $5.52, CPI-adjusted x1.031"
-eggs,dairy_eggs,egg,,50,baseline_bls,488,12,each,south,2026-08,APU0300708111,"BLS South 2025-01 $4.74, CPI-adjusted x1.031"
-plain yogurt,dairy_eggs,dairy,245,,baseline_bls,155,8,oz,south,2026-08,APU0300FJ4101,"BLS South 2025-01 $1.50, CPI-adjusted x1.031"
-whole milk,dairy_eggs,dairy,244,,baseline_bls,415,1,gallon,south,2026-08,APU0300709112,"BLS South 2025-01 $4.03, CPI-adjusted x1.031"
-frozen blueberries,frozen,,155,,baseline_usda,446,1,lb,us,2026-08,USDA ERS Blueberries (Frozen),"USDA ERS 2023 $4.20, CPI-adjusted x1.061"
-frozen broccoli,frozen,,91,,baseline_usda,273,1,lb,us,2026-08,USDA ERS Broccoli (Frozen),"USDA ERS 2023 $2.57, CPI-adjusted x1.061"
-frozen corn,frozen,,136,,baseline_usda,194,1,lb,us,2026-08,USDA ERS Corn (Frozen),"USDA ERS 2023 $1.83, CPI-adjusted x1.061"
-frozen peas,frozen,,134,,baseline_usda,233,1,lb,us,2026-08,USDA ERS Green peas (Frozen),"USDA ERS 2023 $2.19, CPI-adjusted x1.061"
-frozen spinach,frozen,,156,,baseline_usda,262,1,lb,us,2026-08,USDA ERS Spinach (Frozen),"USDA ERS 2023 $2.47, CPI-adjusted x1.061"
-frozen strawberries,frozen,,149,,baseline_usda,368,1,lb,us,2026-08,USDA ERS Strawberries (Frozen),"USDA ERS 2023 $3.47, CPI-adjusted x1.061"
-coconut milk,international,,,,seed,250,13.5,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-firm tofu,international,soy,248,,seed,250,14,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-soy sauce,international,soy|gluten,,,seed,350,15,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); tamari is the gluten-free swap
-tempeh,international,soy,166,,seed,350,8,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-bacon,meat_seafood,meat,,,baseline_bls,682,1,lb,south,2026-08,APU0300704111,"BLS South 2025-01 $6.62, CPI-adjusted x1.031"
-beef stew meat,meat_seafood,meat,,,baseline_bls,782,1,lb,south,2026-08,APU0300703432,"BLS South 2025-01 $7.59, CPI-adjusted x1.031"
-boneless chicken breast,meat_seafood,poultry,,,baseline_bls,351,1,lb,south,2026-08,APU0300FF1101,"BLS South 2025-01 $3.40, CPI-adjusted x1.031"
-boneless pork chops,meat_seafood,meat,,,baseline_bls,463,1,lb,south,2026-08,APU0300704212,"BLS South 2025-01 $4.50, CPI-adjusted x1.031"
-chicken legs,meat_seafood,poultry,,,baseline_bls,188,1,lb,south,2026-08,APU0300706212,"BLS South 2025-01 $1.83, CPI-adjusted x1.031"
-ground beef,meat_seafood,meat,,,baseline_bls,525,1,lb,south,2026-08,APU0300703112,"BLS South 2025-01 $5.10, CPI-adjusted x1.031"
-whole chicken,meat_seafood,poultry,,,baseline_bls,197,1,lb,south,2026-08,APU0300706111,"BLS South 2025-01 $1.91, CPI-adjusted x1.031"
-all-purpose flour,pantry,gluten,125,,baseline_bls,54,1,lb,south,2026-08,APU0300701111,"BLS South 2025-01 $0.52, CPI-adjusted x1.031"
-canned black beans,pantry,,172,,baseline_usda,139,1,lb,us,2026-08,USDA ERS Black beans (Canned),"USDA ERS 2023 $1.31, CPI-adjusted x1.061"
-canned black-eyed peas,pantry,,171,,baseline_usda,151,1,lb,us,2026-08,USDA ERS Blackeye peas (Canned),"USDA ERS 2023 $1.42, CPI-adjusted x1.061"
-canned chickpeas,pantry,,164,,seed,120,15,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-canned corn,pantry,,164,,baseline_usda,129,1,lb,us,2026-08,USDA ERS Corn (Canned),"USDA ERS 2023 $1.22, CPI-adjusted x1.061"
-canned kidney beans,pantry,,172,,baseline_usda,127,1,lb,us,2026-08,USDA ERS Kidney beans (Canned),"USDA ERS 2023 $1.20, CPI-adjusted x1.061"
-canned pinto beans,pantry,,171,,baseline_usda,129,1,lb,us,2026-08,USDA ERS Pinto beans (Canned),"USDA ERS 2023 $1.21, CPI-adjusted x1.061"
-canned pumpkin,pantry,,245,,baseline_usda,221,1,lb,us,2026-08,USDA ERS Pumpkin (Canned),"USDA ERS 2023 $2.08, CPI-adjusted x1.061"
-canned tomatoes,pantry,,240,,baseline_usda,128,1,lb,us,2026-08,USDA ERS Tomatoes (Canned),"USDA ERS 2023 $1.21, CPI-adjusted x1.061"
-canned white beans,pantry,,179,,baseline_usda,124,1,lb,us,2026-08,USDA ERS Great northern beans (Canned),"USDA ERS 2023 $1.17, CPI-adjusted x1.061"
-dates,pantry,,147,24,baseline_usda,625,1,lb,us,2026-08,USDA ERS Dates (Dried),"USDA ERS 2023 $5.89, CPI-adjusted x1.061"
-dried beans,pantry,,180,,baseline_bls,160,1,lb,south,2026-08,APU0300714233,"BLS South 2025-01 $1.55, CPI-adjusted x1.031"
-dried black beans,pantry,,194,,baseline_usda,176,1,lb,us,2026-08,USDA ERS Black beans (Dried),"USDA ERS 2023 $1.66, CPI-adjusted x1.061"
-dried black-eyed peas,pantry,,167,,baseline_usda,226,1,lb,us,2026-08,USDA ERS Blackeye peas (Dried),"USDA ERS 2023 $2.13, CPI-adjusted x1.061"
-dried chickpeas,pantry,,200,,seed,200,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-dried cranberries,pantry,,121,,baseline_usda,559,1,lb,us,2026-08,USDA ERS Cranberries (Dried),"USDA ERS 2023 $5.26, CPI-adjusted x1.061"
-dried pinto beans,pantry,,193,,baseline_usda,159,1,lb,us,2026-08,USDA ERS Pinto beans (Dried),"USDA ERS 2023 $1.50, CPI-adjusted x1.061"
-lentils,pantry,,192,,baseline_usda,208,1,lb,us,2026-08,USDA ERS Lentils (Dried),"USDA ERS 2023 $1.96, CPI-adjusted x1.061"
-olive oil,pantry,,,,seed,900,16.9,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-olives,pantry,,135,,baseline_usda,636,1,lb,us,2026-08,USDA ERS Olives (Canned),"USDA ERS 2023 $5.99, CPI-adjusted x1.061"
-pasta,pantry,gluten,100,,baseline_bls,131,1,lb,south,2026-08,APU0300701322,"BLS South 2025-01 $1.27, CPI-adjusted x1.031"
-peanut butter,pantry,peanut,258,,seed,350,16,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-quinoa,pantry,,170,,seed,500,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-raisins,pantry,,145,,baseline_usda,459,1,lb,us,2026-08,USDA ERS Grapes (raisins) (Dried),"USDA ERS 2023 $4.33, CPI-adjusted x1.061"
-rolled oats,pantry,gluten,90,,seed,400,42,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); marked gluten unless certified gluten-free
-sugar,pantry,,200,,baseline_bls,108,1,lb,south,2026-08,APU0300715211,"BLS South 2025-01 $1.05, CPI-adjusted x1.031"
-vegetable broth,pantry,,,,seed,250,32,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-vegetable oil,pantry,,,,seed,400,48,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-white rice,pantry,,185,,baseline_bls,115,1,lb,south,2026-08,APU0300701312,"BLS South 2025-01 $1.11, CPI-adjusted x1.031"
-apples,produce,,125,182,baseline_usda,198,1,lb,us,2026-08,USDA ERS Apples (Fresh),"USDA ERS 2023 $1.86, CPI-adjusted x1.061"
-asparagus,produce,,,,baseline_usda,341,1,lb,us,2026-08,USDA ERS Asparagus (Fresh),"USDA ERS 2023 $3.21, CPI-adjusted x1.061"
-avocado,produce,,150,200,baseline_usda,240,1,lb,us,2026-08,USDA ERS Avocados (Fresh),"USDA ERS 2023 $2.26, CPI-adjusted x1.061"
-bananas,produce,,,118,baseline_bls,62,1,lb,south,2026-08,APU0300711211,"BLS South 2025-01 $0.60, CPI-adjusted x1.031"
-blueberries,produce,,148,,baseline_usda,545,1,lb,us,2026-08,USDA ERS Blueberries (Fresh),"USDA ERS 2023 $5.13, CPI-adjusted x1.061"
-broccoli,produce,,91,,baseline_usda,321,1,lb,us,2026-08,USDA ERS Broccoli heads (Fresh),"USDA ERS 2023 $3.02, CPI-adjusted x1.061"
-brussels sprouts,produce,,88,,baseline_usda,323,1,lb,us,2026-08,USDA ERS Brussels sprouts (Fresh),"USDA ERS 2023 $3.04, CPI-adjusted x1.061"
-butternut squash,produce,,140,,baseline_usda,135,1,lb,us,2026-08,USDA ERS Butternut squash (Fresh),"USDA ERS 2023 $1.27, CPI-adjusted x1.061"
-carrots,produce,,128,61,baseline_usda,107,1,lb,us,2026-08,"USDA ERS Carrots, raw whole (Fresh)","USDA ERS 2023 $1.01, CPI-adjusted x1.061"
-cauliflower,produce,,107,,baseline_usda,225,1,lb,us,2026-08,USDA ERS Cauliflower heads (Fresh),"USDA ERS 2023 $2.12, CPI-adjusted x1.061"
-celery,produce,,101,40,baseline_usda,141,1,lb,us,2026-08,"USDA ERS Celery, trimmed bunches (Fresh)","USDA ERS 2023 $1.33, CPI-adjusted x1.061"
-cherry tomatoes,produce,,149,,baseline_usda,441,1,lb,us,2026-08,"USDA ERS Tomatoes, grape and cherry (Fresh)","USDA ERS 2023 $4.16, CPI-adjusted x1.061"
-cilantro,produce,,,,seed,100,1,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); one bunch
-collard greens,produce,,36,,baseline_usda,264,1,lb,us,2026-08,USDA ERS Collard greens (Fresh),"USDA ERS 2023 $2.48, CPI-adjusted x1.061"
-cucumber,produce,,119,300,baseline_usda,116,1,lb,us,2026-08,USDA ERS Cucumbers with peel (Fresh),"USDA ERS 2023 $1.09, CPI-adjusted x1.061"
-garlic,produce,,,50,seed,60,1,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); one head
-ginger,produce,,,,seed,400,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-grapes,produce,,151,,baseline_usda,239,1,lb,us,2026-08,USDA ERS Grapes (Fresh),"USDA ERS 2023 $2.25, CPI-adjusted x1.061"
-green beans,produce,,100,,baseline_usda,282,1,lb,us,2026-08,USDA ERS Green beans (Fresh),"USDA ERS 2023 $2.66, CPI-adjusted x1.061"
-green bell pepper,produce,,149,119,baseline_usda,160,1,lb,us,2026-08,USDA ERS Green peppers (Fresh),"USDA ERS 2023 $1.50, CPI-adjusted x1.061"
-green cabbage,produce,,89,,baseline_usda,88,1,lb,us,2026-08,"USDA ERS Cabbage, green (Fresh)","USDA ERS 2023 $0.83, CPI-adjusted x1.061"
-jalapeno,produce,,,14,seed,200,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-kale,produce,,21,,baseline_usda,379,1,lb,us,2026-08,USDA ERS Kale (Fresh),"USDA ERS 2023 $3.57, CPI-adjusted x1.061"
-lemons,produce,,,85,baseline_bls,235,1,lb,south,2026-08,APU0300711412,"BLS South 2025-01 $2.28, CPI-adjusted x1.031"
-lime,produce,,,67,seed,40,1,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-mango,produce,,165,336,baseline_usda,155,1,lb,us,2026-08,USDA ERS Mangoes (Fresh),"USDA ERS 2023 $1.46, CPI-adjusted x1.061"
-mushrooms,produce,,70,18,baseline_usda,441,1,lb,us,2026-08,"USDA ERS Mushrooms, whole (Fresh)","USDA ERS 2023 $4.15, CPI-adjusted x1.061"
-okra,produce,,100,,baseline_usda,603,1,lb,us,2026-08,USDA ERS Okra (Fresh),"USDA ERS 2023 $5.68, CPI-adjusted x1.061"
-onion,produce,,160,150,baseline_usda,113,1,lb,us,2026-08,USDA ERS Onions (Fresh),"USDA ERS 2023 $1.06, CPI-adjusted x1.061"
-oranges,produce,,,140,baseline_bls,164,1,lb,south,2026-08,APU0300711311,"BLS South 2025-01 $1.59, CPI-adjusted x1.031"
-peaches,produce,,154,150,baseline_usda,261,1,lb,us,2026-08,USDA ERS Peaches (Fresh),"USDA ERS 2023 $2.46, CPI-adjusted x1.061"
-pears,produce,,140,178,baseline_usda,203,1,lb,us,2026-08,USDA ERS Pears (Fresh),"USDA ERS 2023 $1.92, CPI-adjusted x1.061"
-pineapple,produce,,165,905,baseline_usda,71,1,lb,us,2026-08,USDA ERS Pineapple (Fresh),"USDA ERS 2023 $0.67, CPI-adjusted x1.061"
-potatoes,produce,,,213,baseline_bls,111,1,lb,south,2026-08,APU0300712112,"BLS South 2025-01 $1.08, CPI-adjusted x1.031"
-radishes,produce,,116,,baseline_usda,196,1,lb,us,2026-08,USDA ERS Radish (Fresh),"USDA ERS 2023 $1.85, CPI-adjusted x1.061"
-red bell pepper,produce,,149,119,baseline_usda,181,1,lb,us,2026-08,USDA ERS Red peppers (Fresh),"USDA ERS 2023 $1.71, CPI-adjusted x1.061"
-red cabbage,produce,,89,,baseline_usda,134,1,lb,us,2026-08,"USDA ERS Cabbage, red (Fresh)","USDA ERS 2023 $1.26, CPI-adjusted x1.061"
-roma tomatoes,produce,,180,62,baseline_usda,131,1,lb,us,2026-08,"USDA ERS Tomatoes, Roma and plum (Fresh)","USDA ERS 2023 $1.24, CPI-adjusted x1.061"
-romaine lettuce,produce,,47,,baseline_bls,313,1,lb,south,2026-08,APU0300FL2101,"BLS South 2025-01 $3.03, CPI-adjusted x1.031"
-scallions,produce,,,,seed,100,1,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); one bunch
-spinach,produce,,30,,baseline_usda,478,1,lb,us,2026-08,"USDA ERS Spinach, eaten raw (Fresh)","USDA ERS 2023 $4.50, CPI-adjusted x1.061"
-strawberries,produce,,152,,baseline_bls,358,12,oz,south,2026-08,APU0300711415,"BLS South 2025-01 $3.48, CPI-adjusted x1.031"
-sweet potatoes,produce,,133,130,baseline_usda,124,1,lb,us,2026-08,USDA ERS Sweet potatoes (Fresh),"USDA ERS 2023 $1.16, CPI-adjusted x1.061"
-tomatoes,produce,,180,123,baseline_bls,191,1,lb,south,2026-08,APU0300712311,"BLS South 2025-01 $1.86, CPI-adjusted x1.031"
-zucchini,produce,,124,196,baseline_usda,174,1,lb,us,2026-08,USDA ERS Zucchini (Fresh),"USDA ERS 2023 $1.64, CPI-adjusted x1.061"
-black pepper,spices,,116,,seed,400,3,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-chili powder,spices,,128,,seed,300,2.5,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-curry powder,spices,,100,,seed,400,2,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-ground cumin,spices,,96,,seed,300,2,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-salt,spices,,292,,seed,150,26,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
-smoked paprika,spices,,109,,seed,400,2,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+ingredient,aisle,contains,may_contain,grams_per_cup,grams_per_each,source,price_cents,quantity,unit,region,as_of,source_ref,note
+corn tortillas,bakery,,,,26,seed,250,30,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+flour tortillas,bakery,gluten,meat|pork,,45,seed,350,10,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); some brands use lard
+white bread,bakery,gluten,,,,baseline_bls,181,1,lb,south,2026-08,APU0300702111,"BLS South 2025-01 $1.75, CPI-adjusted x1.031"
+butter,dairy_eggs,dairy,,227,,seed,450,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+cheddar cheese,dairy_eggs,dairy,animal_rennet,113,,baseline_bls,568,1,lb,south,2026-08,APU0300710212,"BLS South 2025-01 $5.52, CPI-adjusted x1.031"
+eggs,dairy_eggs,egg,,,50,baseline_bls,488,12,each,south,2026-08,APU0300708111,"BLS South 2025-01 $4.74, CPI-adjusted x1.031"
+feta,dairy_eggs,dairy,animal_rennet,150,,seed,400,6,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); rennet type varies by brand
+parmesan,dairy_eggs,dairy,animal_rennet,100,,seed,600,8,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); traditional Parmigiano uses animal rennet
+plain yogurt,dairy_eggs,dairy,,245,,baseline_bls,155,8,oz,south,2026-08,APU0300FJ4101,"BLS South 2025-01 $1.50, CPI-adjusted x1.031"
+whole milk,dairy_eggs,dairy,,244,,baseline_bls,415,1,gallon,south,2026-08,APU0300709112,"BLS South 2025-01 $4.03, CPI-adjusted x1.031"
+frozen blueberries,frozen,,,155,,baseline_usda,446,1,lb,us,2026-08,USDA ERS Blueberries (Frozen),"USDA ERS 2023 $4.20, CPI-adjusted x1.061"
+frozen broccoli,frozen,,,91,,baseline_usda,273,1,lb,us,2026-08,USDA ERS Broccoli (Frozen),"USDA ERS 2023 $2.57, CPI-adjusted x1.061"
+frozen corn,frozen,,,136,,baseline_usda,194,1,lb,us,2026-08,USDA ERS Corn (Frozen),"USDA ERS 2023 $1.83, CPI-adjusted x1.061"
+frozen peas,frozen,,,134,,baseline_usda,233,1,lb,us,2026-08,USDA ERS Green peas (Frozen),"USDA ERS 2023 $2.19, CPI-adjusted x1.061"
+frozen spinach,frozen,,,156,,baseline_usda,262,1,lb,us,2026-08,USDA ERS Spinach (Frozen),"USDA ERS 2023 $2.47, CPI-adjusted x1.061"
+frozen strawberries,frozen,,,149,,baseline_usda,368,1,lb,us,2026-08,USDA ERS Strawberries (Frozen),"USDA ERS 2023 $3.47, CPI-adjusted x1.061"
+coconut milk,international,,,,,seed,250,13.5,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+firm tofu,international,soy,,248,,seed,250,14,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+soy sauce,international,soy|gluten,,,,seed,350,15,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); tamari is the gluten-free swap
+tempeh,international,soy,,166,,seed,350,8,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+bacon,meat_seafood,meat|pork,,,,baseline_bls,682,1,lb,south,2026-08,APU0300704111,"BLS South 2025-01 $6.62, CPI-adjusted x1.031"
+beef stew meat,meat_seafood,meat,,,,baseline_bls,782,1,lb,south,2026-08,APU0300703432,"BLS South 2025-01 $7.59, CPI-adjusted x1.031"
+boneless chicken breast,meat_seafood,poultry,,,,baseline_bls,351,1,lb,south,2026-08,APU0300FF1101,"BLS South 2025-01 $3.40, CPI-adjusted x1.031"
+boneless pork chops,meat_seafood,meat|pork,,,,baseline_bls,463,1,lb,south,2026-08,APU0300704212,"BLS South 2025-01 $4.50, CPI-adjusted x1.031"
+chicken legs,meat_seafood,poultry,,,,baseline_bls,188,1,lb,south,2026-08,APU0300706212,"BLS South 2025-01 $1.83, CPI-adjusted x1.031"
+ground beef,meat_seafood,meat,,,,baseline_bls,525,1,lb,south,2026-08,APU0300703112,"BLS South 2025-01 $5.10, CPI-adjusted x1.031"
+whole chicken,meat_seafood,poultry,,,,baseline_bls,197,1,lb,south,2026-08,APU0300706111,"BLS South 2025-01 $1.91, CPI-adjusted x1.031"
+all-purpose flour,pantry,gluten,,125,,baseline_bls,54,1,lb,south,2026-08,APU0300701111,"BLS South 2025-01 $0.52, CPI-adjusted x1.031"
+canned black beans,pantry,,,172,,baseline_usda,139,1,lb,us,2026-08,USDA ERS Black beans (Canned),"USDA ERS 2023 $1.31, CPI-adjusted x1.061"
+canned black-eyed peas,pantry,,,171,,baseline_usda,151,1,lb,us,2026-08,USDA ERS Blackeye peas (Canned),"USDA ERS 2023 $1.42, CPI-adjusted x1.061"
+canned chickpeas,pantry,,,164,,seed,120,15,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+canned corn,pantry,,,164,,baseline_usda,129,1,lb,us,2026-08,USDA ERS Corn (Canned),"USDA ERS 2023 $1.22, CPI-adjusted x1.061"
+canned kidney beans,pantry,,,172,,baseline_usda,127,1,lb,us,2026-08,USDA ERS Kidney beans (Canned),"USDA ERS 2023 $1.20, CPI-adjusted x1.061"
+canned pinto beans,pantry,,,171,,baseline_usda,129,1,lb,us,2026-08,USDA ERS Pinto beans (Canned),"USDA ERS 2023 $1.21, CPI-adjusted x1.061"
+canned pumpkin,pantry,,,245,,baseline_usda,221,1,lb,us,2026-08,USDA ERS Pumpkin (Canned),"USDA ERS 2023 $2.08, CPI-adjusted x1.061"
+canned tomatoes,pantry,,,240,,baseline_usda,128,1,lb,us,2026-08,USDA ERS Tomatoes (Canned),"USDA ERS 2023 $1.21, CPI-adjusted x1.061"
+canned white beans,pantry,,,179,,baseline_usda,124,1,lb,us,2026-08,USDA ERS Great northern beans (Canned),"USDA ERS 2023 $1.17, CPI-adjusted x1.061"
+dates,pantry,,,147,24,baseline_usda,625,1,lb,us,2026-08,USDA ERS Dates (Dried),"USDA ERS 2023 $5.89, CPI-adjusted x1.061"
+dried beans,pantry,,,180,,baseline_bls,160,1,lb,south,2026-08,APU0300714233,"BLS South 2025-01 $1.55, CPI-adjusted x1.031"
+dried black beans,pantry,,,194,,baseline_usda,176,1,lb,us,2026-08,USDA ERS Black beans (Dried),"USDA ERS 2023 $1.66, CPI-adjusted x1.061"
+dried black-eyed peas,pantry,,,167,,baseline_usda,226,1,lb,us,2026-08,USDA ERS Blackeye peas (Dried),"USDA ERS 2023 $2.13, CPI-adjusted x1.061"
+dried chickpeas,pantry,,,200,,seed,200,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+dried cranberries,pantry,,,121,,baseline_usda,559,1,lb,us,2026-08,USDA ERS Cranberries (Dried),"USDA ERS 2023 $5.26, CPI-adjusted x1.061"
+dried pinto beans,pantry,,,193,,baseline_usda,159,1,lb,us,2026-08,USDA ERS Pinto beans (Dried),"USDA ERS 2023 $1.50, CPI-adjusted x1.061"
+lentils,pantry,,,192,,baseline_usda,208,1,lb,us,2026-08,USDA ERS Lentils (Dried),"USDA ERS 2023 $1.96, CPI-adjusted x1.061"
+olive oil,pantry,,,,,seed,900,16.9,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+olives,pantry,,,135,,baseline_usda,636,1,lb,us,2026-08,USDA ERS Olives (Canned),"USDA ERS 2023 $5.99, CPI-adjusted x1.061"
+pasta,pantry,gluten,,100,,baseline_bls,131,1,lb,south,2026-08,APU0300701322,"BLS South 2025-01 $1.27, CPI-adjusted x1.031"
+peanut butter,pantry,peanut,,258,,seed,350,16,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+quinoa,pantry,,,170,,seed,500,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+raisins,pantry,,,145,,baseline_usda,459,1,lb,us,2026-08,USDA ERS Grapes (raisins) (Dried),"USDA ERS 2023 $4.33, CPI-adjusted x1.061"
+rolled oats,pantry,gluten,,90,,seed,400,42,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); marked gluten unless certified gluten-free
+sugar,pantry,,,200,,baseline_bls,108,1,lb,south,2026-08,APU0300715211,"BLS South 2025-01 $1.05, CPI-adjusted x1.031"
+vegetable broth,pantry,,,,,seed,250,32,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+vegetable oil,pantry,,,,,seed,400,48,fl_oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+white rice,pantry,,,185,,baseline_bls,115,1,lb,south,2026-08,APU0300701312,"BLS South 2025-01 $1.11, CPI-adjusted x1.031"
+apples,produce,,,125,182,baseline_usda,198,1,lb,us,2026-08,USDA ERS Apples (Fresh),"USDA ERS 2023 $1.86, CPI-adjusted x1.061"
+asparagus,produce,,,,,baseline_usda,341,1,lb,us,2026-08,USDA ERS Asparagus (Fresh),"USDA ERS 2023 $3.21, CPI-adjusted x1.061"
+avocado,produce,,,150,200,baseline_usda,240,1,lb,us,2026-08,USDA ERS Avocados (Fresh),"USDA ERS 2023 $2.26, CPI-adjusted x1.061"
+bananas,produce,,,,118,baseline_bls,62,1,lb,south,2026-08,APU0300711211,"BLS South 2025-01 $0.60, CPI-adjusted x1.031"
+blueberries,produce,,,148,,baseline_usda,545,1,lb,us,2026-08,USDA ERS Blueberries (Fresh),"USDA ERS 2023 $5.13, CPI-adjusted x1.061"
+broccoli,produce,,,91,,baseline_usda,321,1,lb,us,2026-08,USDA ERS Broccoli heads (Fresh),"USDA ERS 2023 $3.02, CPI-adjusted x1.061"
+brussels sprouts,produce,,,88,,baseline_usda,323,1,lb,us,2026-08,USDA ERS Brussels sprouts (Fresh),"USDA ERS 2023 $3.04, CPI-adjusted x1.061"
+butternut squash,produce,,,140,,baseline_usda,135,1,lb,us,2026-08,USDA ERS Butternut squash (Fresh),"USDA ERS 2023 $1.27, CPI-adjusted x1.061"
+carrots,produce,,,128,61,baseline_usda,107,1,lb,us,2026-08,"USDA ERS Carrots, raw whole (Fresh)","USDA ERS 2023 $1.01, CPI-adjusted x1.061"
+cauliflower,produce,,,107,,baseline_usda,225,1,lb,us,2026-08,USDA ERS Cauliflower heads (Fresh),"USDA ERS 2023 $2.12, CPI-adjusted x1.061"
+celery,produce,,,101,40,baseline_usda,141,1,lb,us,2026-08,"USDA ERS Celery, trimmed bunches (Fresh)","USDA ERS 2023 $1.33, CPI-adjusted x1.061"
+cherry tomatoes,produce,,,149,,baseline_usda,441,1,lb,us,2026-08,"USDA ERS Tomatoes, grape and cherry (Fresh)","USDA ERS 2023 $4.16, CPI-adjusted x1.061"
+cilantro,produce,,,,,seed,100,1,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); one bunch
+collard greens,produce,,,36,,baseline_usda,264,1,lb,us,2026-08,USDA ERS Collard greens (Fresh),"USDA ERS 2023 $2.48, CPI-adjusted x1.061"
+cucumber,produce,,,119,300,baseline_usda,116,1,lb,us,2026-08,USDA ERS Cucumbers with peel (Fresh),"USDA ERS 2023 $1.09, CPI-adjusted x1.061"
+garlic,produce,,,,50,seed,60,1,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); one head
+ginger,produce,,,,,seed,400,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+grapes,produce,,,151,,baseline_usda,239,1,lb,us,2026-08,USDA ERS Grapes (Fresh),"USDA ERS 2023 $2.25, CPI-adjusted x1.061"
+green beans,produce,,,100,,baseline_usda,282,1,lb,us,2026-08,USDA ERS Green beans (Fresh),"USDA ERS 2023 $2.66, CPI-adjusted x1.061"
+green bell pepper,produce,,,149,119,baseline_usda,160,1,lb,us,2026-08,USDA ERS Green peppers (Fresh),"USDA ERS 2023 $1.50, CPI-adjusted x1.061"
+green cabbage,produce,,,89,,baseline_usda,88,1,lb,us,2026-08,"USDA ERS Cabbage, green (Fresh)","USDA ERS 2023 $0.83, CPI-adjusted x1.061"
+jalapeno,produce,,,,14,seed,200,1,lb,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+kale,produce,,,21,,baseline_usda,379,1,lb,us,2026-08,USDA ERS Kale (Fresh),"USDA ERS 2023 $3.57, CPI-adjusted x1.061"
+lemons,produce,,,,85,baseline_bls,235,1,lb,south,2026-08,APU0300711412,"BLS South 2025-01 $2.28, CPI-adjusted x1.031"
+lime,produce,,,,67,seed,40,1,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+mango,produce,,,165,336,baseline_usda,155,1,lb,us,2026-08,USDA ERS Mangoes (Fresh),"USDA ERS 2023 $1.46, CPI-adjusted x1.061"
+mushrooms,produce,,,70,18,baseline_usda,441,1,lb,us,2026-08,"USDA ERS Mushrooms, whole (Fresh)","USDA ERS 2023 $4.15, CPI-adjusted x1.061"
+okra,produce,,,100,,baseline_usda,603,1,lb,us,2026-08,USDA ERS Okra (Fresh),"USDA ERS 2023 $5.68, CPI-adjusted x1.061"
+onion,produce,,,160,150,baseline_usda,113,1,lb,us,2026-08,USDA ERS Onions (Fresh),"USDA ERS 2023 $1.06, CPI-adjusted x1.061"
+oranges,produce,,,,140,baseline_bls,164,1,lb,south,2026-08,APU0300711311,"BLS South 2025-01 $1.59, CPI-adjusted x1.031"
+peaches,produce,,,154,150,baseline_usda,261,1,lb,us,2026-08,USDA ERS Peaches (Fresh),"USDA ERS 2023 $2.46, CPI-adjusted x1.061"
+pears,produce,,,140,178,baseline_usda,203,1,lb,us,2026-08,USDA ERS Pears (Fresh),"USDA ERS 2023 $1.92, CPI-adjusted x1.061"
+pineapple,produce,,,165,905,baseline_usda,71,1,lb,us,2026-08,USDA ERS Pineapple (Fresh),"USDA ERS 2023 $0.67, CPI-adjusted x1.061"
+potatoes,produce,,,,213,baseline_bls,111,1,lb,south,2026-08,APU0300712112,"BLS South 2025-01 $1.08, CPI-adjusted x1.031"
+radishes,produce,,,116,,baseline_usda,196,1,lb,us,2026-08,USDA ERS Radish (Fresh),"USDA ERS 2023 $1.85, CPI-adjusted x1.061"
+red bell pepper,produce,,,149,119,baseline_usda,181,1,lb,us,2026-08,USDA ERS Red peppers (Fresh),"USDA ERS 2023 $1.71, CPI-adjusted x1.061"
+red cabbage,produce,,,89,,baseline_usda,134,1,lb,us,2026-08,"USDA ERS Cabbage, red (Fresh)","USDA ERS 2023 $1.26, CPI-adjusted x1.061"
+roma tomatoes,produce,,,180,62,baseline_usda,131,1,lb,us,2026-08,"USDA ERS Tomatoes, Roma and plum (Fresh)","USDA ERS 2023 $1.24, CPI-adjusted x1.061"
+romaine lettuce,produce,,,47,,baseline_bls,313,1,lb,south,2026-08,APU0300FL2101,"BLS South 2025-01 $3.03, CPI-adjusted x1.031"
+scallions,produce,,,,,seed,100,1,each,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026); one bunch
+spinach,produce,,,30,,baseline_usda,478,1,lb,us,2026-08,"USDA ERS Spinach, eaten raw (Fresh)","USDA ERS 2023 $4.50, CPI-adjusted x1.061"
+strawberries,produce,,,152,,baseline_bls,358,12,oz,south,2026-08,APU0300711415,"BLS South 2025-01 $3.48, CPI-adjusted x1.031"
+sweet potatoes,produce,,,133,130,baseline_usda,124,1,lb,us,2026-08,USDA ERS Sweet potatoes (Fresh),"USDA ERS 2023 $1.16, CPI-adjusted x1.061"
+tomatoes,produce,,,180,123,baseline_bls,191,1,lb,south,2026-08,APU0300712311,"BLS South 2025-01 $1.86, CPI-adjusted x1.031"
+zucchini,produce,,,124,196,baseline_usda,174,1,lb,us,2026-08,USDA ERS Zucchini (Fresh),"USDA ERS 2023 $1.64, CPI-adjusted x1.061"
+black pepper,spices,,,116,,seed,400,3,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+chili powder,spices,,,128,,seed,300,2.5,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+curry powder,spices,,,100,,seed,400,2,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+ground cumin,spices,,,96,,seed,300,2,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+salt,spices,,,292,,seed,150,26,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)
+smoked paprika,spices,,,109,,seed,400,2,oz,asheville,2026-10,data/seed_prices.csv,rough hand estimate (Oct 2026)

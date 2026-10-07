@@ -1,28 +1,30 @@
-ingredient,aisle,contains,price,quantity,unit,grams_per_cup,grams_per_each,note
-garlic,produce,,0.60,1,each,,50,rough hand estimate (Oct 2026); one head
-ginger,produce,,4.00,1,lb,,,rough hand estimate (Oct 2026)
-lime,produce,,0.40,1,each,,67,rough hand estimate (Oct 2026)
-cilantro,produce,,1.00,1,each,,,rough hand estimate (Oct 2026); one bunch
-scallions,produce,,1.00,1,each,,,rough hand estimate (Oct 2026); one bunch
-jalapeno,produce,,2.00,1,lb,,14,rough hand estimate (Oct 2026)
-firm tofu,international,soy,2.50,14,oz,248,,rough hand estimate (Oct 2026)
-tempeh,international,soy,3.50,8,oz,166,,rough hand estimate (Oct 2026)
-canned chickpeas,pantry,,1.20,15,oz,164,,rough hand estimate (Oct 2026)
-dried chickpeas,pantry,,2.00,1,lb,200,,rough hand estimate (Oct 2026)
-quinoa,pantry,,5.00,1,lb,170,,rough hand estimate (Oct 2026)
-rolled oats,pantry,gluten,4.00,42,oz,90,,rough hand estimate (Oct 2026); marked gluten unless certified gluten-free
-coconut milk,international,,2.50,13.5,fl_oz,,,rough hand estimate (Oct 2026)
-soy sauce,international,soy|gluten,3.50,15,fl_oz,,,rough hand estimate (Oct 2026); tamari is the gluten-free swap
-vegetable broth,pantry,,2.50,32,fl_oz,,,rough hand estimate (Oct 2026)
-olive oil,pantry,,9.00,16.9,fl_oz,,,rough hand estimate (Oct 2026)
-vegetable oil,pantry,,4.00,48,fl_oz,,,rough hand estimate (Oct 2026)
-peanut butter,pantry,peanut,3.50,16,oz,258,,rough hand estimate (Oct 2026)
-butter,dairy_eggs,dairy,4.50,1,lb,227,,rough hand estimate (Oct 2026)
-flour tortillas,bakery,gluten,3.50,10,each,,45,rough hand estimate (Oct 2026)
-corn tortillas,bakery,,2.50,30,each,,26,rough hand estimate (Oct 2026)
-salt,spices,,1.50,26,oz,292,,rough hand estimate (Oct 2026)
-black pepper,spices,,4.00,3,oz,116,,rough hand estimate (Oct 2026)
-ground cumin,spices,,3.00,2,oz,96,,rough hand estimate (Oct 2026)
-chili powder,spices,,3.00,2.5,oz,128,,rough hand estimate (Oct 2026)
-smoked paprika,spices,,4.00,2,oz,109,,rough hand estimate (Oct 2026)
-curry powder,spices,,4.00,2,oz,100,,rough hand estimate (Oct 2026)
+ingredient,aisle,contains,may_contain,price,quantity,unit,grams_per_cup,grams_per_each,note
+garlic,produce,,,0.60,1,each,,50,rough hand estimate (Oct 2026); one head
+ginger,produce,,,4.00,1,lb,,,rough hand estimate (Oct 2026)
+lime,produce,,,0.40,1,each,,67,rough hand estimate (Oct 2026)
+cilantro,produce,,,1.00,1,each,,,rough hand estimate (Oct 2026); one bunch
+scallions,produce,,,1.00,1,each,,,rough hand estimate (Oct 2026); one bunch
+jalapeno,produce,,,2.00,1,lb,,14,rough hand estimate (Oct 2026)
+firm tofu,international,soy,,2.50,14,oz,248,,rough hand estimate (Oct 2026)
+tempeh,international,soy,,3.50,8,oz,166,,rough hand estimate (Oct 2026)
+canned chickpeas,pantry,,,1.20,15,oz,164,,rough hand estimate (Oct 2026)
+dried chickpeas,pantry,,,2.00,1,lb,200,,rough hand estimate (Oct 2026)
+quinoa,pantry,,,5.00,1,lb,170,,rough hand estimate (Oct 2026)
+rolled oats,pantry,gluten,,4.00,42,oz,90,,rough hand estimate (Oct 2026); marked gluten unless certified gluten-free
+coconut milk,international,,,2.50,13.5,fl_oz,,,rough hand estimate (Oct 2026)
+soy sauce,international,soy|gluten,,3.50,15,fl_oz,,,rough hand estimate (Oct 2026); tamari is the gluten-free swap
+vegetable broth,pantry,,,2.50,32,fl_oz,,,rough hand estimate (Oct 2026)
+olive oil,pantry,,,9.00,16.9,fl_oz,,,rough hand estimate (Oct 2026)
+vegetable oil,pantry,,,4.00,48,fl_oz,,,rough hand estimate (Oct 2026)
+peanut butter,pantry,peanut,,3.50,16,oz,258,,rough hand estimate (Oct 2026)
+butter,dairy_eggs,dairy,,4.50,1,lb,227,,rough hand estimate (Oct 2026)
+flour tortillas,bakery,gluten,meat|pork,3.50,10,each,,45,rough hand estimate (Oct 2026); some brands use lard
+corn tortillas,bakery,,,2.50,30,each,,26,rough hand estimate (Oct 2026)
+salt,spices,,,1.50,26,oz,292,,rough hand estimate (Oct 2026)
+black pepper,spices,,,4.00,3,oz,116,,rough hand estimate (Oct 2026)
+ground cumin,spices,,,3.00,2,oz,96,,rough hand estimate (Oct 2026)
+chili powder,spices,,,3.00,2.5,oz,128,,rough hand estimate (Oct 2026)
+smoked paprika,spices,,,4.00,2,oz,109,,rough hand estimate (Oct 2026)
+curry powder,spices,,,4.00,2,oz,100,,rough hand estimate (Oct 2026)
+parmesan,dairy_eggs,dairy,animal_rennet,6.00,8,oz,100,,rough hand estimate (Oct 2026); traditional Parmigiano uses animal rennet
+feta,dairy_eggs,dairy,animal_rennet,4.00,6,oz,150,,rough hand estimate (Oct 2026); rennet type varies by brand
