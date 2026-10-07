@@ -278,3 +278,146 @@ describe('row level security', () => {
     assert.equal(bobSees, 0)
   })
 })
+
+describe('diet customization', () => {
+  const CAROL = '00000000-0000-0000-0000-00000000000c'
+  const ids = {}
+  let parmesanPasta, tacos, tacosEitherTortilla, pestoPasta, baconPasta
+
+  const idOf = async (name) =>
+    (
+      await db.query('select id from ingredients where lower(name) = $1', [
+        name,
+      ])
+    ).rows[0].id
+  const fit = async (recipeId, userId) =>
+    (
+      await db.query('select recipe_fit_for_user($1, $2) as s', [
+        recipeId,
+        userId,
+      ])
+    ).rows[0].s
+  const setProfile = (fields) =>
+    db.query(
+      `insert into profiles (user_id, avoid_categories, allergens, strict_may_contain)
+       values ($1, $2, $3, $4)
+       on conflict (user_id) do update set avoid_categories = excluded.avoid_categories,
+         allergens = excluded.allergens, strict_may_contain = excluded.strict_may_contain`,
+      [
+        CAROL,
+        fields.avoid ?? [],
+        fields.allergens ?? [],
+        fields.strict ?? false,
+      ],
+    )
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1)', [CAROL])
+    await db.query(
+      `insert into user_diets (user_id, diet_slug) values ($1, 'vegetarian')`,
+      [CAROL],
+    )
+    for (const name of [
+      'pasta',
+      'parmesan',
+      'flour tortillas',
+      'corn tortillas',
+      'canned black beans',
+      'bacon',
+    ]) {
+      ids[name] = await idOf(name)
+    }
+    const { rows } = await db.query(
+      `insert into ingredients (name, contains, may_contain) values ('pesto', '{dairy}', '{tree_nut}')
+       returning id`,
+    )
+    ids.pesto = rows[0].id
+    parmesanPasta = await recipe('Cacio e pepe', [[ids.pasta], [ids.parmesan]])
+    tacos = await recipe('Bean tacos', [
+      [ids['flour tortillas']],
+      [ids['canned black beans']],
+    ])
+    tacosEitherTortilla = await recipe('Bean tacos (any tortilla)', [
+      [ids['flour tortillas'], ids['corn tortillas']],
+      [ids['canned black beans']],
+    ])
+    pestoPasta = await recipe('Pesto pasta', [[ids.pasta], [ids.pesto]])
+    baconPasta = await recipe('Carbonara', [[ids.pasta], [ids.bacon]])
+  })
+
+  it('keeps "may contain" out of recipe diet labels', async () => {
+    // Parmesan is fine for plain vegetarian; rennet isn't part of that preset.
+    assert.equal(await meetsDiet(parmesanPasta, 'vegetarian'), true)
+    // Flour tortillas may contain lard, so the label isn't earned outright.
+    assert.equal(await meetsDiet(tacos, 'vegetarian'), null)
+    assert.equal(await meetsDiet(tacosEitherTortilla, 'vegetarian'), true)
+  })
+
+  it('flags may-contain ingredients for a check by default', async () => {
+    await setProfile({})
+    assert.equal(await fit(parmesanPasta, CAROL), 'fits')
+    assert.equal(await fit(tacos, CAROL), 'check_label')
+    assert.equal(await fit(tacosEitherTortilla, CAROL), 'fits')
+  })
+
+  it('adds extra exclusions on top of a preset', async () => {
+    await setProfile({ avoid: ['animal_rennet'] })
+    assert.equal(await fit(parmesanPasta, CAROL), 'check_label')
+    await setProfile({ avoid: ['animal_rennet'], strict: true })
+    assert.equal(await fit(parmesanPasta, CAROL), 'excluded')
+    assert.equal(await fit(tacos, CAROL), 'excluded')
+  })
+
+  it('treats allergies as strict regardless of the setting', async () => {
+    await setProfile({ allergens: ['tree_nut'], strict: false })
+    assert.equal(await fit(pestoPasta, CAROL), 'excluded')
+  })
+
+  it('supports narrower presets like no pork', async () => {
+    assert.equal(await meetsDiet(baconPasta, 'no_pork'), false)
+    assert.equal(await meetsDiet(baconPasta, 'no_red_meat'), false)
+    assert.equal(await meetsDiet(parmesanPasta, 'no_pork'), true)
+  })
+
+  it('stores soft goals as either specific days or a weekly count', async () => {
+    // Meatless Mondays, and four vegetarian dinners a week.
+    await db.query(
+      `insert into user_diet_goals (user_id, diet_slug, days, meal) values ($1, 'vegetarian', '{1}', 'dinner')`,
+      [CAROL],
+    )
+    await db.query(
+      `insert into user_diet_goals (user_id, diet_slug, per_week, meal) values ($1, 'vegetarian', 4, 'dinner')`,
+      [CAROL],
+    )
+    for (const bad of [
+      `insert into user_diet_goals (user_id, diet_slug, days, per_week) values ($1, 'vegetarian', '{1}', 2)`,
+      `insert into user_diet_goals (user_id, diet_slug) values ($1, 'vegetarian')`,
+      `insert into user_diet_goals (user_id, diet_slug, days) values ($1, 'vegetarian', '{8}')`,
+    ]) {
+      await assert.rejects(db.query(bad, [CAROL]))
+    }
+  })
+
+  it('stores weights between -1 and 1 and keeps them private', async () => {
+    await db.query(
+      `insert into user_category_weights (user_id, category, weight) values ($1, 'meat', -0.5)`,
+      [CAROL],
+    )
+    await assert.rejects(
+      db.query(
+        `insert into user_category_weights (user_id, category, weight) values ($1, 'fish', 2)`,
+        [CAROL],
+      ),
+    )
+    const bobSees = await as('authenticated', BOB, async () => {
+      const goals = await db.query(
+        'select count(*)::int as n from user_diet_goals',
+      )
+      const weights = await db.query(
+        'select count(*)::int as n from user_category_weights',
+      )
+      return goals.rows[0].n + weights.rows[0].n
+    })
+    assert.equal(bobSees, 0)
+  })
+})

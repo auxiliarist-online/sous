@@ -24,7 +24,7 @@ from pathlib import Path
 
 API_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = API_DIR / "data"
-MIGRATION = API_DIR.parent.parent / "supabase" / "migrations" / "20261007010000_baseline_prices.sql"
+MIGRATION = API_DIR.parent.parent / "supabase" / "migrations" / "20261007030000_baseline_prices.sql"
 
 DBNOMICS_SOUTH = "https://api.db.nomics.world/v22/series/BLS/ap?" + urllib.parse.urlencode(
     {"dimensions": json.dumps({"area": ["0300"]}), "observations": 1, "limit": 1000}
@@ -46,6 +46,7 @@ class Item:
     contains: tuple[str, ...] = ()
     grams_per_cup: float | None = None
     grams_per_each: float | None = None
+    may_contain: tuple[str, ...] = ()
 
 
 # BLS item code -> ingredient, with the quantity and unit each series is priced in.
@@ -56,14 +57,18 @@ BLS_ITEMS: dict[str, tuple[Item, float, str]] = {
     "702111": (Item("white bread", "bakery", ("gluten",)), 1, "lb"),
     "703112": (Item("ground beef", "meat_seafood", ("meat",)), 1, "lb"),
     "703432": (Item("beef stew meat", "meat_seafood", ("meat",)), 1, "lb"),
-    "704111": (Item("bacon", "meat_seafood", ("meat",)), 1, "lb"),
-    "704212": (Item("boneless pork chops", "meat_seafood", ("meat",)), 1, "lb"),
+    "704111": (Item("bacon", "meat_seafood", ("meat", "pork")), 1, "lb"),
+    "704212": (Item("boneless pork chops", "meat_seafood", ("meat", "pork")), 1, "lb"),
     "706111": (Item("whole chicken", "meat_seafood", ("poultry",)), 1, "lb"),
     "706212": (Item("chicken legs", "meat_seafood", ("poultry",)), 1, "lb"),
     "FF1101": (Item("boneless chicken breast", "meat_seafood", ("poultry",)), 1, "lb"),
     "708111": (Item("eggs", "dairy_eggs", ("egg",), None, 50), 12, "each"),
     "709112": (Item("whole milk", "dairy_eggs", ("dairy",), 244), 1, "gallon"),
-    "710212": (Item("cheddar cheese", "dairy_eggs", ("dairy",), 113), 1, "lb"),
+    "710212": (
+        Item("cheddar cheese", "dairy_eggs", ("dairy",), 113, may_contain=("animal_rennet",)),
+        1,
+        "lb",
+    ),
     "FJ4101": (Item("plain yogurt", "dairy_eggs", ("dairy",), 245), 8, "oz"),
     "711211": (Item("bananas", "produce", (), None, 118), 1, "lb"),
     "711311": (Item("oranges", "produce", (), None, 140), 1, "lb"),
@@ -138,6 +143,7 @@ COLUMNS = [
     "ingredient",
     "aisle",
     "contains",
+    "may_contain",
     "grams_per_cup",
     "grams_per_each",
     "source",
@@ -174,6 +180,7 @@ def row(
         "ingredient": item.ingredient,
         "aisle": item.aisle,
         "contains": "|".join(item.contains),
+        "may_contain": "|".join(item.may_contain),
         "grams_per_cup": "" if item.grams_per_cup is None else f"{item.grams_per_cup:g}",
         "grams_per_each": "" if item.grams_per_each is None else f"{item.grams_per_each:g}",
         "source": source,
@@ -248,6 +255,7 @@ def seed_rows() -> list[dict[str, str]]:
                 tuple(c for c in r["contains"].split("|") if c),
                 float(r["grams_per_cup"]) if r["grams_per_cup"] else None,
                 float(r["grams_per_each"]) if r["grams_per_each"] else None,
+                tuple(c for c in r["may_contain"].split("|") if c),
             )
             rows.append(
                 row(
@@ -279,14 +287,17 @@ def write_migration(rows: list[dict[str, str]]) -> None:
         "-- apps/api/scripts/build_baseline_prices.py; edit the script, not this file.",
         f"-- Generated {date.today().isoformat()} from BLS (South), USDA ERS and hand seeds.",
         "",
-        "insert into public.ingredients (name, aisle, contains, grams_per_cup, grams_per_each)",
+        "insert into public.ingredients",
+        "  (name, aisle, contains, may_contain, grams_per_cup, grams_per_each)",
         "values",
     ]
     values = []
     for r in ingredients.values():
         contains = "'{" + ",".join(c for c in r["contains"].split("|") if c) + "}'"
+        may_contain = "'{" + ",".join(c for c in r["may_contain"].split("|") if c) + "}'"
         values.append(
-            f"  ({sql_literal(r['ingredient'])}, {sql_literal(r['aisle'])}, {contains}, "
+            f"  ({sql_literal(r['ingredient'])}, {sql_literal(r['aisle'])}, "
+            f"{contains}, {may_contain}, "
             f"{r['grams_per_cup'] or 'null'}, {r['grams_per_each'] or 'null'})"
         )
     lines.append(",\n".join(values))
