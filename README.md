@@ -10,8 +10,13 @@ Stack and reasoning: [docs/adr/0001-stack.md](docs/adr/0001-stack.md).
 apps/
   web/   React + TypeScript (Vite), mobile-first UI
   api/   Python FastAPI service
+supabase/
+  migrations/   Postgres schema (Supabase migrations)
+  tests/        Schema tests, run against PGlite
 docs/
-  adr/   Architecture decision records
+  adr/          Architecture decision records
+  research/     Spikes and research notes
+  data-model.md Schema overview and diagram
 ```
 
 ## Prerequisites
@@ -59,6 +64,7 @@ npm run format:check
 npm run lint
 npm run typecheck
 npm test
+npm run test:db   # database migrations + access rules
 
 # API (from apps/api)
 .venv/bin/ruff check .
