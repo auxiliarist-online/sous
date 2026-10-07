@@ -69,7 +69,7 @@ class CrawlStore(Protocol):
         error_code: str | None = None,
         recipe_id: str | None = None,
     ) -> None: ...
-    async def hide_recipe(self, recipe_id: str) -> None: ...
+    async def hide_recipe(self, source: Source, recipe_id: str) -> None: ...
     async def opt_out(self, source: Source) -> int: ...
     async def finish_run(self, report: RunReport) -> None: ...
 
@@ -167,12 +167,14 @@ class SupabaseCrawlStore:
             body["recipe_id"] = recipe_id
         await self._call("PATCH", "crawl_pages", params={"id": f"eq.{page.id}"}, json=body)
 
-    async def hide_recipe(self, recipe_id: str) -> None:
+    async def hide_recipe(self, source: Source, recipe_id: str) -> None:
+        """Hide a public recipe, but only one that belongs to this source."""
         await self._call(
             "PATCH",
             "recipes",
             params={
                 "id": f"eq.{recipe_id}",
+                "source_id": f"eq.{source.id}",
                 "visibility": "eq.public",
                 "status": "in.(active,needs_review)",
             },

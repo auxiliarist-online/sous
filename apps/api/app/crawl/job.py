@@ -21,7 +21,7 @@ from app.config import settings
 from app.crawl.sitemap import find_recipe_urls
 from app.crawl.store import CrawlStore, PageStatus, QueuedPage, RunReport, Source
 from app.recipes import fetch
-from app.recipes.extract import extract_recipe
+from app.recipes.extract import domain_of, extract_recipe
 from app.recipes.fetch import TIMEOUT, FetchError, fetch_page, user_agent
 
 log = logging.getLogger(__name__)
@@ -118,6 +118,9 @@ async def _crawl_page(
     report.pages_fetched += 1
     try:
         fetched = await fetch_page(page.url, client)
+        if domain_of(fetched.url) != report.source.domain:
+            # Only approved sites are crawled; a redirect elsewhere isn't followed up.
+            raise FetchError("off_site_redirect", f"redirected to {fetched.url}")
         try:
             draft = extract_recipe(fetched.html, fetched.url)
         except FetchError:
@@ -131,7 +134,7 @@ async def _crawl_page(
         await store.record_page(page, status, e.code)
         # Gone from the site, or the site asked us not to read it: out of the catalog.
         if page.recipe_id and status in ("not_found", "robots_disallowed"):
-            await store.hide_recipe(page.recipe_id)
+            await store.hide_recipe(report.source, page.recipe_id)
         return status, e.code
 
     saved = await store.save_recipe({**draft.payload(None), "refresh": True})

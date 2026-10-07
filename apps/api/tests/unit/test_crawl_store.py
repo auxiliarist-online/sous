@@ -115,9 +115,10 @@ def test_records_a_page(status: str, attempts: int) -> None:
 
 
 def test_hides_only_a_public_listed_recipe() -> None:
-    _, seen = call(lambda s: s.hide_recipe("r1"))
+    _, seen = call(lambda s: s.hide_recipe(SOURCE, "r1"))
     params = seen[0].url.params
     assert (params["id"], params["visibility"]) == ("eq.r1", "eq.public")
+    assert params["source_id"] == "eq.src-1"  # never another site's recipe
     assert body(seen[0]) == {"status": "hidden"}
 
 

@@ -22,6 +22,9 @@ from app.config import settings
 MAX_REDIRECTS = 5
 MAX_BYTES = 5_000_000
 ROBOTS_TTL_SECONDS = 24 * 3600
+# Longest we'll wait for a site's turn. A site can set any Crawl-delay, so a
+# longer wait fails as rate_limited instead of tying up the request.
+MAX_WAIT_SECONDS = 60.0
 TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 
 
@@ -126,6 +129,8 @@ class Throttle:
         async with self._lock:
             now = time.monotonic()
             start = max(now, self._next.get(host, 0.0))
+            if start - now > MAX_WAIT_SECONDS:
+                raise FetchError("rate_limited", "That site is busy. Try again later.")
             self._next[host] = start + max(self.interval, crawl_delay or 0.0)
         if start > now:
             await asyncio.sleep(start - now)

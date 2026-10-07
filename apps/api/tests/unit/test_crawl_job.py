@@ -60,7 +60,7 @@ class FakeStore:
     ) -> None:
         self.status[page.url] = status
 
-    async def hide_recipe(self, recipe_id: str) -> None:
+    async def hide_recipe(self, source: Source, recipe_id: str) -> None:
         self.hidden.append(recipe_id)
 
     async def opt_out(self, source: Source) -> int:
@@ -75,12 +75,19 @@ def html(body: str) -> httpx.Response:
     return httpx.Response(200, text=body, headers={"content-type": "text/html"})
 
 
-def blog(pages: dict[str, httpx.Response], robots: str = "") -> httpx.MockTransport:
-    """A synthetic blog whose sitemap lists every page in `pages`."""
+def blog(
+    pages: dict[str, httpx.Response],
+    robots: str = "",
+    elsewhere: dict[str, httpx.Response] | None = None,
+) -> httpx.MockTransport:
+    """A synthetic blog whose sitemap lists every page in `pages`. `elsewhere`
+    holds full URLs on other sites."""
     sitemap = urlset([(f"{HOME}{path}", None) for path in pages])
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["user-agent"].startswith("SousBot/0.1 (+https://")
+        if request.url.host != "example-blog.com":
+            return (elsewhere or {}).get(str(request.url), httpx.Response(404))
         path = request.url.path
         if path == "/robots.txt":
             return httpx.Response(200, text=robots)
@@ -259,3 +266,17 @@ def test_an_unreadable_robots_txt_stops_without_opting_out() -> None:
     report, store, _ = crawl(httpx.MockTransport(lambda r: httpx.Response(503)))
     assert (report.status, report.stop_reason) == ("stopped", "robots.txt: unreachable")
     assert store.opted_out == []
+
+
+@pytest.mark.usefixtures("no_dns")
+def test_a_redirect_to_another_site_is_not_imported() -> None:
+    pages = {"/tacos/": httpx.Response(301, headers={"location": "https://example-other.com/x/"})}
+    store = FakeStore()
+    url = f"{HOME}/tacos/"
+    store.pages[url] = QueuedPage("page-0", url, None, 0, "r1")
+    store.status[url] = None
+    # The redirect lands on another site's real recipe.
+    crawl(blog(pages, elsewhere={"https://example-other.com/x/": recipe_page("x")}), store)
+    assert store.status[url] == "error"
+    assert store.saved == []
+    assert store.hidden == []

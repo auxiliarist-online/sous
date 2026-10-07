@@ -176,3 +176,18 @@ class TestThrottle:
 
         asyncio.run(go())
         assert waits == [12.0]
+
+
+def test_an_absurd_crawl_delay_fails_fast_instead_of_hanging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.recipes.fetch.time.monotonic", lambda: 100.0)
+    throttle = fetch.Throttle(5.0)
+
+    async def go() -> None:
+        await throttle.wait("slow.example", crawl_delay=999_999_999)
+        await throttle.wait("slow.example")
+
+    with pytest.raises(FetchError) as err:
+        asyncio.run(go())
+    assert err.value.code == "rate_limited"
