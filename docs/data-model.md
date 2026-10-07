@@ -153,7 +153,7 @@ Users get three kinds of control (TYL-32):
 
 ### Recipe content rights
 
-- `recipe_sources.content_rights` is `link_only` by default: we keep metadata and ingredients and link out for instructions. `instructions` is only filled for `public_domain` or `licensed` sources, or a user's own private recipe (TYL-27).
+- `recipe_sources.content_rights` is `link_only` by default: we keep metadata and ingredients and link out for instructions. `instructions` is only filled for `public_domain` or `licensed` sources, or a user's own private recipe. Full rules: [policies/recipe-sources.md](policies/recipe-sources.md) (TYL-27).
 - `opted_out_at` records a site asking to be removed.
 - New recipes start as `needs_review` and aren't shown publicly until they're `active`.
 

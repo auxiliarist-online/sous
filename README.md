@@ -16,6 +16,7 @@ supabase/
 docs/
   adr/          Architecture decision records
   research/     Spikes and research notes
+  policies/     Product policies (recipe sources and attribution)
   data-model.md Schema overview and diagram
 ```
 
