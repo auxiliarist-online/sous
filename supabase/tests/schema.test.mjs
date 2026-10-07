@@ -421,3 +421,155 @@ describe('diet customization', () => {
     assert.equal(bobSees, 0)
   })
 })
+
+describe('import_recipe', () => {
+  const payload = (url, extra = {}) => ({
+    added_by: ALICE,
+    source: { domain: 'www.example-blog.com', name: 'Example Blog' },
+    recipe: {
+      source_url: url,
+      title: 'Black bean chili',
+      image_url: 'https://example-blog.com/chili.jpg',
+      servings: 6,
+      total_minutes: 45,
+      summary: "The author's own headnote",
+      instructions: ['Their step one'],
+    },
+    cuisines: ['mexican', 'Dairy-Free'],
+    ingredients: [
+      { line_no: 0, raw_text: '2 cans black beans', section: '' },
+      { line_no: 1, raw_text: '1 onion, diced', section: 'Toppings' },
+      { line_no: 2, raw_text: '' },
+    ],
+    ...extra,
+  })
+
+  const importRecipe = (p) =>
+    as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [p])
+      return rows[0].r
+    })
+
+  it('stores a link-only recipe privately, without the author’s text', async () => {
+    const r = await importRecipe(payload('https://example-blog.com/chili/'))
+    assert.equal(r.created, true)
+    assert.equal(r.visibility, 'private')
+    assert.equal(r.status, 'needs_review')
+
+    const { rows } = await db.query(
+      `select r.summary, r.instructions, r.image_url, s.domain, s.content_rights,
+              (select array_agg(raw_text order by line_no) from recipe_ingredients where recipe_id = r.id) as lines,
+              (select array_agg(section order by line_no) from recipe_ingredients where recipe_id = r.id) as sections,
+              (select array_agg(cuisine_slug) from recipe_cuisines where recipe_id = r.id) as cuisines,
+              exists (select 1 from user_saved_recipes where recipe_id = r.id and user_id = $2) as saved
+       from recipes r join recipe_sources s on s.id = r.source_id where r.id = $1`,
+      [r.recipe_id, ALICE],
+    )
+    const got = rows[0]
+    assert.equal(got.domain, 'example-blog.com')
+    assert.equal(got.content_rights, 'link_only')
+    assert.equal(got.summary, null)
+    assert.equal(got.instructions, null)
+    assert.equal(got.image_url, 'https://example-blog.com/chili.jpg')
+    assert.deepEqual(got.lines, ['2 cans black beans', '1 onion, diced'])
+    assert.deepEqual(got.sections, [null, 'Toppings'])
+    assert.deepEqual(got.cuisines, ['mexican'])
+    assert.equal(got.saved, true)
+  })
+
+  it('dedupes on the canonical URL and shares it with the next importer', async () => {
+    const url = 'https://example-blog.com/lentil-soup/'
+    const first = await importRecipe(payload(url))
+    const second = await importRecipe({ ...payload(url), added_by: BOB })
+    assert.equal(second.created, false)
+    assert.equal(second.recipe_id, first.recipe_id)
+
+    const visibleTo = (user) =>
+      as('authenticated', user, async () => {
+        const { rows } = await db.query(
+          'select count(*)::int as n from recipes where id = $1',
+          [first.recipe_id],
+        )
+        return rows[0].n
+      })
+    assert.equal(await visibleTo(ALICE), 1)
+    assert.equal(await visibleTo(BOB), 1)
+  })
+
+  it('does not let a saved row expose a hand-typed private recipe', async () => {
+    const handTyped = await recipe('Alice’s own', [], {
+      url: null,
+      visibility: 'private',
+      addedBy: ALICE,
+    })
+    await db.query('update recipes set source_url = null where id = $1', [
+      handTyped,
+    ])
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+      [BOB, handTyped],
+    )
+    const n = await as('authenticated', BOB, async () => {
+      const { rows } = await db.query(
+        'select count(*)::int as n from recipes where id = $1',
+        [handTyped],
+      )
+      return rows[0].n
+    })
+    assert.equal(n, 0)
+  })
+
+  it('makes approved sources public and keeps text only when rights allow', async () => {
+    await db.query(
+      `insert into recipe_sources (name, domain, content_rights, crawl_enabled)
+       values ('MyPlate', 'myplate.gov', 'public_domain', true)`,
+    )
+    const r = await importRecipe({
+      ...payload('https://www.myplate.gov/recipes/veggie-chili'),
+      source: { domain: 'www.myplate.gov', name: 'MyPlate Kitchen' },
+    })
+    assert.equal(r.visibility, 'public')
+    const { rows } = await db.query(
+      'select summary, instructions from recipes where id = $1',
+      [r.recipe_id],
+    )
+    assert.equal(rows[0].summary, "The author's own headnote")
+    assert.deepEqual(rows[0].instructions, ['Their step one'])
+  })
+
+  it('drops the image for an opted-out source and keeps it private', async () => {
+    await db.query(
+      `insert into recipe_sources (name, domain, crawl_enabled, opted_out_at)
+       values ('Gone', 'opted-out.example', true, now())`,
+    )
+    const r = await importRecipe({
+      ...payload('https://opted-out.example/stew/'),
+      source: { domain: 'opted-out.example' },
+    })
+    assert.equal(r.visibility, 'private')
+    const { rows } = await db.query(
+      'select image_url from recipes where id = $1',
+      [r.recipe_id],
+    )
+    assert.equal(rows[0].image_url, null)
+  })
+
+  it('refuses callers other than the API', async () => {
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query('select import_recipe($1)', [payload('https://x.example/a/')]),
+      ),
+      /only callable by the API/,
+    )
+  })
+
+  it('requires a title, URL and domain', async () => {
+    await assert.rejects(
+      importRecipe({
+        ...payload('https://x.example/b/'),
+        recipe: { source_url: 'https://x.example/b/' },
+      }),
+      /required/,
+    )
+  })
+})
