@@ -7,6 +7,9 @@ Postgres on Supabase. The schema lives in [`supabase/migrations/`](../supabase/m
 ```mermaid
 erDiagram
     recipe_sources ||--o{ recipes : publishes
+    recipe_sources ||--o{ crawl_pages : "sitemap URLs"
+    recipe_sources ||--o{ crawl_runs : "crawl log"
+    crawl_pages |o--o| recipes : "imported as"
     recipes ||--o{ recipe_ingredients : "has lines"
     recipes ||--o{ recipe_cuisines : ""
     recipes ||--o{ recipe_diets : ""
@@ -154,12 +157,20 @@ Users get three kinds of control (TYL-32):
 ### Recipe content rights
 
 - `recipe_sources.content_rights` is `link_only` by default: we keep metadata and ingredients and link out for instructions. `instructions` is only filled for `public_domain` or `licensed` sources, or a user's own private recipe. Full rules: [policies/recipe-sources.md](policies/recipe-sources.md) (TYL-27).
-- `opted_out_at` records a site asking to be removed.
+- `opted_out_at` records a site asking to be removed. `opt_out_source()` sets it, stops crawling, and hides the site's public recipes.
+- `crawl_enabled` is only set after the per-site check, recorded in `crawl_notes`.
 - New recipes start as `needs_review` and aren't shown publicly until they're `active`.
+
+### Crawling (TYL-26)
+
+- `crawl_pages` is the queue: one row per sitemap URL with its `lastmod` and what happened when we fetched it. `crawl_enqueue()` adds new URLs and re-queues a page only when its `lastmod` moves forward; blocked and disallowed pages are never re-queued automatically.
+- `crawl_runs` logs each nightly run per site: counts, and why it stopped if it did.
+- `import_recipe()` with `refresh: true` updates a changed recipe in place (same content-rights rules) and sends it back to `needs_review`.
 
 ### Access (row level security)
 
 - **Catalog** (recipes, ingredients, diets, cuisines, stores, products, shared prices): readable by anyone, written only by the API using the service role.
+- **Crawler** (`crawl_pages`, `crawl_runs`): RLS with no policies, so only the service role can see them.
 - **Recipes:** anyone sees public `active` ones; users also see recipes they added. Ingredient lines, cuisines and diet labels follow their recipe.
 - **User data** (profile, favorites, plans, lists, own prices, own stores): only the owner can read or write.
 
@@ -174,5 +185,4 @@ Users get three kinds of control (TYL-32):
 
 - **Households:** sharing a plan or list with family (TYL-18). Plans and lists are per user for now; adding a `household_id` later is straightforward.
 - **Nutrition** (TYL-11, after v1).
-- **Crawl run history:** only `last_crawled_at` per source for now.
 - **Assistant conversations** (TYL-25).

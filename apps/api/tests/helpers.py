@@ -38,3 +38,20 @@ def page_html(ld: dict[str, Any] | None = None, canonical: str | None = None) ->
         f'<meta property="og:site_name" content="Example Blog">{link}{script}'
         f"</head><body><p>Story about tacos.</p></body></html>"
     )
+
+
+SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
+
+
+def urlset(entries: list[tuple[str, str | None]]) -> str:
+    """A sitemap listing pages: [(url, lastmod or None)]."""
+    urls = "".join(
+        f"<url><loc>{url}</loc>{f'<lastmod>{mod}</lastmod>' if mod else ''}</url>"
+        for url, mod in entries
+    )
+    return f'<?xml version="1.0"?><urlset xmlns="{SITEMAP_NS}">{urls}</urlset>'
+
+
+def sitemap_index(urls: list[str]) -> str:
+    items = "".join(f"<sitemap><loc>{url}</loc></sitemap>" for url in urls)
+    return f'<?xml version="1.0"?><sitemapindex xmlns="{SITEMAP_NS}">{items}</sitemapindex>'
