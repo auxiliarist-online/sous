@@ -86,13 +86,15 @@ cd apps/api
 
 Each run reads the site's sitemaps, queues new or changed URLs (by `lastmod`), and fetches them at most once every 5 seconds per site (longer if `robots.txt` sets `Crawl-delay`). Progress is in `crawl_pages` and `crawl_runs`. It's meant to run nightly as a batch job; where that runs is still open (ADR 0001).
 
-## Deploying the web app (Vercel)
+## Deploying (Vercel)
 
-1. In the [Vercel dashboard](https://vercel.com/new), import the `auxiliarist-online/sous` GitHub repo.
-2. Set **Root Directory** to `apps/web`. Vercel detects Vite; keep the default build (`npm run build`) and output (`dist`).
-3. Add the `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` environment variables.
-4. Deploy. Every merge to `main` then deploys to production, and every pull request gets a preview URL.
+Two Vercel projects deploy from this repo on every merge to `main`, and every pull request gets preview links:
 
-`apps/web/vercel.json` turns on clean URLs, so `public/sousbot.html` is served at `/sousbot`. That page is SousBot's public contact and opt-out page (TYL-36). Once it's live, set `SOUSBOT_CONTACT_URL` in the API's environment to its address so the crawler's user agent links to it.
+| Project              | Root Directory | Production                       |
+| -------------------- | -------------- | -------------------------------- |
+| `sous` (web)         | `apps/web`     | https://sous-tawny.vercel.app    |
+| `sous-api` (FastAPI) | `apps/api`     | https://sous-api-five.vercel.app |
 
-The API isn't deployed yet; the web app only needs it for features that call `/api`.
+- **Web:** Vite defaults (`npm run build`, output `dist`). `apps/web/vercel.json` turns on clean URLs, so `public/sousbot.html` is served at `/sousbot`, and rewrites `/api/*` to the API project, so the browser only ever talks to one origin.
+- **API:** Vercel runs the FastAPI `app` in `app/main.py` as one function. Its environment needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (set as a sensitive variable) and `SOUSBOT_CONTACT_URL` (the `/sousbot` page above).
+- **Web environment:** `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (the public anon key only).
