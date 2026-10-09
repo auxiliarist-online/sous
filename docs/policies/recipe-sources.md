@@ -9,6 +9,7 @@ Sous shows other people's recipes to help people find them and cook them. It sho
 
 ## Summary
 
+- **Sous is a tool for your own recipes, not a publisher of other people's.** Recipes from food blogs reach Sous mainly through each user's own imports, kept private to them. The shared catalog holds only recipes we're allowed to share: open licenses, federal works, and sites that give written permission. See [ADR 0002](../adr/0002-recipe-catalog.md).
 - **Store facts, link to the writing.** For third-party recipes we keep the title, ingredients, times, servings and an image link. Instructions and the author's own prose stay on their site.
 - **Credit every recipe where it's shown.** Every card and detail page shows the source name and a link to the original.
 - **Crawl politely and honestly.** Use a `SousBot` user agent with a contact link, obey `robots.txt`, keep request rates low, and never get around a block.
@@ -38,7 +39,7 @@ Rules that follow from this:
 
 - **`summary` is ours or nothing.** For `link_only` recipes it stays null, or we write it ourselves from facts ("Vegetarian · Thai · 35 min · serves 4"). We never copy, paraphrase or AI-rewrite the author's description.
 - **Search** covers title, cuisine and ingredient names. It never indexes text we don't store.
-- **USDA MyPlate Kitchen** is US government work, so it's `public_domain` and instructions can be shown in full, still with credit to MyPlate.
+- **Federal recipes** (USDA's Food and Nutrition Service) are US government work, so they're `public_domain` and instructions can be shown in full, with credit to the collection. Only recipes whose source is a federal agency count; recipes credited to a university or state partner may be copyrighted. (USDA MyPlate Kitchen was retired in January 2026.)
 - **`licensed`** means we have written permission from the site, saved in the source's record. Never set it on our own judgement.
 
 ## Attribution
@@ -51,6 +52,7 @@ Rules that follow from this:
 ## Images
 
 - **Show the source's own image by its URL; don't copy, cache, crop into new files, or re-host it.** Images are the most clearly copyrighted part of a recipe page, and a hotlinked image stays under the blogger's control.
+- **Only when the source allows it.** Some sites forbid linking to their images (101 Cookbooks, for example). For catalog sources, store `image_url` only when the site's terms, license or written permission allow it, and note which in `crawl_notes`. Otherwise show the placeholder. A user's private import may keep the image link, since only they see it.
 - Load images lazily and only on screens where the recipe is shown with its attribution.
 - If an image fails to load or a site asks us not to hotlink, show a plain placeholder. Don't fall back to another copy of the image.
 - Image thumbnails stored by Sous need permission from the site (that is, `licensed`).
@@ -112,6 +114,7 @@ This policy is a careful starting point, not legal advice. Before Sous takes pay
 ## Effects on the backlog
 
 - **TYL-8 (import from URL):** follow [What we store](#what-we-store), [Crawling and fetching](#crawling-and-fetching) and [User imports](#user-imports). Don't store `description` or instructions for `link_only` sources.
-- **TYL-26 (bulk crawl):** blocked on the contact page and on the per-site check before `crawl_enabled`.
+- **TYL-26 (bulk crawl):** only for sources that gave written permission or whose license allows it. The first per-site check (TYL-41, 2026-10-08) found none of the starter blogs usable without permission; requests go out under TYL-46.
+- **TYL-35 (import UI):** the main way blog recipes reach Sous, so importing must be quick from a phone.
 - **TYL-12 (browse UI):** attribution on every card, "View full recipe" as the main action, image placeholder.
 - **TYL-25 (assistant):** answers from metadata only, always with the link.
