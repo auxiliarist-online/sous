@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import type { ImportResult, SavedRecipe } from './library.ts'
 
 /** What the screen needs from the API and database; tests pass fakes. */
@@ -61,14 +61,10 @@ export function Library({
     [api, refresh],
   )
 
-  // A recipe shared to Sous from another app is saved straight away, once.
-  const handledShare = useRef(false)
-  useEffect(() => {
-    if (sharedUrl && !handledShare.current) {
-      handledShare.current = true
-      void save(sharedUrl)
-    }
-  }, [sharedUrl, save])
+  // A link shared to Sous only fills in the form: saving always takes the
+  // user's tap, so another site can't add recipes by linking to /share.
+  const confirmingShare =
+    !!sharedUrl && url === sharedUrl && status.state === 'idle'
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -84,7 +80,9 @@ export function Library({
   return (
     <>
       <form className="card" onSubmit={submit}>
-        <h2>Add a recipe</h2>
+        <h2>
+          {confirmingShare ? 'Save the recipe you shared?' : 'Add a recipe'}
+        </h2>
         <label htmlFor="recipe-url">Recipe link</label>
         <input
           id="recipe-url"

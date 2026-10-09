@@ -35,7 +35,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
     return defaultClient ? liveApi(defaultClient, session) : null
   }, [session, libraryApi])
 
-  // Once signed in, the Library takes the shared link; don't replay it later.
+  // Once signed in, the Library shows the shared link; don't offer it again later.
   useEffect(() => {
     if (session && shared) clearShare()
   }, [session, shared])
@@ -56,9 +56,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
       {auth && session === null && (
         <>
           {shared && (
-            <p className="card muted">
-              Sign in and we'll save the recipe you shared.
-            </p>
+            <p className="card muted">Sign in to save the recipe you shared.</p>
           )}
           <SignIn auth={auth} />
         </>

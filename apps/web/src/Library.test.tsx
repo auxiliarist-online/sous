@@ -84,14 +84,19 @@ describe('Library', () => {
     )
   })
 
-  it('saves a shared link straight away, once', async () => {
+  it('fills in a shared link but saves it only when the user taps Save', async () => {
     const api = fakeApi()
-    const { rerender } = render(
-      <Library api={api} sharedUrl={SAVED.source_url} />,
-    )
+    render(<Library api={api} sharedUrl={SAVED.source_url} />)
+    expect(
+      screen.getByRole('heading', { name: 'Save the recipe you shared?' }),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Recipe link')).toHaveValue(SAVED.source_url)
+    await screen.findByText(/Nothing saved yet/)
+    expect(api.save).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+    expect(api.save).toHaveBeenCalledWith(SAVED.source_url)
     expect(await screen.findByText('Black bean tacos')).toBeInTheDocument()
-    rerender(<Library api={api} sharedUrl={SAVED.source_url} />)
-    expect(api.save).toHaveBeenCalledTimes(1)
   })
 
   it('removes a recipe after confirming', async () => {
