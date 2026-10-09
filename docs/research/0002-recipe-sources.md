@@ -71,6 +71,12 @@ The policy (TYL-27) rules out getting around these blocks: no browser user agent
 - **Import from the user's own browser.** For a single recipe the user is already looking at, a bookmarklet or share target can send the page's recipe data from their browser to Sous. That's the user's own visit, so nothing is being bypassed.
 - **MyPlate** is public domain: check whether USDA publishes the recipes as a download or API before crawling.
 
+## Update 2026-10-08: terms check and MyPlate
+
+- **Terms:** checking the 8 reachable sites' terms before crawling (TYL-41) found none usable for a paid product without permission, and two more now block SousBot. Notes per site are in `recipe_sources.crawl_notes`.
+- **MyPlate Kitchen** was retired with MyPlate.gov in January 2026, and not all of its recipes were federal works. Federal recipes now come from USDA's Food and Nutrition Service (TYL-42).
+- What Sous does instead is in [ADR 0002](../adr/0002-recipe-catalog.md).
+
 ## Libraries
 
 | Library                                                                      | License | Notes                                                                                                                                                          |
