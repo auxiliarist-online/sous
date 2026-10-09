@@ -36,6 +36,7 @@ const session = {
 const library = (): LibraryApi => ({
   list: vi.fn(async () => []),
   save: vi.fn(),
+  savePage: vi.fn(),
   remove: vi.fn(),
 })
 

@@ -7,7 +7,13 @@ import {
   type Auth,
 } from './auth.ts'
 import { Library, type LibraryApi } from './Library.tsx'
-import { importRecipe, removeSaved, savedRecipes } from './library.ts'
+import {
+  importPage,
+  importRecipe,
+  removeSaved,
+  savedRecipes,
+} from './library.ts'
+import { clearPage, pendingPage } from './page.ts'
 import { clearShare, pendingShare } from './share.ts'
 import { SignIn } from './SignIn.tsx'
 
@@ -15,6 +21,7 @@ function liveApi(db: SupabaseClient, session: Session): LibraryApi {
   return {
     list: () => savedRecipes(db),
     save: (url) => importRecipe(session, url),
+    savePage: (page) => importPage(session, page),
     remove: (id) => removeSaved(db, id),
   }
 }
@@ -28,6 +35,7 @@ interface Props {
 function App({ auth = defaultAuth, libraryApi }: Props) {
   const session = useSession(auth)
   const [shared] = useState(pendingShare)
+  const [sharedPage] = useState(pendingPage)
 
   const api = useMemo(() => {
     if (!session) return null
@@ -38,7 +46,8 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
   // Once signed in, the Library shows the shared link; don't offer it again later.
   useEffect(() => {
     if (session && shared) clearShare()
-  }, [session, shared])
+    if (session && sharedPage) clearPage()
+  }, [session, shared, sharedPage])
 
   return (
     <main className="app" aria-busy={session === undefined}>
@@ -55,7 +64,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
       )}
       {auth && session === null && (
         <>
-          {shared && (
+          {(shared || sharedPage) && (
             <p className="card muted">Sign in to save the recipe you shared.</p>
           )}
           <SignIn auth={auth} />
@@ -63,7 +72,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
       )}
       {auth && session && api && (
         <>
-          <Library api={api} sharedUrl={shared} />
+          <Library api={api} sharedUrl={shared} sharedPage={sharedPage} />
           <section className="card account">
             <p className="muted small">
               Signed in as <strong>{session.user.email}</strong>

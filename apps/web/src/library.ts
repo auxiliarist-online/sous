@@ -42,16 +42,25 @@ export function firstUrl(
   return null
 }
 
-export async function importRecipe(
+export function importRecipe(
   session: Session,
   url: string,
   send: typeof apiFetch = apiFetch,
 ): Promise<ImportResult> {
+  return importVia(send, session, '/recipes/import', { url })
+}
+
+async function importVia(
+  send: typeof apiFetch,
+  session: Session,
+  path: string,
+  body: object,
+): Promise<ImportResult> {
   let resp: Response
   try {
-    resp = await send(session, '/recipes/import', {
+    resp = await send(session, path, {
       method: 'POST',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(body),
     })
   } catch {
     throw new ImportError(
@@ -66,10 +75,11 @@ export async function importRecipe(
       'Your session has expired. Sign in again.',
     )
   }
-  const body = (await resp.json().catch(() => null)) as {
-    detail?: { code?: string; message?: string }
-  } | null
-  const detail = body?.detail
+  const detail = (
+    (await resp.json().catch(() => null)) as {
+      detail?: { code?: string; message?: string }
+    } | null
+  )?.detail
   if (detail && typeof detail === 'object' && detail.message) {
     throw new ImportError(detail.code ?? 'error', detail.message)
   }
@@ -121,4 +131,46 @@ export async function removeSaved(
     .delete()
     .eq('recipe_id', recipeId)
   if (error) throw error
+}
+
+/** A recipe page's data, read by the bookmarklet in the user's own browser. */
+export interface PageData {
+  url: string
+  siteName: string | null
+  ld: string[]
+}
+
+export async function importPage(
+  session: Session,
+  page: PageData,
+  send: typeof apiFetch = apiFetch,
+): Promise<ImportResult> {
+  return importVia(send, session, '/recipes/import-page', {
+    url: page.url,
+    site_name: page.siteName,
+    ld: page.ld,
+  })
+}
+
+function isRecipe(node: unknown): node is { name?: unknown } {
+  if (!node || typeof node !== 'object') return false
+  const type = (node as { '@type'?: unknown })['@type']
+  return type === 'Recipe' || (Array.isArray(type) && type.includes('Recipe'))
+}
+
+/** The recipe's name from a page's JSON-LD, for the confirm screen. */
+export function recipeTitle(ld: string[]): string | null {
+  for (const block of ld) {
+    let data: unknown
+    try {
+      data = JSON.parse(block)
+    } catch {
+      continue
+    }
+    const graph = (data as { '@graph'?: unknown })?.['@graph']
+    const nodes = [data, graph].flat(2)
+    const recipe = nodes.find(isRecipe)
+    if (recipe && typeof recipe.name === 'string') return recipe.name.trim()
+  }
+  return null
 }
