@@ -812,3 +812,165 @@ describe('crawler', () => {
     }
   })
 })
+
+describe('browser import', () => {
+  const imp = (p) =>
+    as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [p])
+      return rows[0].r
+    })
+
+  const page = (url, user, title = 'Chana masala', extra = {}) => ({
+    added_by: user,
+    origin: 'browser',
+    source: { domain: 'blocked-blog.example', name: 'Blocked Blog' },
+    recipe: {
+      source_url: url,
+      title,
+      summary: 'Their headnote',
+      instructions: ['Their step'],
+    },
+    ingredients: [{ line_no: 0, raw_text: '1 can chickpeas' }],
+    ...extra,
+  })
+
+  const row = async (id) =>
+    (
+      await db.query(
+        `select origin, visibility, added_by, title, summary, instructions,
+                (select array_agg(raw_text order by line_no) from recipe_ingredients where recipe_id = r.id) as lines
+         from recipes r where id = $1`,
+        [id],
+      )
+    ).rows[0]
+
+  it('keeps a private copy for the user, without the author’s text', async () => {
+    const r = await imp(page('https://blocked-blog.example/chana/', ALICE))
+    assert.deepEqual([r.created, r.visibility], [true, 'private'])
+    const got = await row(r.recipe_id)
+    assert.equal(got.origin, 'browser')
+    assert.equal(got.added_by, ALICE)
+    assert.equal(got.summary, null)
+    assert.equal(got.instructions, null)
+    assert.deepEqual(got.lines, ['1 can chickpeas'])
+  })
+
+  it('gives each user their own copy, so made-up data reaches no one else', async () => {
+    const url = 'https://blocked-blog.example/forged/'
+    const fake = await imp(page(url, ALICE, 'Totally real recipe'))
+    const bobs = await imp(page(url, BOB, 'Chana masala'))
+    assert.notEqual(bobs.recipe_id, fake.recipe_id)
+    assert.equal((await row(bobs.recipe_id)).title, 'Chana masala')
+
+    // Bob can't see Alice's copy, and a server import doesn't reuse it.
+    const seen = await as('authenticated', BOB, async () => {
+      const { rows } = await db.query(
+        'select count(*)::int as n from recipes where id = $1',
+        [fake.recipe_id],
+      )
+      return rows[0].n
+    })
+    assert.equal(seen, 0)
+    const fetched = await imp({ ...page(url, BOB), origin: undefined })
+    assert.notEqual(fetched.recipe_id, fake.recipe_id)
+    assert.equal((await row(fetched.recipe_id)).origin, 'fetched')
+  })
+
+  it('updates the user’s copy when they import the page again', async () => {
+    const url = 'https://blocked-blog.example/again/'
+    const first = await imp(page(url, ALICE, 'Draft title'))
+    const again = await imp(
+      page(url, ALICE, 'Final title', {
+        ingredients: [
+          { line_no: 0, raw_text: '2 cans chickpeas' },
+          { line_no: 1, raw_text: '1 onion' },
+        ],
+      }),
+    )
+    assert.deepEqual(
+      [again.recipe_id, again.created, again.updated],
+      [first.recipe_id, false, true],
+    )
+    const got = await row(first.recipe_id)
+    assert.equal(got.title, 'Final title')
+    assert.deepEqual(got.lines, ['2 cans chickpeas', '1 onion'])
+  })
+
+  it('reuses a recipe Sous fetched itself instead of the browser’s data', async () => {
+    const url = 'https://blocked-blog.example/trusted/'
+    const trusted = await imp({
+      ...page(url, BOB, 'Trusted title'),
+      origin: undefined,
+    })
+    const r = await imp(page(url, ALICE, 'Browser title'))
+    assert.deepEqual([r.recipe_id, r.created], [trusted.recipe_id, false])
+    assert.equal((await row(trusted.recipe_id)).title, 'Trusted title')
+    const { rows } = await db.query(
+      'select 1 from user_saved_recipes where user_id = $1 and recipe_id = $2',
+      [ALICE, trusted.recipe_id],
+    )
+    assert.equal(rows.length, 1)
+  })
+
+  it('never makes browser data public, even from an approved source', async () => {
+    await db.query(
+      `insert into recipe_sources (name, domain, crawl_enabled) values ('Approved', 'approved-blog.example', true)`,
+    )
+    const r = await imp({
+      ...page('https://approved-blog.example/x/', ALICE),
+      source: { domain: 'approved-blog.example' },
+    })
+    assert.equal(r.visibility, 'private')
+    await assert.rejects(
+      db.query(`update recipes set visibility = 'public' where id = $1`, [
+        r.recipe_id,
+      ]),
+      /recipes_browser_private/,
+    )
+  })
+
+  it('never lets browser data name a source that everyone sees', async () => {
+    await imp({
+      ...page('https://fresh-blog.example/x/', ALICE),
+      source: {
+        domain: 'fresh-blog.example',
+        name: 'Scam Recipes',
+        homepage_url: 'https://scam.example/',
+      },
+    })
+    const { rows } = await db.query(
+      `select name, homepage_url from recipe_sources where domain = 'fresh-blog.example'`,
+    )
+    assert.deepEqual(rows[0], {
+      name: 'fresh-blog.example',
+      homepage_url: 'https://fresh-blog.example/',
+    })
+
+    // An existing source keeps its name.
+    await db.query(
+      `insert into recipe_sources (name, domain) values ('Named Blog', 'named-blog.example')`,
+    )
+    await imp({
+      ...page('https://named-blog.example/renamed/', ALICE),
+      source: { domain: 'named-blog.example', name: 'Renamed' },
+    })
+    const kept = await db.query(
+      `select name from recipe_sources where domain = 'named-blog.example'`,
+    )
+    assert.equal(kept.rows[0].name, 'Named Blog')
+  })
+
+  it('requires a user and a known origin', async () => {
+    await assert.rejects(
+      imp(page('https://blocked-blog.example/a/', null)),
+      /needs added_by/,
+    )
+    await assert.rejects(
+      imp({
+        ...page('https://blocked-blog.example/b/', ALICE),
+        origin: 'email',
+      }),
+      /origin must be/,
+    )
+  })
+})

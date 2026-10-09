@@ -5,6 +5,8 @@ actually gets stored is decided by the source's content rights in
 import_recipe(); see docs/policies/recipe-sources.md.
 """
 
+import html
+import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -128,9 +130,43 @@ def _no_recipe() -> FetchError:
     )
 
 
-def extract_recipe(html: str, url: str) -> RecipeDraft:
+# Browser import: a page's JSON-LD blocks, as the user's own browser read them.
+MAX_LD_BLOCKS = 20
+MAX_LD_CHARS = 500_000
+
+
+def page_from_json_ld(url: str, blocks: list[str], site_name: str | None = None) -> str:
+    """A minimal page holding only the given JSON-LD, for extract_recipe().
+
+    Blocks are parsed and re-serialized, so nothing but valid JSON reaches the
+    page, and "</" is escaped so a block can't close its script tag.
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise FetchError("invalid_url", "That doesn't look like a web address.")
+    if len(blocks) > MAX_LD_BLOCKS or sum(len(b) for b in blocks) > MAX_LD_CHARS:
+        raise FetchError("too_large", "That page has too much data to import.")
+    scripts = []
+    for block in blocks:
+        try:
+            data = json.loads(block)
+        except ValueError:
+            continue
+        safe = json.dumps(data).replace("</", "<\\/")
+        scripts.append(f'<script type="application/ld+json">{safe}</script>')
+    if not scripts:
+        raise _no_recipe()
+    meta = (
+        f'<meta property="og:site_name" content="{html.escape(site_name, quote=True)}">'
+        if site_name
+        else ""
+    )
+    return f"<html><head>{meta}{''.join(scripts)}</head><body></body></html>"
+
+
+def extract_recipe(page: str, url: str) -> RecipeDraft:
     try:
-        scraper = scrape_html(html, org_url=url, supported_only=False)
+        scraper = scrape_html(page, org_url=url, supported_only=False)
     except RecipeScrapersExceptions as e:
         raise _no_recipe() from e
     title = _field(scraper.title)
