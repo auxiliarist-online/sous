@@ -11,7 +11,7 @@ from typing import Any
 
 import psycopg
 
-from app.recipes.extract import CUISINES, RecipeDraft, extract_recipe
+from app.recipes.extract import CUISINES, RecipeDraft, extract_recipe, page_from_json_ld
 from tests.helpers import RECIPE_LD, page_html
 
 URL = "https://www.example-blog.com/black-bean-tacos/"
@@ -113,3 +113,27 @@ def test_the_crawler_refreshes_a_changed_page(db: psycopg.Connection) -> None:
         [created["recipe_id"]],
     ).fetchall()
     assert lines == [("2 cans black beans",), ("8 corn tortillas",)]
+
+
+def test_a_browser_import_is_a_private_copy_per_user(
+    db: psycopg.Connection, make_user: Callable[[], str]
+) -> None:
+    alice, bob = make_user(), make_user()
+    page = page_from_json_ld(URL, [json.dumps(RECIPE_LD)], "Example Blog")
+    draft = extract_recipe(page, URL)
+
+    def browser_import(user: str) -> Any:
+        row = db.execute(
+            "select import_recipe(%s::jsonb)",
+            [json.dumps({**draft.payload(user), "origin": "browser"})],
+        ).fetchone()
+        assert row is not None
+        return row[0]
+
+    mine, theirs = browser_import(alice), browser_import(bob)
+    assert mine["recipe_id"] != theirs["recipe_id"]
+    assert mine["visibility"] == theirs["visibility"] == "private"
+    origin = db.execute(
+        "select origin, added_by::text from recipes where id = %s", [mine["recipe_id"]]
+    ).fetchone()
+    assert origin == ("browser", alice)

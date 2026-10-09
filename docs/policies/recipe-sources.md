@@ -81,6 +81,14 @@ A user pasting a URL (TYL-8) follows the same storage rules as the crawler. The 
 - Imports from an opted-out site still work for the user's own private use, as a saved link: title, URL and ingredients, but no image. Imported recipes are never shown publicly.
 - Recipes a user types in by hand are their own content; we store everything they enter, including instructions, and keep it private.
 
+### Import from the user's browser
+
+For sites that block Sous's server, the user's own browser sends the recipe data from a page they're viewing (a bookmarklet reads the page's schema.org JSON-LD; `POST /recipes/import-page`).
+
+- **No fetch, so no robots.txt check.** The user visited the page themselves; Sous doesn't contact the site. This is the honest alternative to getting around a block, not a way around one: Sous's server still never fetches a page that refuses it.
+- **Same storage rules.** The data goes through the same extractor, so `link_only` sources still lose the description and instructions.
+- **Only trusted for that user.** Anyone could send made-up data for any address, so a browser import is always a private copy for the person who sent it (`origin = 'browser'`). It's never public, never shared with other users, and never reused when someone else imports the same address. If Sous has already fetched that recipe itself, the user gets that trusted copy instead.
+
 ## Opt-outs and takedowns
 
 - The contact page lists an email address for opt-out and takedown requests. Reply within 3 business days.

@@ -78,7 +78,15 @@ class TestSaveRecipe:
         request = seen[0]
         assert request.url == "https://proj.supabase.co/rest/v1/rpc/import_recipe"
         assert request.headers["apikey"] == "service-key"
-        assert json.loads(request.content)["p"] == self.draft.payload("user-1")
+        assert json.loads(request.content)["p"] == {
+            **self.draft.payload("user-1"),
+            "origin": "fetched",
+        }
+
+    def test_marks_a_browser_import(self, supabase: Install) -> None:
+        seen = supabase(lambda r: httpx.Response(200, json={"recipe_id": "r-1"}))
+        asyncio.run(store.save_recipe(self.draft, "user-1", origin="browser"))
+        assert json.loads(seen[0].content)["p"]["origin"] == "browser"
 
     def test_raises_when_the_database_refuses(self, supabase: Install) -> None:
         supabase(lambda r: httpx.Response(400, json={"message": "required"}))

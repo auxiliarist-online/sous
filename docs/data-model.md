@@ -161,6 +161,11 @@ Users get three kinds of control (TYL-32):
 - `crawl_enabled` is only set after the per-site check, recorded in `crawl_notes`.
 - New recipes start as `needs_review` and aren't shown publicly until they're `active`.
 
+### Browser imports (TYL-35)
+
+- `recipes.origin` is `fetched` (Sous read the page, or a user typed the recipe) or `browser` (sent from a user's browser for a site that blocks Sous).
+- A fetched recipe is shared by every user who imports its URL (unique `source_url` among fetched recipes). A browser recipe is a private copy for `added_by` only (unique per URL and user), and a check constraint keeps it private, so made-up browser data can't reach other users.
+
 ### Crawling (TYL-26)
 
 - `crawl_pages` is the queue: one row per sitemap URL with its `lastmod` and what happened when we fetched it. `crawl_enqueue()` adds new URLs and re-queues a page only when its `lastmod` moves forward; blocked and disallowed pages are never re-queued automatically.
