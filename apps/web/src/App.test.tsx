@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
+import type { LibraryApi } from './Library.tsx'
 import type { Auth } from './auth.ts'
 
 type Listener = (event: string, session: Session | null) => void
@@ -31,6 +32,12 @@ const session = {
   access_token: 't',
   user: { email: 'cook@example.com' },
 } as Session
+
+const library = (): LibraryApi => ({
+  list: vi.fn(async () => []),
+  save: vi.fn(),
+  remove: vi.fn(),
+})
 
 describe('App', () => {
   it('renders the app name', () => {
@@ -85,7 +92,7 @@ describe('App', () => {
 
   it('shows who is signed in and signs out', async () => {
     const { auth } = fakeAuth(session)
-    render(<App auth={auth} />)
+    render(<App auth={auth} libraryApi={library} />)
     expect(await screen.findByText('cook@example.com')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     expect(auth.signOut).toHaveBeenCalled()
@@ -93,7 +100,7 @@ describe('App', () => {
 
   it('follows sign-in from the emailed link', async () => {
     const { auth, emit } = fakeAuth()
-    render(<App auth={auth} />)
+    render(<App auth={auth} libraryApi={library} />)
     await screen.findByLabelText('Email')
     act(() => emit(session))
     expect(await screen.findByText('cook@example.com')).toBeInTheDocument()
