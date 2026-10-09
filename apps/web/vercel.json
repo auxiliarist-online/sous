@@ -6,6 +6,6 @@
       "source": "/api/:path*",
       "destination": "https://sous-api-five.vercel.app/api/:path*"
     },
-    { "source": "/share", "destination": "/index.html" }
+    { "source": "/share", "destination": "/" }
   ]
 }
