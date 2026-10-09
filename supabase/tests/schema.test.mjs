@@ -929,6 +929,37 @@ describe('browser import', () => {
     )
   })
 
+  it('never lets browser data name a source that everyone sees', async () => {
+    await imp({
+      ...page('https://fresh-blog.example/x/', ALICE),
+      source: {
+        domain: 'fresh-blog.example',
+        name: 'Scam Recipes',
+        homepage_url: 'https://scam.example/',
+      },
+    })
+    const { rows } = await db.query(
+      `select name, homepage_url from recipe_sources where domain = 'fresh-blog.example'`,
+    )
+    assert.deepEqual(rows[0], {
+      name: 'fresh-blog.example',
+      homepage_url: 'https://fresh-blog.example/',
+    })
+
+    // An existing source keeps its name.
+    await db.query(
+      `insert into recipe_sources (name, domain) values ('Named Blog', 'named-blog.example')`,
+    )
+    await imp({
+      ...page('https://named-blog.example/renamed/', ALICE),
+      source: { domain: 'named-blog.example', name: 'Renamed' },
+    })
+    const kept = await db.query(
+      `select name from recipe_sources where domain = 'named-blog.example'`,
+    )
+    assert.equal(kept.rows[0].name, 'Named Blog')
+  })
+
   it('requires a user and a known origin', async () => {
     await assert.rejects(
       imp(page('https://blocked-blog.example/a/', null)),

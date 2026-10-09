@@ -3,7 +3,8 @@
 -- For sites that block Sous's server, the user's browser sends the page's
 -- recipe data instead. That data is only trusted for the person who sent it:
 -- it becomes a private copy for them, never the shared recipe for its URL,
--- so made-up data can't reach other users or the public catalog.
+-- and it never names a source, so made-up data can't reach other users or
+-- the public catalog.
 
 alter table public.recipes
   -- fetched: Sous read the page itself (or a user typed the recipe; then source_url is null).
@@ -51,11 +52,15 @@ begin
     raise exception 'a browser import needs added_by' using errcode = '22023';
   end if;
 
+  -- The first import from a site creates its source record, which everyone
+  -- sees. Browser data mustn't name it: a new source from a browser import
+  -- is named after its domain until Sous fetches a page from it.
   insert into public.recipe_sources (name, domain, homepage_url)
   values (
-    coalesce(nullif(p -> 'source' ->> 'name', ''), v_domain),
+    case when v_browser then v_domain
+         else coalesce(nullif(p -> 'source' ->> 'name', ''), v_domain) end,
     v_domain,
-    p -> 'source' ->> 'homepage_url'
+    'https://' || v_domain || '/'
   )
   on conflict (domain) do nothing;
   select * into v_source from public.recipe_sources where domain = v_domain;
