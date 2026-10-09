@@ -1,6 +1,13 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
-import { ImportError, firstUrl, importRecipe, savedRecipes } from './library.ts'
+import {
+  ImportError,
+  firstUrl,
+  importPage,
+  importRecipe,
+  recipeTitle,
+  savedRecipes,
+} from './library.ts'
 
 const session = { access_token: 'tok' } as Session
 
@@ -100,5 +107,39 @@ describe('savedRecipes', () => {
       },
     ])
     expect(order).toHaveBeenCalledWith('created_at', { ascending: false })
+  })
+})
+
+describe('importPage', () => {
+  it('sends the page data to the browser import endpoint', async () => {
+    const send = reply(200, { recipe_id: 'r1' })
+    const page = {
+      url: 'https://blog.example/dal/',
+      siteName: 'Blog',
+      ld: ['{}'],
+    }
+    await importPage(session, page, send)
+    expect(send).toHaveBeenCalledWith(session, '/recipes/import-page', {
+      method: 'POST',
+      body: JSON.stringify({ url: page.url, site_name: 'Blog', ld: ['{}'] }),
+    })
+  })
+})
+
+describe('recipeTitle', () => {
+  it('finds the recipe in a Yoast-style graph and with a list of types', () => {
+    const graph = JSON.stringify({
+      '@graph': [
+        { '@type': 'WebPage', name: 'Page' },
+        { '@type': ['Recipe'], name: ' Dal ' },
+      ],
+    })
+    expect(recipeTitle(['not json', graph])).toBe('Dal')
+  })
+
+  it('is null without a named recipe', () => {
+    expect(
+      recipeTitle([JSON.stringify({ '@type': 'Organization', name: 'Blog' })]),
+    ).toBeNull()
   })
 })

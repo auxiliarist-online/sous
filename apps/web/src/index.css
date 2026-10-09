@@ -198,3 +198,36 @@ a.button {
 .account {
   margin-top: calc(var(--space) * 2.5);
 }
+
+.help summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--color-accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help h3 {
+  margin: 0.75rem 0 0;
+  font-size: 1rem;
+}
+
+.help ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.help li {
+  margin: 0.25rem 0;
+}
+
+a.bookmarklet {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border: 1px dashed var(--color-accent);
+  border-radius: 999px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: grab;
+}
