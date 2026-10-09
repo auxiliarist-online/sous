@@ -17,7 +17,9 @@ const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 /** Null when the Supabase env vars aren't set (e.g. a fresh checkout). */
-export const auth: Auth | null = url && key ? createClient(url, key).auth : null
+export const client: SupabaseClient | null =
+  url && key ? createClient(url, key) : null
+export const auth: Auth | null = client?.auth ?? null
 
 /** The current session: undefined while loading, null when signed out. */
 export function useSession(client: Auth | null): Session | null | undefined {

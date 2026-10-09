@@ -130,3 +130,71 @@ button.link {
   text-decoration: underline;
   font-weight: normal;
 }
+
+.small {
+  font-size: 0.875rem;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+a.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 1rem;
+  border-radius: 10px;
+  background: var(--color-accent);
+  color: var(--color-bg);
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+}
+
+.saved h3 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.recipes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recipes li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 0.5rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
+.recipes li a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.recipes li .small {
+  grid-column: 1;
+}
+
+.recipes .remove {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  color: var(--color-muted);
+  font-size: 1.5rem;
+  font-weight: normal;
+}
+
+.account {
+  margin-top: calc(var(--space) * 2.5);
+}
