@@ -46,6 +46,19 @@ const library = (): SousApi => ({
   savePreferences: vi.fn(async () => {}),
   options: vi.fn(async () => ({ diets: [], cuisines: [] })),
   searchIngredients: vi.fn(async () => []),
+  plan: vi.fn(async () => []),
+  addToPlan: vi.fn(async () => {}),
+  updateEntry: vi.fn(async () => {}),
+  removeEntry: vi.fn(async () => {}),
+  copyPlan: vi.fn(async () => 0),
+  planCost: vi.fn(async () => ({
+    budgetCents: null,
+    totalCents: 0,
+    estimated: false,
+    unpricedLines: 0,
+    entries: {},
+  })),
+  recipeFits: vi.fn(async () => ({})),
 })
 
 describe('App', () => {

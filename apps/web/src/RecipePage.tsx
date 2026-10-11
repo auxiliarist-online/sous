@@ -2,12 +2,20 @@ import { Fragment, useEffect, useState } from 'react'
 import { DietChips } from './Library.tsx'
 import { dietLabels, sourceLabel } from './library.ts'
 import { navigate } from './navigation.ts'
+import { weekOf, type Fit } from './plan.ts'
 import { Link } from './router.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
 export interface RecipePageApi {
   recipe(id: string): Promise<RecipeDetail | null>
   remove(recipeId: string): Promise<void>
+  addToPlan(
+    weekStart: string,
+    recipeId: string,
+    servings: number,
+    day?: string | null,
+  ): Promise<void>
+  recipeFits(ids: string[]): Promise<Record<string, Fit>>
 }
 
 function minutes(m: number | null): string | null {
@@ -20,11 +28,24 @@ function minutes(m: number | null): string | null {
 /** One recipe: where it's from, its diet labels, its ingredients (starred
  *  when their brand decides a label) and, for recipes we may store in full,
  *  its steps. For other people's recipes the source's page is the main action. */
-export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
+export function RecipePage({
+  id,
+  api,
+  householdSize = 1,
+}: {
+  id: string
+  api: RecipePageApi
+  /** How many servings to plan by default. */
+  householdSize?: number
+}) {
   const [recipe, setRecipe] = useState<RecipeDetail | null | undefined>(
     undefined,
   )
   const [failed, setFailed] = useState(false)
+  const [fit, setFit] = useState<Fit | null>(null)
+  const [planned, setPlanned] = useState<'idle' | 'adding' | 'added' | 'error'>(
+    'idle',
+  )
 
   useEffect(() => {
     let live = true
@@ -32,10 +53,25 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       (r) => live && setRecipe(r),
       () => live && setFailed(true),
     )
+    // Without an answer, let the plan's own rules decide.
+    api.recipeFits([id]).then(
+      (f) => live && setFit(f[id] ?? null),
+      () => {},
+    )
     return () => {
       live = false
     }
   }, [api, id])
+
+  async function plan() {
+    setPlanned('adding')
+    try {
+      await api.addToPlan(weekOf(), id, householdSize)
+      setPlanned('added')
+    } catch {
+      setPlanned('error')
+    }
+  }
 
   async function remove(r: RecipeDetail) {
     if (!confirm(`Remove “${r.title}” from your recipes?`)) return
@@ -136,6 +172,29 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       )}
 
       <div className="actions">
+        {fit === 'excluded' ? (
+          <p className="muted small">
+            This recipe doesn't fit your diets or allergies, so it can't go in
+            your plan.
+          </p>
+        ) : planned === 'added' ? (
+          <p role="status">
+            Added to this week's plan. <Link to="/plan">See the plan</Link>
+          </p>
+        ) : (
+          <button
+            type="button"
+            disabled={planned === 'adding'}
+            onClick={() => void plan()}
+          >
+            {planned === 'adding' ? 'Adding…' : "Add to this week's plan"}
+          </button>
+        )}
+        {planned === 'error' && (
+          <p role="alert" className="error">
+            We couldn't add it to your plan. Try again.
+          </p>
+        )}
         {recipe.handTyped && (
           <Link to={`/edit/${recipe.id}`} className="button secondary">
             Edit recipe

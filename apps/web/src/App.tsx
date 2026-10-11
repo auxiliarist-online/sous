@@ -15,6 +15,18 @@ import {
 } from './library.ts'
 import { route, usePath } from './navigation.ts'
 import { clearPage, pendingPage } from './page.ts'
+import { PlanPage, type PlanApi } from './Plan.tsx'
+import {
+  addToPlan,
+  copyPlan,
+  isMonday,
+  loadPlan,
+  planCost,
+  recipeFits,
+  removeEntry,
+  updateEntry,
+  weekOf,
+} from './plan.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
 import { Link } from './router.tsx'
@@ -33,7 +45,11 @@ import {
 } from './sous.ts'
 
 /** Everything the signed-in pages need; tests pass a fake. */
-export type SousApi = LibraryApi & RecipePageApi & RecipeFormApi & SettingsApi
+export type SousApi = LibraryApi &
+  RecipePageApi &
+  RecipeFormApi &
+  SettingsApi &
+  PlanApi
 
 function liveApi(db: SupabaseClient, session: Session): SousApi {
   const userId = session.user.id
@@ -48,6 +64,14 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     savePreferences: (p) => savePreferences(db, userId, p),
     options: () => referenceOptions(db),
     searchIngredients: (q) => searchIngredients(db, q),
+    plan: (week) => loadPlan(db, week),
+    addToPlan: (week, id, servings, day) =>
+      addToPlan(db, week, id, servings, day),
+    updateEntry: (id, patch) => updateEntry(db, id, patch),
+    removeEntry: (id) => removeEntry(db, id),
+    copyPlan: (from, to) => copyPlan(db, from, to),
+    planCost: (week) => planCost(session, week),
+    recipeFits: (ids) => recipeFits(db, ids),
   }
 }
 
@@ -91,6 +115,14 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
 
   const at = route(path)
   const signedIn = !!(auth && session && api)
+  const householdSize = prefs?.householdSize ?? 1
+  // Any date in the address shows the week it falls in.
+  const week =
+    at.page === 'plan' && at.week
+      ? isMonday(at.week)
+        ? at.week
+        : weekOf(new Date(`${at.week}T12:00`))
+      : weekOf()
 
   return (
     <main className="app" aria-busy={session === undefined}>
@@ -102,6 +134,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         {signedIn && (
           <nav className="app-nav" aria-label="Main">
             <Link to="/">Recipes</Link>
+            <Link to="/plan">Plan</Link>
             <Link to="/settings">Preferences</Link>
           </nav>
         )}
@@ -133,11 +166,24 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
             />
           )}
           {at.page === 'recipe' && (
-            <RecipePage key={at.id} id={at.id} api={api} />
+            <RecipePage
+              key={at.id}
+              id={at.id}
+              api={api}
+              householdSize={householdSize}
+            />
           )}
           {at.page === 'new' && <RecipeForm api={api} />}
           {at.page === 'edit' && (
             <RecipeForm key={at.id} api={api} recipeId={at.id} />
+          )}
+          {at.page === 'plan' && (
+            <PlanPage
+              key={week}
+              api={api}
+              week={week}
+              householdSize={householdSize}
+            />
           )}
           {at.page === 'settings' && (
             <Settings

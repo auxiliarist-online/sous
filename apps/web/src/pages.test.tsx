@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
 import { route } from './navigation.ts'
+import { weekOf, type Fit } from './plan.ts'
 import { RecipeForm } from './RecipeForm.tsx'
 import { RecipePage } from './RecipePage.tsx'
 import { Settings } from './Settings.tsx'
@@ -25,6 +26,10 @@ const line = (
   rawText,
   section: null,
   name: rawText.split(' ').slice(-2).join(' '),
+  quantity: null,
+  quantityMax: null,
+  unit: null,
+  preparation: null,
   isOptional: false,
   ...extra,
 })
@@ -84,15 +89,23 @@ describe('route', () => {
     ['/new', { page: 'new' }],
     ['/settings', { page: 'settings' }],
     ['/recipe/not-an-id', { page: 'library' }],
+    ['/plan', { page: 'plan', week: null }],
+    ['/plan/2026-10-12', { page: 'plan', week: '2026-10-12' }],
   ])('%s', (path, expected) => {
     expect(route(path)).toEqual(expected)
   })
 })
 
 describe('RecipePage', () => {
-  const api = (r: RecipeDetail | null) => ({
+  const api = (r: RecipeDetail | null, fit: Fit = 'fits') => ({
     recipe: vi.fn(async () => r),
     remove: vi.fn(async () => {}),
+    addToPlan: vi.fn(
+      async (_week: string, _id: string, _servings: number) => {},
+    ),
+    recipeFits: vi.fn(async (ids: string[]) =>
+      Object.fromEntries(ids.map((id) => [id, fit])),
+    ),
   })
 
   it('shows where it is from, its labels, and stars the ingredient to check', async () => {
@@ -129,6 +142,28 @@ describe('RecipePage', () => {
       `/edit/${SOUP.id}`,
     )
     expect(screen.getAllByText('Soup')).toHaveLength(1)
+  })
+
+  it('adds the recipe to this week for the household', async () => {
+    const fake = api(SOUP)
+    render(<RecipePage id={SOUP.id} api={fake} householdSize={3} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: "Add to this week's plan" }),
+    )
+    expect(fake.addToPlan).toHaveBeenCalledWith(weekOf(), SOUP.id, 3)
+    expect(
+      await screen.findByRole('link', { name: 'See the plan' }),
+    ).toHaveAttribute('href', '/plan')
+  })
+
+  it('won’t plan a recipe that breaks the user’s rules', async () => {
+    render(<RecipePage id={BURRITOS.id} api={api(BURRITOS, 'excluded')} />)
+    expect(
+      await screen.findByText(/doesn't fit your diets or allergies/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: "Add to this week's plan" }),
+    ).toBeNull()
   })
 
   it('says when a recipe is not found', async () => {

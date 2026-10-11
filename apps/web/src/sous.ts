@@ -12,6 +12,10 @@ export interface IngredientLine {
   rawText: string
   section: string | null
   name: string | null
+  quantity: number | null
+  quantityMax: number | null
+  unit: string | null
+  preparation: string | null
   isOptional: boolean
 }
 
@@ -51,6 +55,10 @@ interface RecipeRow {
     raw_text: string
     section: string | null
     name: string | null
+    quantity: number | null
+    quantity_max: number | null
+    unit: string | null
+    preparation: string | null
     is_optional: boolean
   }[]
   diets: {
@@ -71,7 +79,7 @@ export async function recipeDetail(
     .select(
       `id, title, source_url, source_note, servings, prep_minutes, cook_minutes, total_minutes,
        instructions, added_by, source:recipe_sources(name),
-       ingredients:recipe_ingredients(line_no, option_no, raw_text, section, name, is_optional),
+       ingredients:recipe_ingredients(line_no, option_no, raw_text, section, name, quantity, quantity_max, unit, preparation, is_optional),
        diets:recipe_diets(diet_slug, source, checks), cuisines:recipe_cuisines(cuisine_slug)`,
     )
     .eq('id', id)
@@ -99,6 +107,10 @@ export async function recipeDetail(
         rawText: i.raw_text,
         section: i.section,
         name: i.name,
+        quantity: i.quantity == null ? null : Number(i.quantity),
+        quantityMax: i.quantity_max == null ? null : Number(i.quantity_max),
+        unit: i.unit ?? null,
+        preparation: i.preparation ?? null,
         isOptional: i.is_optional,
       })),
     // The publisher's own tags are only hints; show what the ingredients prove.

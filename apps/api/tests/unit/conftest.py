@@ -1,5 +1,10 @@
+import functools
+from collections.abc import Callable
+
+import httpx2 as httpx
 import pytest
 
+from app.config import settings
 from app.recipes import fetch
 
 
@@ -19,3 +24,27 @@ def no_dns(monkeypatch: pytest.MonkeyPatch) -> None:
             await real(url)
 
     monkeypatch.setattr(fetch, "_check_public_host", check)
+
+
+Handler = Callable[[httpx.Request], httpx.Response]
+Install = Callable[[Handler], list[httpx.Request]]
+
+
+@pytest.fixture
+def supabase(monkeypatch: pytest.MonkeyPatch) -> Install:
+    """Route every AsyncClient through `handler`; returns the requests made."""
+    monkeypatch.setattr(settings, "supabase_url", "https://proj.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role_key", "service-key")
+
+    def install(handler: Handler) -> list[httpx.Request]:
+        seen: list[httpx.Request] = []
+
+        def record(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return handler(request)
+
+        client = functools.partial(httpx.AsyncClient, transport=httpx.MockTransport(record))
+        monkeypatch.setattr(httpx, "AsyncClient", client)
+        return seen
+
+    return install
