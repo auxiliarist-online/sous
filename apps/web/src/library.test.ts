@@ -88,7 +88,9 @@ describe('savedRecipes', () => {
           id: 'r1',
           title: 'Dal',
           source_url: 'https://blog.example/dal/',
+          source_note: null,
           total_minutes: 30,
+          ingredients: [{ name: 'red lentils' }, { name: null }],
           source: { name: 'Example Blog' },
           diets: [
             { diet_slug: 'vegan', source: 'derived', checks: [] },
@@ -107,9 +109,11 @@ describe('savedRecipes', () => {
         title: 'Dal',
         sourceUrl: 'https://blog.example/dal/',
         sourceName: 'Example Blog',
+        sourceNote: null,
         totalMinutes: 30,
         savedAt: '2026-10-09T10:00:00Z',
         diets: [{ slug: 'vegan', checks: [] }],
+        ingredients: ['red lentils'],
       },
     ])
     expect(order).toHaveBeenCalledWith('created_at', { ascending: false })
@@ -167,8 +171,8 @@ describe('dietLabels', () => {
         d('gluten_free'),
         d('egg_free'),
       ]),
-    ).toEqual({ labels: ['Vegan', 'Gluten-free'], notes: [] })
-    expect(dietLabels([])).toEqual({ labels: [], notes: [] })
+    ).toEqual({ labels: ['Vegan', 'Gluten-free'], notes: [], starred: [] })
+    expect(dietLabels([])).toEqual({ labels: [], notes: [], starred: [] })
   })
 
   it('stars a label that depends on brand and says what to check', () => {
@@ -184,6 +188,7 @@ describe('dietLabels', () => {
     ).toEqual({
       labels: ['Vegetarian*', 'Gluten-free*', 'Dairy-free'],
       notes: ['Check the refried beans: some brands contain gluten or meat.'],
+      starred: ['refried beans'],
     })
   })
 })

@@ -6,6 +6,13 @@
       "source": "/api/:path*",
       "destination": "https://sous-api-five.vercel.app/api/:path*"
     },
-    { "source": "/share", "destination": "/" }
+    {
+      "source": "/(share|new|settings)",
+      "destination": "/"
+    },
+    {
+      "source": "/(recipe|edit)/:id",
+      "destination": "/"
+    }
   ]
 }

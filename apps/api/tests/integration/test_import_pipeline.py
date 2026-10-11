@@ -177,3 +177,34 @@ def test_an_imported_recipe_gets_diet_labels_from_its_ingredients(db: psycopg.Co
     }
     assert {("vegan", "derived"), ("vegetarian", "derived"), ("gluten_free", "derived")} <= labels
     assert not any(source == "publisher" for _, source in labels)  # derived won
+
+
+def test_a_hand_typed_recipe_is_parsed_labelled_and_private(
+    db: psycopg.Connection, make_user: Callable[[], str]
+) -> None:
+    from app.recipes.routes import ManualRecipe, _manual_payload
+
+    user = make_user()
+    body = ManualRecipe(
+        title="Weeknight dal",
+        ingredients="1 cup red lentils\n1 onion, diced\nFor serving:\n2 tbsp plain yogurt",
+        instructions="Simmer the lentils.\nTop with yogurt.",
+        servings=4,
+    )
+    row = db.execute(
+        "select save_manual_recipe(%s::jsonb)", [json.dumps(_manual_payload(body, user, None))]
+    ).fetchone()
+    assert row is not None
+    rid = row[0]["recipe_id"]
+    recipe = db.execute(
+        "select visibility, instructions from recipes where id = %s", [rid]
+    ).fetchone()
+    assert recipe == ("private", ["Simmer the lentils.", "Top with yogurt."])
+    diets = {
+        d for (d,) in db.execute("select diet_slug from recipe_diets where recipe_id = %s", [rid])
+    }
+    assert "vegetarian" in diets and "vegan" not in diets  # yogurt is dairy
+    sections = db.execute(
+        "select name, section from recipe_ingredients where recipe_id = %s order by line_no", [rid]
+    ).fetchall()
+    assert sections[-1] == ("plain yogurt", "For serving")

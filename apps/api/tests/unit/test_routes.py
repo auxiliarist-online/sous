@@ -10,6 +10,7 @@ from app.main import app
 from app.recipes import routes
 from app.recipes.extract import RecipeDraft, page_from_json_ld
 from app.recipes.fetch import FetchError, Page
+from app.recipes.store import NotYours
 from tests.helpers import RECIPE_LD, page_html
 
 
@@ -132,3 +133,71 @@ class TestPageFromJsonLd:
     def test_escapes_the_site_name(self) -> None:
         page = page_from_json_ld("https://a.example/", ["{}"], site_name='"><b>x')
         assert '"><b>' not in page
+
+
+class TestManual:
+    """Recipes typed in by hand."""
+
+    @pytest.fixture
+    def saved(self, monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+        calls: list[dict[str, Any]] = []
+
+        async def fake_save(payload: dict[str, Any]) -> dict[str, Any]:
+            calls.append(payload)
+            if payload["recipe_id"] == "00000000-0000-0000-0000-0000000000ff":
+                raise NotYours("nope")
+            return {"recipe_id": payload["recipe_id"] or "new-id", "created": True}
+
+        monkeypatch.setattr(routes, "save_manual", fake_save)
+        return calls
+
+    def test_parses_ingredients_sections_and_steps(
+        self, client: TestClient, saved: list[dict[str, Any]]
+    ) -> None:
+        resp = client.post(
+            "/recipes/manual",
+            json={
+                "title": "  Lentil soup ",
+                "ingredients": "1 cup red lentils\n\nFor the topping:\n2 tbsp olive oil\n",
+                "instructions": "1. Rinse the lentils.\n\nStep 2: Simmer for 20 minutes.\n",
+                "servings": 4,
+                "source_note": " Grandma ",
+                "cuisines": ["middle_eastern"],
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json() == {"recipe_id": "new-id", "created": True}
+        p = saved[0]
+        assert (p["added_by"], p["recipe_id"]) == ("user-1", None)
+        assert p["recipe"]["title"] == "Lentil soup"
+        assert p["recipe"]["instructions"] == ["Rinse the lentils.", "Simmer for 20 minutes."]
+        assert p["recipe"]["source_note"] == "Grandma"
+        lines = [(r["line_no"], r["name"], r["section"]) for r in p["ingredients"]]
+        assert lines == [(0, "red lentils", None), (1, "olive oil", "For the topping")]
+
+    def test_edits_the_users_own_recipe(
+        self, client: TestClient, saved: list[dict[str, Any]]
+    ) -> None:
+        rid = "00000000-0000-0000-0000-000000000001"
+        resp = client.put(f"/recipes/manual/{rid}", json={"title": "Soup"})
+        assert resp.status_code == 200
+        assert resp.json() == {"recipe_id": rid, "created": False}
+        assert saved[0]["recipe"]["instructions"] is None
+
+    def test_someone_elses_recipe_is_not_found(
+        self, client: TestClient, saved: list[dict[str, Any]]
+    ) -> None:
+        resp = client.put(
+            "/recipes/manual/00000000-0000-0000-0000-0000000000ff", json={"title": "x"}
+        )
+        assert resp.status_code == 404
+
+    @pytest.mark.parametrize(
+        "body",
+        [{"title": ""}, {"title": "x", "servings": 0}, {"title": "x" * 201}, {"ingredients": "x"}],
+    )
+    def test_rejects_bad_input(
+        self, client: TestClient, saved: list[dict[str, Any]], body: dict[str, Any]
+    ) -> None:
+        assert client.post("/recipes/manual", json=body).status_code == 422
+        assert saved == []

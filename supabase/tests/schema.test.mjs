@@ -1427,3 +1427,144 @@ describe('diet labels', () => {
     )
   })
 })
+
+describe('hand-typed recipes', () => {
+  const save = (p) =>
+    as('service_role', null, async () => {
+      const { rows } = await db.query('select save_manual_recipe($1) as r', [p])
+      return rows[0].r
+    })
+  const mine = (extra = {}) => ({
+    added_by: ALICE,
+    recipe: {
+      title: 'Grandma’s lentil soup',
+      servings: 4,
+      total_minutes: 45,
+      instructions: ['Soften the onion.', 'Simmer everything.'],
+      source_note: 'Grandma',
+    },
+    cuisines: ['middle_eastern', 'not_a_cuisine'],
+    ingredients: [
+      {
+        line_no: 0,
+        raw_text: '1 cup red lentils',
+        name: 'red lentils',
+        candidates: ['red lentils', 'lentils'],
+        quantity: 1,
+        unit: 'cup',
+      },
+      {
+        line_no: 1,
+        raw_text: '1 onion',
+        name: 'onion',
+        candidates: ['onion'],
+        quantity: 1,
+        unit: 'each',
+      },
+    ],
+    ...extra,
+  })
+
+  it('stores everything the user typed, privately, and saves it for them', async () => {
+    const r = await save(mine())
+    assert.equal(r.created, true)
+    const { rows } = await db.query(
+      `select title, instructions, source_note, source_url, visibility, status, added_by,
+              (select count(*)::int from recipe_ingredients where recipe_id = r.id) as lines,
+              (select array_agg(cuisine_slug) from recipe_cuisines where recipe_id = r.id) as cuisines,
+              exists (select 1 from recipe_diets where recipe_id = r.id and diet_slug = 'vegan') as vegan,
+              exists (select 1 from user_saved_recipes where recipe_id = r.id and user_id = $2) as saved
+       from recipes r where r.id = $1`,
+      [r.recipe_id, ALICE],
+    )
+    assert.deepEqual(rows[0], {
+      title: 'Grandma’s lentil soup',
+      instructions: ['Soften the onion.', 'Simmer everything.'],
+      source_note: 'Grandma',
+      source_url: null,
+      visibility: 'private',
+      status: 'active',
+      added_by: ALICE,
+      lines: 2,
+      cuisines: ['middle_eastern'],
+      vegan: true,
+      saved: true,
+    })
+    const seen = await as('authenticated', BOB, async () => {
+      const { rows } = await db.query(
+        'select count(*)::int as n from recipes where id = $1',
+        [r.recipe_id],
+      )
+      return rows[0].n
+    })
+    assert.equal(seen, 0, 'private to its author')
+  })
+
+  it('lets the author edit it, with labels updated', async () => {
+    const { recipe_id } = await save(mine())
+    const r = await save(
+      mine({
+        recipe_id,
+        recipe: { title: 'Lentil soup with butter' },
+        ingredients: [
+          {
+            line_no: 0,
+            raw_text: '2 tbsp butter',
+            name: 'butter',
+            candidates: ['butter'],
+          },
+        ],
+      }),
+    )
+    assert.deepEqual([r.recipe_id, r.created], [recipe_id, false])
+    const { rows } = await db.query(
+      `select title, instructions,
+              exists (select 1 from recipe_diets where recipe_id = $1 and diet_slug = 'vegan') as vegan
+       from recipes where id = $1`,
+      [recipe_id],
+    )
+    assert.deepEqual(rows[0], {
+      title: 'Lentil soup with butter',
+      instructions: null,
+      vegan: false,
+    })
+  })
+
+  it('refuses to edit someone else’s recipe or an imported one', async () => {
+    const { recipe_id } = await save(mine())
+    await assert.rejects(
+      save(mine({ recipe_id, added_by: BOB })),
+      /no such recipe of yours/,
+    )
+    const imported = await as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [
+        {
+          added_by: ALICE,
+          source: { domain: 'edit-blog.example' },
+          recipe: {
+            source_url: 'https://edit-blog.example/x/',
+            title: 'Imported',
+          },
+        },
+      ])
+      return rows[0].r
+    })
+    await assert.rejects(
+      save(mine({ recipe_id: imported.recipe_id })),
+      /no such recipe of yours/,
+    )
+  })
+
+  it('requires a title and the API', async () => {
+    await assert.rejects(
+      save(mine({ recipe: { title: '  ' } })),
+      /title are required/,
+    )
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query('select save_manual_recipe($1)', [mine()]),
+      ),
+      /only callable by the API/,
+    )
+  })
+})

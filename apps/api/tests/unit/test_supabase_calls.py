@@ -97,3 +97,23 @@ class TestSaveRecipe:
         monkeypatch.setattr(settings, "supabase_url", "")
         with pytest.raises(store.StoreError):
             asyncio.run(store.save_recipe(self.draft, "user-1"))
+
+
+class TestSaveManual:
+    PAYLOAD = {"added_by": "user-1", "recipe": {"title": "Soup"}}
+
+    def test_calls_save_manual_recipe(self, supabase: Install) -> None:
+        seen = supabase(lambda r: httpx.Response(200, json={"recipe_id": "r-1", "created": True}))
+        assert asyncio.run(store.save_manual(self.PAYLOAD)) == {"recipe_id": "r-1", "created": True}
+        assert seen[0].url == "https://proj.supabase.co/rest/v1/rpc/save_manual_recipe"
+        assert json.loads(seen[0].content) == {"p": self.PAYLOAD}
+
+    def test_not_your_recipe(self, supabase: Install) -> None:
+        supabase(lambda r: httpx.Response(403, json={"message": "no such recipe of yours"}))
+        with pytest.raises(store.NotYours):
+            asyncio.run(store.save_manual(self.PAYLOAD))
+
+    def test_other_failures(self, supabase: Install) -> None:
+        supabase(lambda r: httpx.Response(500, text="boom"))
+        with pytest.raises(store.StoreError):
+            asyncio.run(store.save_manual(self.PAYLOAD))

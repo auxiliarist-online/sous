@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Library, type LibraryApi } from './Library.tsx'
@@ -9,6 +9,8 @@ const DAL: SavedRecipe = {
   title: 'Red lentil dal',
   sourceUrl: 'https://www.example-blog.com/dal/',
   sourceName: null,
+  sourceNote: null,
+  ingredients: ['red lentils', 'spinach'],
   totalMinutes: 35,
   savedAt: '2026-10-09T00:00:00Z',
   diets: [
@@ -46,11 +48,12 @@ describe('Library', () => {
   it('lists saved recipes with their source and time', async () => {
     render(<Library api={fakeApi([DAL])} />)
     const link = await screen.findByRole('link', { name: 'Red lentil dal' })
-    expect(link).toHaveAttribute('href', DAL.sourceUrl)
-    expect(screen.getByText('example-blog.com · 35 min')).toBeInTheDocument()
-    expect(screen.getByText('Vegan')).toBeInTheDocument()
-    expect(screen.getByText('Gluten-free')).toBeInTheDocument()
-    expect(screen.queryByText('Vegetarian')).toBeNull()
+    expect(link).toHaveAttribute('href', '/recipe/r1')
+    const list = within(screen.getByRole('list', { name: 'Your recipes' }))
+    expect(list.getByText('example-blog.com · 35 min')).toBeInTheDocument()
+    expect(list.getByText('Vegan')).toBeInTheDocument()
+    expect(list.getByText('Gluten-free')).toBeInTheDocument()
+    expect(list.queryByText('Vegetarian')).toBeNull()
     expect(screen.getByText(/always check the packaging/)).toBeInTheDocument()
   })
 

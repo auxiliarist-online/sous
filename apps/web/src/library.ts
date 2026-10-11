@@ -15,12 +15,16 @@ export interface ImportResult {
 export interface SavedRecipe {
   id: string
   title: string
-  sourceUrl: string
+  /** Null for a recipe the user typed in themselves. */
+  sourceUrl: string | null
   sourceName: string | null
+  sourceNote: string | null
   totalMinutes: number | null
   savedAt: string
   /** Diet labels earned from the ingredients (or set by a reviewer). */
   diets: DietLabel[]
+  /** Parsed ingredient names, for search. */
+  ingredients: string[]
 }
 
 /** A diet a recipe fits. `checks` lists ingredients whose brand decides it:
@@ -104,6 +108,7 @@ interface SavedRow {
     id: string
     title: string
     source_url: string | null
+    source_note: string | null
     total_minutes: number | null
     source: { name: string } | null
     diets:
@@ -113,6 +118,7 @@ interface SavedRow {
           checks: DietLabel['checks'] | null
         }[]
       | null
+    ingredients: { name: string | null }[] | null
   } | null
 }
 
@@ -122,23 +128,27 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
   const { data, error } = await db
     .from('user_saved_recipes')
     .select(
-      'created_at, recipe:recipes(id, title, source_url, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks))',
+      'created_at, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
   return ((data ?? []) as unknown as SavedRow[])
-    .filter((row) => row.recipe?.source_url)
+    .filter((row) => row.recipe)
     .map((row) => ({
       id: row.recipe!.id,
       title: row.recipe!.title,
-      sourceUrl: row.recipe!.source_url!,
+      sourceUrl: row.recipe!.source_url,
       sourceName: row.recipe!.source?.name ?? null,
+      sourceNote: row.recipe!.source_note,
       totalMinutes: row.recipe!.total_minutes,
       savedAt: row.created_at,
       // The publisher's own tags are only hints; show what the ingredients prove.
       diets: (row.recipe!.diets ?? [])
         .filter((d) => d.source !== 'publisher')
         .map((d) => ({ slug: d.diet_slug, checks: d.checks ?? [] })),
+      ingredients: (row.recipe!.ingredients ?? []).flatMap((i) =>
+        i.name ? [i.name] : [],
+      ),
     }))
 }
 
@@ -219,6 +229,8 @@ function list(words: string[]): string {
 export function dietLabels(diets: DietLabel[]): {
   labels: string[]
   notes: string[]
+  /** Ingredient names to star: their brand decides a shown label. */
+  starred: string[]
 } {
   const bySlug = new Map(diets.map((d) => [d.slug, d]))
   const shown = SHOWN_DIETS.filter(
@@ -239,5 +251,60 @@ export function dietLabels(diets: DietLabel[]): {
     ([ingredient, cats]) =>
       `Check the ${ingredient}: some brands contain ${list([...cats].sort())}.`,
   )
-  return { labels, notes }
+  return { labels, notes, starred: [...checks.keys()] }
+}
+
+/** Where a recipe is from, for a card: the site, or the user's own note. */
+export function sourceLabel(
+  name: string | null,
+  url: string | null,
+  note: string | null = null,
+): string {
+  if (url) return name || new URL(url).hostname.replace(/^www\./, '')
+  return note ? `Your recipe · ${note}` : 'Your recipe'
+}
+
+export interface RecipeFilter {
+  query: string
+  /** Every one of these diets (a starred, check-the-label fit counts). */
+  diets: string[]
+  maxMinutes: number | null
+}
+
+export const NO_FILTER: RecipeFilter = {
+  query: '',
+  diets: [],
+  maxMinutes: null,
+}
+
+function words(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+}
+
+/** Recipes matching every filter. The query matches the start of words in the
+ *  title, source or ingredient names ("lent" finds "Red lentil dal"). */
+export function filterRecipes(
+  recipes: SavedRecipe[],
+  f: RecipeFilter,
+): SavedRecipe[] {
+  const terms = words(f.query)
+  return recipes.filter((r) => {
+    if (
+      f.maxMinutes !== null &&
+      !(r.totalMinutes && r.totalMinutes <= f.maxMinutes)
+    )
+      return false
+    const has = new Set(r.diets.map((d) => d.slug))
+    if (!f.diets.every((d) => has.has(d))) return false
+    if (!terms.length) return true
+    const haystack = words(
+      [r.title, r.sourceName ?? '', r.sourceNote ?? '', ...r.ingredients].join(
+        ' ',
+      ),
+    )
+    return terms.every((t) => haystack.some((w) => w.startsWith(t)))
+  })
 }
