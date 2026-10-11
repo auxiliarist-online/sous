@@ -6,9 +6,11 @@ ingredient happens in the database (match_ingredient()), from the candidate
 names built here, so the ingredient list and aliases stay in one place.
 """
 
+import functools
 import os
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
@@ -18,12 +20,20 @@ from app.pricing.units import ALIASES as UNIT_ALIASES
 from app.pricing.units import KNOWN_UNITS
 
 # The parser's NLTK data ships with the app (scripts/fetch_nltk_data.py), so it
-# never tries to download it at runtime. Set before the parser imports NLTK.
+# never tries to download it at runtime.
 _DATA = Path(__file__).resolve().parents[2] / "nltk_data"
-if _DATA.is_dir():
-    os.environ.setdefault("NLTK_DATA", str(_DATA))
 
-from ingredient_parser import parse_ingredient  # noqa: E402
+
+@functools.cache
+def _parser() -> Callable[[str], Any]:
+    """Load the parser on first use, not on import: importing the API (as Vercel
+    does while building, before the NLTK data is fetched) mustn't load NLTK."""
+    if _DATA.is_dir():
+        os.environ.setdefault("NLTK_DATA", str(_DATA))
+    from ingredient_parser import parse_ingredient
+
+    return parse_ingredient
+
 
 # Below this the parse is flagged for review.
 CONFIDENT = 0.85
@@ -231,7 +241,7 @@ def parse_line(line_no: int, raw: str, section: str | None = None) -> list[Parse
     text = raw.strip()
     if not text:
         return []
-    parsed = parse_ingredient(text)
+    parsed = _parser()(text)
     options = _options(parsed, text)
     if not options:  # a heading like "For the sauce:", or something we can't read
         return [ParsedLine(line_no, raw, section)]
