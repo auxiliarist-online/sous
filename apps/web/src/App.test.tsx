@@ -20,6 +20,7 @@ function fakeAuth(initial: Session | null = null) {
       return { data: { subscription: { unsubscribe: vi.fn() } } }
     }),
     signInWithOtp: vi.fn(async () => ({ data: {}, error: null })),
+    verifyOtp: vi.fn(async () => ({ data: {}, error: null })),
     signOut: vi.fn(async () => ({ error: null })),
   }
   return {
@@ -59,7 +60,7 @@ describe('App', () => {
       ' cook@example.com ',
     )
     await userEvent.click(
-      screen.getByRole('button', { name: 'Email me a link' }),
+      screen.getByRole('button', { name: 'Email me a code' }),
     )
     expect(auth.signInWithOtp).toHaveBeenCalledWith({
       email: 'cook@example.com',
@@ -89,9 +90,56 @@ describe('App', () => {
       'cook@example.com',
     )
     await userEvent.click(
-      screen.getByRole('button', { name: 'Email me a link' }),
+      screen.getByRole('button', { name: 'Email me a code' }),
     )
     expect(await screen.findByRole('alert')).toHaveTextContent(text)
+  })
+
+  it('signs in with the code from the email, without leaving the app', async () => {
+    const { auth, emit } = fakeAuth()
+    auth.verifyOtp.mockImplementationOnce(async () => {
+      emit(session)
+      return { data: {}, error: null }
+    })
+    render(<App auth={auth} libraryApi={library} />)
+    await userEvent.type(
+      await screen.findByLabelText('Email'),
+      'cook@example.com',
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Email me a code' }),
+    )
+    const signIn = await screen.findByRole('button', { name: 'Sign in' })
+    expect(signIn).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('Code'), '123 456')
+    await userEvent.click(signIn)
+    expect(auth.verifyOtp).toHaveBeenCalledWith({
+      email: 'cook@example.com',
+      token: '123456',
+      type: 'email',
+    })
+    expect(await screen.findByText('cook@example.com')).toBeInTheDocument()
+  })
+
+  it('explains a wrong or expired code', async () => {
+    const { auth } = fakeAuth()
+    auth.verifyOtp.mockResolvedValueOnce({
+      data: {},
+      error: { code: 'otp_expired', status: 403 },
+    } as never)
+    render(<App auth={auth} />)
+    await userEvent.type(
+      await screen.findByLabelText('Email'),
+      'cook@example.com',
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Email me a code' }),
+    )
+    await userEvent.type(await screen.findByLabelText('Code'), '000000')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "That code didn't work",
+    )
   })
 
   it('shows who is signed in and signs out', async () => {

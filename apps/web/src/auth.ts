@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 /** The parts of Supabase Auth the app uses; tests pass a fake. */
 export type Auth = Pick<
   SupabaseClient['auth'],
-  'getSession' | 'onAuthStateChange' | 'signInWithOtp' | 'signOut'
+  'getSession' | 'onAuthStateChange' | 'signInWithOtp' | 'verifyOtp' | 'signOut'
 >
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
