@@ -166,6 +166,7 @@ Users get three kinds of control (TYL-32):
 - Each line is parsed by the API (`app/recipes/ingredients.py`, using `ingredient-parser-nlp`) into `quantity` (and `quantity_max` for ranges), `unit`, `name`, `preparation`, `note` and `is_optional`, with `parse_confidence`. Units use the names in `app/pricing/units.py` (`cup`, `tbsp`, `oz`, `each`…) or a plain singular word (`clove`, `pinch`). "1 (15 oz) can beans" is stored as 15 oz with the note "1 can".
 - "A or B" lines become one row per option, sharing `line_no`. "Salt and pepper" stays one row, flagged for review.
 - `ingredient_id` comes from `match_ingredient()`: the first of the API's candidate names (as written, then without words like "fresh" or "large", singular/plural, "canned …" for cans) that is a canonical ingredient or an `ingredient_aliases` entry. Unmatched lines keep their `name` and get `needs_review`.
+- The canonical ingredient list grows from `apps/api/data/ingredients.csv` (name, aisle, `contains`, `may_contain`, aliases): `apps/api/scripts/build_ingredients.py <version>_<name>` validates it and writes a new migration. Existing names and aliases are never overwritten, and the schema tests check every row and alias landed as written.
 - `set_recipe_ingredients()` replaces a recipe's lines; `scripts/reparse_ingredients.py` re-parses stored recipes after the parser or aliases change.
 
 ### Browser imports (TYL-35)

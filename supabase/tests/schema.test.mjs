@@ -101,16 +101,15 @@ describe('reference data', () => {
     assert.equal(rows[0].ht, 'kroger_api')
   })
 
-  it('seeds baseline prices for every seeded ingredient', async () => {
+  it('seeds one baseline price per priced staple', async () => {
+    // Ingredients added later (apps/api/data/ingredients.csv) have no baseline price yet.
     const { rows } = await db.query(`
-      select (select count(*) from ingredients)::int as ingredients,
-             (select count(*) from prices where source in ('baseline_bls', 'baseline_usda', 'seed'))::int as prices,
-             (select count(*) from ingredients i
-                where not exists (select 1 from prices p where p.ingredient_id = i.id))::int as unpriced
+      select (select count(*) from prices where source in ('baseline_bls', 'baseline_usda', 'seed'))::int as prices,
+             (select count(distinct ingredient_id) from prices
+                where source in ('baseline_bls', 'baseline_usda', 'seed'))::int as priced
     `)
     assert.ok(rows[0].prices >= 100)
-    assert.equal(rows[0].prices, rows[0].ingredients)
-    assert.equal(rows[0].unpriced, 0)
+    assert.equal(rows[0].prices, rows[0].priced)
   })
 
   it('rejects unknown ingredient categories', async () => {
@@ -316,7 +315,7 @@ describe('diet customization', () => {
       ids[name] = await idOf(name)
     }
     const { rows } = await db.query(
-      `insert into ingredients (name, contains, may_contain) values ('pesto', '{dairy}', '{tree_nut}')
+      `insert into ingredients (name, contains, may_contain) values ('test pesto', '{dairy}', '{tree_nut}')
        returning id`,
     )
     ids.pesto = rows[0].id
@@ -990,7 +989,7 @@ describe('ingredient parsing', () => {
     const { rows } = await db.query(
       'select count(*)::int as n from ingredient_aliases',
     )
-    assert.equal(rows[0].n, 159)
+    assert.equal(rows[0].n, 159 + 283)
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
@@ -1165,5 +1164,85 @@ describe('ingredient parsing', () => {
       ),
       /only callable by the API/,
     )
+  })
+})
+
+describe('ingredient list (apps/api/data/ingredients.csv)', () => {
+  const split = (cell) =>
+    cell
+      .split('|')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .sort()
+  let rows
+
+  before(async () => {
+    const text = await readFile(
+      new URL('../../apps/api/data/ingredients.csv', import.meta.url),
+      'utf8',
+    )
+    const [, ...lines] = text.trim().split('\n')
+    rows = lines.map((line) => {
+      const [name, aisle, contains, may, aliases] = line.split(',')
+      return {
+        name,
+        aisle,
+        contains: split(contains),
+        may: split(may),
+        aliases: split(aliases),
+      }
+    })
+  })
+
+  it('stores every ingredient with the aisle and diet facts in the CSV', async () => {
+    const { rows: stored } = await db.query(
+      `select name, aisle, contains, may_contain from ingredients where name = any($1)`,
+      [rows.map((r) => r.name)],
+    )
+    const got = new Map(stored.map((r) => [r.name, r]))
+    for (const r of rows) {
+      const g = got.get(r.name)
+      assert.ok(g, `${r.name} missing (does it already exist?)`)
+      assert.equal(g.aisle, r.aisle, r.name)
+      assert.deepEqual([...g.contains].sort(), r.contains, `${r.name} contains`)
+      assert.deepEqual(
+        [...g.may_contain].sort(),
+        r.may,
+        `${r.name} may_contain`,
+      )
+    }
+  })
+
+  it('points every alias at its own ingredient (no clash with older aliases)', async () => {
+    for (const r of rows) {
+      for (const alias of r.aliases) {
+        const { rows: hit } = await db.query(
+          `select i.name from ingredient_aliases a join ingredients i on i.id = a.ingredient_id where a.alias = $1`,
+          [alias],
+        )
+        assert.equal(hit[0]?.name, r.name, `alias ${alias}`)
+      }
+    }
+  })
+
+  it('reads typical recipe names as the right ingredient', async () => {
+    const cases = [
+      [['heavy cream'], 'heavy cream'],
+      [['fresh parsley', 'parsley'], 'parsley'],
+      [['beef stock'], 'beef broth'],
+      [['dried oregano'], 'dried oregano'],
+      [['fresh basil', 'basil'], 'basil'],
+      [['ground ginger'], 'ground ginger'],
+      [['fresh ginger'], 'ginger'],
+      [['oat milk'], 'oat milk'],
+      [['milk'], 'whole milk'],
+    ]
+    for (const [candidates, expected] of cases) {
+      const { rows: hit } = await db.query(
+        'select name from ingredients where id = match_ingredient($1)',
+        [candidates],
+      )
+      assert.equal(hit[0]?.name, expected, candidates.join(' / '))
+    }
   })
 })
