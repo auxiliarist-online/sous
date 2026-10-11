@@ -1,9 +1,17 @@
 /* Mobile-first: base styles target phones; widen with min-width queries. */
 :root {
-  --color-bg: #faf8f4;
-  --color-text: #1f2421;
-  --color-muted: #5c655f;
-  --color-accent: #2f6b4f;
+  /* Brand palette (provisional, docs/brand.md). Use the --color-* roles below
+     in components, not these directly. */
+  --brand-green: #2f6b4f;
+  --brand-off-white: #faf8f4;
+  --brand-mahogany: #5b2d1e;
+  --brand-black: #161210;
+
+  --color-bg: var(--brand-off-white);
+  --color-text: var(--brand-black);
+  --color-muted: #6e5a4f;
+  --color-accent: var(--brand-green);
+  --color-secondary: var(--brand-mahogany);
   --space: 16px;
 
   font-family:
@@ -20,10 +28,11 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #151917;
-    --color-text: #e8ece9;
-    --color-muted: #a3aca6;
+    --color-bg: #141110;
+    --color-text: #f3efe8;
+    --color-muted: #b3a398;
     --color-accent: #7cc4a0;
+    --color-secondary: #c48a6a;
   }
 }
 
@@ -66,6 +75,7 @@ body {
 
 .card h2 {
   margin: 0;
+  color: var(--color-secondary);
   font-size: 1.25rem;
 }
 
@@ -171,7 +181,7 @@ a.button {
   column-gap: 0.5rem;
   padding: 0.625rem 0;
   border-bottom: 1px solid
-    color-mix(in srgb, var(--color-muted) 30%, transparent);
+    color-mix(in srgb, var(--color-secondary) 25%, transparent);
 }
 
 .recipes li a {
@@ -211,6 +221,7 @@ a.button {
 .help h3 {
   margin: 0.75rem 0 0;
   font-size: 1rem;
+  color: var(--color-secondary);
 }
 
 .help ol {
