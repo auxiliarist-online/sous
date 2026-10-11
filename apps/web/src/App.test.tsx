@@ -3,7 +3,8 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
-import type { LibraryApi } from './Library.tsx'
+import type { SousApi } from './App.tsx'
+import { NO_PREFERENCES } from './sous.ts'
 import type { Auth } from './auth.ts'
 
 type Listener = (event: string, session: Session | null) => void
@@ -34,11 +35,17 @@ const session = {
   user: { email: 'cook@example.com' },
 } as Session
 
-const library = (): LibraryApi => ({
+const library = (): SousApi => ({
   list: vi.fn(async () => []),
   save: vi.fn(),
   savePage: vi.fn(),
   remove: vi.fn(),
+  recipe: vi.fn(async () => null),
+  saveManual: vi.fn(),
+  preferences: vi.fn(async () => NO_PREFERENCES),
+  savePreferences: vi.fn(async () => {}),
+  options: vi.fn(async () => ({ diets: [], cuisines: [] })),
+  searchIngredients: vi.fn(async () => []),
 })
 
 describe('App', () => {
@@ -118,7 +125,9 @@ describe('App', () => {
       token: '123456',
       type: 'email',
     })
-    expect(await screen.findByText('cook@example.com')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Your recipes' }),
+    ).toBeInTheDocument()
   })
 
   it('explains a wrong or expired code', async () => {
@@ -142,12 +151,23 @@ describe('App', () => {
     )
   })
 
-  it('shows who is signed in and signs out', async () => {
+  it('shows who is signed in on the preferences page, and signs out', async () => {
     const { auth } = fakeAuth(session)
     render(<App auth={auth} libraryApi={library} />)
+    await userEvent.click(
+      await screen.findByRole('link', { name: 'Preferences' }),
+    )
     expect(await screen.findByText('cook@example.com')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     expect(auth.signOut).toHaveBeenCalled()
+  })
+
+  it('asks a new user to set preferences, once', async () => {
+    const { auth } = fakeAuth(session)
+    render(<App auth={auth} libraryApi={library} />)
+    expect(
+      await screen.findByRole('heading', { name: 'Tell Sous how you eat' }),
+    ).toBeInTheDocument()
   })
 
   it('follows sign-in from the emailed link', async () => {
@@ -155,6 +175,8 @@ describe('App', () => {
     render(<App auth={auth} libraryApi={library} />)
     await screen.findByLabelText('Email')
     act(() => emit(session))
-    expect(await screen.findByText('cook@example.com')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Your recipes' }),
+    ).toBeInTheDocument()
   })
 })

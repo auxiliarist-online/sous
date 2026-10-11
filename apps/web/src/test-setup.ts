@@ -4,4 +4,6 @@ import { afterEach } from 'vitest'
 
 afterEach(() => {
   cleanup()
+  // Pages are real URLs; start every test on the library.
+  window.history.replaceState(null, '', '/')
 })

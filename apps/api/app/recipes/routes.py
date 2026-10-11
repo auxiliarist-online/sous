@@ -3,9 +3,12 @@
 POST /recipes/import       from a link; Sous fetches the page (TYL-8).
 POST /recipes/import-page  from the page data the user's own browser sends,
                            for sites that block Sous's server (TYL-35).
+POST /recipes/manual       a recipe the user types in; PUT /recipes/manual/{id} edits it.
 """
 
+import re
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -19,7 +22,8 @@ from app.recipes.extract import (
     page_from_json_ld,
 )
 from app.recipes.fetch import FetchError, fetch_page
-from app.recipes.store import save_recipe
+from app.recipes.ingredients import parse_line
+from app.recipes.store import NotYours, save_manual, save_recipe
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -94,3 +98,75 @@ def _result(draft: RecipeDraft, saved: dict[str, Any]) -> ImportResult:
         visibility=saved["visibility"],
         status=saved["status"],
     )
+
+
+class ManualRecipe(BaseModel):
+    """A recipe typed in by hand. Ingredients and steps are one per line; an
+    ingredient line ending in ":" starts a section ("For the sauce:")."""
+
+    title: str = Field(min_length=1, max_length=200)
+    ingredients: str = Field(default="", max_length=20_000)
+    instructions: str = Field(default="", max_length=50_000)
+    servings: float | None = Field(default=None, gt=0, le=100)
+    prep_minutes: int | None = Field(default=None, ge=0, le=10_000)
+    cook_minutes: int | None = Field(default=None, ge=0, le=10_000)
+    total_minutes: int | None = Field(default=None, ge=0, le=10_000)
+    source_note: str | None = Field(default=None, max_length=300)
+    cuisines: list[str] = Field(default_factory=list, max_length=10)
+
+
+class ManualResult(BaseModel):
+    recipe_id: str
+    created: bool
+
+
+STEP_NUMBER = re.compile(r"^\s*(?:step\s*)?\d+[.):]\s*", re.I)
+
+
+def _manual_payload(body: ManualRecipe, user_id: str, recipe_id: UUID | None) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    section: str | None = None
+    for raw in body.ingredients.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.endswith(":"):
+            section = line[:-1].strip() or None
+            continue
+        rows += [p.payload() for p in parse_line(len(rows), line, section)]
+    steps = [STEP_NUMBER.sub("", s).strip() for s in body.instructions.splitlines()]
+    steps = [s for s in steps if s]
+    return {
+        "added_by": user_id,
+        "recipe_id": str(recipe_id) if recipe_id else None,
+        "recipe": {
+            "title": body.title.strip(),
+            "servings": body.servings,
+            "prep_minutes": body.prep_minutes,
+            "cook_minutes": body.cook_minutes,
+            "total_minutes": body.total_minutes,
+            "instructions": steps or None,
+            "source_note": (body.source_note or "").strip() or None,
+        },
+        "cuisines": body.cuisines,
+        "ingredients": rows,
+    }
+
+
+@router.post("/manual", status_code=status.HTTP_201_CREATED)
+async def create_manual(
+    body: ManualRecipe, user_id: Annotated[str, Depends(current_user_id)]
+) -> ManualResult:
+    saved = await save_manual(_manual_payload(body, user_id, None))
+    return ManualResult(recipe_id=saved["recipe_id"], created=True)
+
+
+@router.put("/manual/{recipe_id}")
+async def edit_manual(
+    recipe_id: UUID, body: ManualRecipe, user_id: Annotated[str, Depends(current_user_id)]
+) -> ManualResult:
+    try:
+        saved = await save_manual(_manual_payload(body, user_id, recipe_id))
+    except NotYours as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such recipe of yours.") from e
+    return ManualResult(recipe_id=saved["recipe_id"], created=False)

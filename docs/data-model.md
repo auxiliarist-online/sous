@@ -178,6 +178,16 @@ Users get three kinds of control (TYL-32):
 - `recipes.origin` is `fetched` (Sous read the page, or a user typed the recipe) or `browser` (sent from a user's browser for a site that blocks Sous).
 - A fetched recipe is shared by every user who imports its URL (unique `source_url` among fetched recipes). A browser recipe is a private copy for `added_by` only (unique per URL and user), and a check constraint keeps it private, so made-up browser data can't reach other users.
 
+### Hand-typed recipes (TYL-35)
+
+- A recipe a user types in has no `source_url`, is always `private` to `added_by`, and keeps everything they entered, instructions included. `recipes.source_note` (up to 300 characters) records where it came from in their words ("Grandma", a cookbook and page).
+- `save_manual_recipe()` (service role only, called by `POST`/`PUT /recipes/manual`) creates or edits one: it replaces the ingredient lines through `set_recipe_ingredients()`, so they're parsed and diet-labelled like any other recipe, and saves the recipe to the user. Editing only works on the user's own hand-typed recipes.
+
+### Preferences (TYL-14, TYL-24)
+
+- The web app writes the user's own rows directly under RLS: `profiles` (allergies, extra categories to avoid, `strict_may_contain`, household size, weekly budget in cents) and one row per choice in `user_diets`, `user_favorite_cuisines`, `user_favorite_ingredients` and `user_disliked_ingredients`. Saving replaces each set.
+- A user with no `profiles` row hasn't set preferences yet, and the recipe list offers to set them up.
+
 ### Crawling (TYL-26)
 
 - `crawl_pages` is the queue: one row per sitemap URL with its `lastmod` and what happened when we fetched it. `crawl_enqueue()` adds new URLs and re-queues a page only when its `lastmod` moves forward; blocked and disallowed pages are never re-queued automatically.

@@ -2,12 +2,17 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { bookmarklet } from './bookmarklet.ts'
 import {
   dietLabels,
+  filterRecipes,
   ImportError,
+  NO_FILTER,
   recipeTitle,
+  sourceLabel,
   type ImportResult,
   type PageData,
+  type RecipeFilter,
   type SavedRecipe,
 } from './library.ts'
+import { Link } from './router.tsx'
 
 /** What the screen needs from the API and database; tests pass fakes. */
 export interface LibraryApi {
@@ -23,20 +28,23 @@ type Status =
   | { state: 'saved'; result: ImportResult }
   | { state: 'error'; message: string; code: string }
 
-function sourceLabel(name: string | null, url: string): string {
-  return name || new URL(url).hostname.replace(/^www\./, '')
-}
-
 export function Library({
   api,
   sharedUrl,
   sharedPage,
+  myDiets = [],
+  onboarded = true,
 }: {
   api: LibraryApi
   sharedUrl?: string | null
   /** A page sent by the Save to Sous bookmarklet, waiting for the user's OK. */
   sharedPage?: PageData | null
+  /** The user's own diets, for the "Fits my diets" filter. */
+  myDiets?: string[]
+  /** False until the user has set preferences; shows a prompt. */
+  onboarded?: boolean
 }) {
+  const [filter, setFilter] = useState<RecipeFilter>(NO_FILTER)
   const [url, setUrl] = useState(sharedUrl ?? '')
   const [page, setPage] = useState(sharedPage ?? null)
   const [status, setStatus] = useState<Status>({ state: 'idle' })
@@ -97,6 +105,19 @@ export function Library({
 
   return (
     <>
+      {!onboarded && (
+        <section className="card onboarding">
+          <h2>Tell Sous how you eat</h2>
+          <p className="muted">
+            Your diets, allergies and favorite cuisines shape what Sous shows
+            you.
+          </p>
+          <Link to="/settings" className="button">
+            Set my preferences
+          </Link>
+        </section>
+      )}
+
       <form className="card" onSubmit={submit}>
         <h2>
           {confirmingShare ? 'Save the recipe you shared?' : 'Add a recipe'}
@@ -123,6 +144,9 @@ export function Library({
           Tip: install Sous on your phone, then share recipes to it from your
           browser.
         </p>
+        <Link to="/new" className="small">
+          Or type in a recipe of your own
+        </Link>
       </form>
 
       {page && (
@@ -164,33 +188,18 @@ export function Library({
         {recipes === null && !listError && <p className="muted">Loading…</p>}
         {recipes?.length === 0 && (
           <p className="muted">
-            Nothing saved yet. Paste a link above, or share a recipe to Sous
-            from your browser.
+            Nothing saved yet. Paste a link above, share a recipe to Sous from
+            your browser, or type one in.
           </p>
         )}
         {!!recipes?.length && (
-          <ul className="recipes">
-            {recipes.map((r) => (
-              <li key={r.id}>
-                <a href={r.sourceUrl} target="_blank" rel="noopener noreferrer">
-                  {r.title}
-                </a>
-                <span className="muted small">
-                  {sourceLabel(r.sourceName, r.sourceUrl)}
-                  {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
-                </span>
-                <DietChips diets={r.diets} />
-                <button
-                  type="button"
-                  className="remove"
-                  aria-label={`Remove ${r.title}`}
-                  onClick={() => void remove(r)}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
+          <Filters filter={filter} onChange={setFilter} myDiets={myDiets} />
+        )}
+        {!!recipes?.length && (
+          <RecipeList
+            recipes={filterRecipes(recipes, filter)}
+            onRemove={(r) => void remove(r)}
+          />
         )}
         {!!recipes?.length && (
           <p className="muted small">
@@ -312,7 +321,7 @@ function BrowserImportHelp({ open }: { open: boolean }) {
   )
 }
 
-function DietChips({ diets }: { diets: SavedRecipe['diets'] }) {
+export function DietChips({ diets }: { diets: SavedRecipe['diets'] }) {
   const { labels, notes } = dietLabels(diets)
   if (!labels.length) return null
   return (
@@ -328,5 +337,123 @@ function DietChips({ diets }: { diets: SavedRecipe['diets'] }) {
         </span>
       ))}
     </span>
+  )
+}
+
+const FILTER_DIETS: [slug: string, label: string][] = [
+  ['vegetarian', 'Vegetarian'],
+  ['vegan', 'Vegan'],
+  ['gluten_free', 'Gluten-free'],
+  ['dairy_free', 'Dairy-free'],
+]
+
+function Filters({
+  filter,
+  onChange,
+  myDiets,
+}: {
+  filter: RecipeFilter
+  onChange: (f: RecipeFilter) => void
+  myDiets: string[]
+}) {
+  const toggleDiet = (slug: string) =>
+    onChange({
+      ...filter,
+      diets: filter.diets.includes(slug)
+        ? filter.diets.filter((d) => d !== slug)
+        : [...filter.diets, slug],
+    })
+  const mine =
+    myDiets.length > 0 && myDiets.every((d) => filter.diets.includes(d))
+  return (
+    <div className="filters">
+      <label htmlFor="recipe-search" className="visually-hidden">
+        Search your recipes
+      </label>
+      <input
+        id="recipe-search"
+        type="search"
+        placeholder="Search your recipes"
+        value={filter.query}
+        onChange={(e) => onChange({ ...filter, query: e.target.value })}
+      />
+      <div className="chips" role="group" aria-label="Filters">
+        {myDiets.length > 0 && (
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={mine}
+            onClick={() =>
+              onChange({
+                ...filter,
+                diets: mine
+                  ? filter.diets.filter((d) => !myDiets.includes(d))
+                  : [...new Set([...filter.diets, ...myDiets])],
+              })
+            }
+          >
+            Fits my diets
+          </button>
+        )}
+        {FILTER_DIETS.map(([slug, label]) => (
+          <button
+            key={slug}
+            type="button"
+            className="chip"
+            aria-pressed={filter.diets.includes(slug)}
+            onClick={() => toggleDiet(slug)}
+          >
+            {label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="chip"
+          aria-pressed={filter.maxMinutes === 30}
+          onClick={() =>
+            onChange({
+              ...filter,
+              maxMinutes: filter.maxMinutes === 30 ? null : 30,
+            })
+          }
+        >
+          Under 30 min
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function RecipeList({
+  recipes,
+  onRemove,
+}: {
+  recipes: SavedRecipe[]
+  onRemove: (r: SavedRecipe) => void
+}) {
+  if (!recipes.length) {
+    return <p className="muted">No recipes match. Try fewer filters.</p>
+  }
+  return (
+    <ul className="recipes" aria-label="Your recipes">
+      {recipes.map((r) => (
+        <li key={r.id}>
+          <Link to={`/recipe/${r.id}`}>{r.title}</Link>
+          <span className="muted small">
+            {sourceLabel(r.sourceName, r.sourceUrl, r.sourceNote)}
+            {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
+          </span>
+          <DietChips diets={r.diets} />
+          <button
+            type="button"
+            className="remove"
+            aria-label={`Remove ${r.title}`}
+            onClick={() => onRemove(r)}
+          >
+            ×
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }

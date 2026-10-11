@@ -13,29 +13,56 @@ import {
   removeSaved,
   savedRecipes,
 } from './library.ts'
+import { route, usePath } from './navigation.ts'
 import { clearPage, pendingPage } from './page.ts'
+import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
+import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
+import { Link } from './router.tsx'
+import { Settings, type SettingsApi } from './Settings.tsx'
 import { clearShare, pendingShare } from './share.ts'
 import { SignIn } from './SignIn.tsx'
+import {
+  loadPreferences,
+  NO_PREFERENCES,
+  recipeDetail,
+  referenceOptions,
+  saveManual,
+  savePreferences,
+  searchIngredients,
+  type Preferences,
+} from './sous.ts'
 
-function liveApi(db: SupabaseClient, session: Session): LibraryApi {
+/** Everything the signed-in pages need; tests pass a fake. */
+export type SousApi = LibraryApi & RecipePageApi & RecipeFormApi & SettingsApi
+
+function liveApi(db: SupabaseClient, session: Session): SousApi {
+  const userId = session.user.id
   return {
     list: () => savedRecipes(db),
     save: (url) => importRecipe(session, url),
     savePage: (page) => importPage(session, page),
     remove: (id) => removeSaved(db, id),
+    recipe: (id) => recipeDetail(db, userId, id),
+    saveManual: (input, id) => saveManual(session, input, id),
+    preferences: () => loadPreferences(db, userId),
+    savePreferences: (p) => savePreferences(db, userId, p),
+    options: () => referenceOptions(db),
+    searchIngredients: (q) => searchIngredients(db, q),
   }
 }
 
 interface Props {
   auth?: Auth | null
-  /** Builds the library API for a session; tests pass a fake. */
-  libraryApi?: (session: Session) => LibraryApi
+  /** Builds the API for a session; tests pass a fake. */
+  libraryApi?: (session: Session) => SousApi
 }
 
 function App({ auth = defaultAuth, libraryApi }: Props) {
   const session = useSession(auth)
+  const path = usePath()
   const [shared] = useState(pendingShare)
   const [sharedPage] = useState(pendingPage)
+  const [prefs, setPrefs] = useState<Preferences | null>(null)
 
   const api = useMemo(() => {
     if (!session) return null
@@ -49,11 +76,35 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
     if (session && sharedPage) clearPage()
   }, [session, shared, sharedPage])
 
+  useEffect(() => {
+    if (!api) return
+    let live = true
+    api.preferences().then(
+      (p) => live && setPrefs(p),
+      // Preferences only shape filters; the app works without them.
+      () => live && setPrefs(NO_PREFERENCES),
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
+
+  const at = route(path)
+  const signedIn = !!(auth && session && api)
+
   return (
     <main className="app" aria-busy={session === undefined}>
       <header className="app-header">
-        <h1>Sous</h1>
+        <h1>
+          <Link to="/">Sous</Link>
+        </h1>
         <p>Plan the week. Shop the deals.</p>
+        {signedIn && (
+          <nav className="app-nav" aria-label="Main">
+            <Link to="/">Recipes</Link>
+            <Link to="/settings">Preferences</Link>
+          </nav>
+        )}
       </header>
 
       {!auth && (
@@ -70,21 +121,32 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
           <SignIn auth={auth} />
         </>
       )}
-      {auth && session && api && (
+      {signedIn && api && auth && session && (
         <>
-          <Library api={api} sharedUrl={shared} sharedPage={sharedPage} />
-          <section className="card account">
-            <p className="muted small">
-              Signed in as <strong>{session.user.email}</strong>
-            </p>
-            <button
-              type="button"
-              className="link"
-              onClick={() => void auth.signOut()}
-            >
-              Sign out
-            </button>
-          </section>
+          {at.page === 'library' && (
+            <Library
+              api={api}
+              sharedUrl={shared}
+              sharedPage={sharedPage}
+              myDiets={prefs?.diets ?? []}
+              onboarded={prefs === null || prefs.saved}
+            />
+          )}
+          {at.page === 'recipe' && (
+            <RecipePage key={at.id} id={at.id} api={api} />
+          )}
+          {at.page === 'new' && <RecipeForm api={api} />}
+          {at.page === 'edit' && (
+            <RecipeForm key={at.id} api={api} recipeId={at.id} />
+          )}
+          {at.page === 'settings' && (
+            <Settings
+              api={api}
+              email={session.user.email}
+              onSaved={setPrefs}
+              onSignOut={() => void auth.signOut()}
+            />
+          )}
         </>
       )}
     </main>

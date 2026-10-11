@@ -30,3 +30,26 @@ async def save_recipe(
         raise StoreError(f"import_recipe failed: {resp.status_code} {resp.text[:300]}")
     result: dict[str, Any] = resp.json()
     return result
+
+
+class NotYours(StoreError):
+    """The recipe doesn't exist or isn't the user's hand-typed recipe."""
+
+
+async def save_manual(payload: dict[str, Any]) -> dict[str, Any]:
+    """Create or edit a hand-typed recipe through save_manual_recipe()."""
+    if not settings.supabase_url or not settings.supabase_service_role_key:
+        raise StoreError("Supabase is not configured")
+    key = settings.supabase_service_role_key
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"{settings.supabase_url}/rest/v1/rpc/save_manual_recipe",
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            json={"p": payload},
+        )
+    if resp.status_code == 403:  # raised with errcode 42501
+        raise NotYours(resp.text[:300])
+    if resp.status_code != 200:
+        raise StoreError(f"save_manual_recipe failed: {resp.status_code} {resp.text[:300]}")
+    result: dict[str, Any] = resp.json()
+    return result
