@@ -237,14 +237,20 @@ def _options(parsed: Any, raw: str) -> list[tuple[str, float]]:
     return names
 
 
+# Checkboxes and bullets some recipe plugins put before each line ("▢ 1 cup rice").
+BULLET = re.compile(
+    r"^[\s\u25a2\u2610\u25a1\u25fb\u25fd\u25aa\u2022\u25cf\u25e6\u2023\u2043\u2713\u2714\u2611*\u00b7\-\u2013\u2014]+"
+)
+
+
 def parse_line(line_no: int, raw: str, section: str | None = None) -> list[ParsedLine]:
-    text = raw.strip()
+    text = BULLET.sub("", raw).strip()
     if not text:
         return []
     parsed = _parser()(text)
     options = _options(parsed, text)
     if not options:  # a heading like "For the sauce:", or something we can't read
-        return [ParsedLine(line_no, raw, section)]
+        return [ParsedLine(line_no, text, section)]
     qty, qty_max, unit, amount_note, amount_conf, canned = _amounts(parsed)
     comment = parsed.comment.text if parsed.comment else None
     notes = [n for n in (amount_note, comment) if n]
@@ -255,7 +261,7 @@ def parse_line(line_no: int, raw: str, section: str | None = None) -> list[Parse
         out.append(
             ParsedLine(
                 line_no=line_no,
-                raw_text=raw,
+                raw_text=text,
                 section=section,
                 option_no=i,
                 name=name,

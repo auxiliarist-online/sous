@@ -990,7 +990,8 @@ describe('ingredient parsing', () => {
     const { rows } = await db.query(
       'select count(*)::int as n from ingredient_aliases',
     )
-    assert.equal(rows[0].n, 146)
+    assert.equal(rows[0].n, 159)
+    assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
   })
