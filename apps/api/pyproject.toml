@@ -6,6 +6,7 @@ dependencies = [
     "defusedxml>=0.7",
     "fastapi>=0.115",
     "httpx2>=2.13",
+    "ingredient-parser-nlp>=2.8,<3",
     "pydantic-settings>=2.6",
     "recipe-scrapers>=15.12,<16",
 ]
@@ -25,6 +26,11 @@ dev = [
 [build-system]
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
+
+# Vercel runs this after installing dependencies: the ingredient parser's NLTK
+# data ships with the function instead of downloading on a cold start.
+[tool.vercel.scripts]
+build = "python scripts/fetch_nltk_data.py"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

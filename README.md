@@ -36,6 +36,7 @@ cp apps/web/.env.example apps/web/.env.local
 cd apps/api
 python3 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
+.venv/bin/python scripts/fetch_nltk_data.py   # data for the ingredient parser
 cp .env.example .env
 ```
 

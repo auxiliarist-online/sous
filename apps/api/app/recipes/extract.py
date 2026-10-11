@@ -17,6 +17,7 @@ from recipe_scrapers import scrape_html
 from recipe_scrapers._exceptions import RecipeScrapersExceptions
 
 from app.recipes.fetch import FetchError
+from app.recipes.ingredients import parse_line
 
 TRACKING_PARAMS = re.compile(r"^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref|_ga)$", re.I)
 
@@ -83,7 +84,12 @@ class RecipeDraft:
                 "instructions": self.instructions,
             },
             "cuisines": self.cuisines,
-            "ingredients": [vars(i) for i in self.ingredients],
+            # Parsed into amounts, units and names; see app/recipes/ingredients.py.
+            "ingredients": [
+                row.payload()
+                for i in self.ingredients
+                for row in parse_line(i.line_no, i.raw_text, i.section)
+            ],
         }
 
 

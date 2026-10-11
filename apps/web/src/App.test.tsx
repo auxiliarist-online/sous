@@ -72,12 +72,17 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows a friendly error when the link cannot be sent', async () => {
+  it.each([
+    [
+      { code: 'over_email_send_rate_limit', status: 429 },
+      'as many sign-in emails',
+    ],
+    [{ code: 'email_address_invalid', status: 400 }, 'valid email address'],
+    [{ status: 0 }, "couldn't reach the sign-in service"],
+    [{ code: 'unexpected_failure', status: 500 }, "couldn't send the link"],
+  ])('explains why the link was not sent (%o)', async (error, text) => {
     const { auth } = fakeAuth()
-    auth.signInWithOtp.mockResolvedValueOnce({
-      data: {},
-      error: new Error('rate limit'),
-    } as never)
+    auth.signInWithOtp.mockResolvedValueOnce({ data: {}, error } as never)
     render(<App auth={auth} />)
     await userEvent.type(
       await screen.findByLabelText('Email'),
@@ -86,9 +91,7 @@ describe('App', () => {
     await userEvent.click(
       screen.getByRole('button', { name: 'Email me a link' }),
     )
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      "couldn't send the link",
-    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(text)
   })
 
   it('shows who is signed in and signs out', async () => {
