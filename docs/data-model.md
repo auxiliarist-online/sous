@@ -188,6 +188,13 @@ Users get three kinds of control (TYL-32):
 - The web app writes the user's own rows directly under RLS: `profiles` (allergies, extra categories to avoid, `strict_may_contain`, household size, weekly budget in cents) and one row per choice in `user_diets`, `user_favorite_cuisines`, `user_favorite_ingredients` and `user_disliked_ingredients`. Saving replaces each set.
 - A user with no `profiles` row hasn't set preferences yet, and the recipe list offers to set them up.
 
+### Meal plans (TYL-15)
+
+- One `meal_plans` row per user and week; weeks start on Monday (check constraint). `budget_cents` overrides the profile's weekly budget for that week when set.
+- `meal_plan_entries` hold a recipe, the servings planned and optionally a day in the week (null means "some day this week"). Row-level security only lets a user plan recipes they can see, so another user's private recipe can't be planned.
+- The web app edits plans directly. `add_to_meal_plan()` creates the week's plan on first use; `copy_meal_plan()` copies a week into another, keeping weekdays and skipping recipes no longer active. `my_recipe_fits()` returns `recipe_fit_for_user()` for the signed-in user, which the planner uses as a hard filter (`excluded` recipes can't be added).
+- `GET /api/plans/{week}/cost` prices the week: `plan_cost_inputs()` (service role only) returns the entries, their ingredient lines, conversions and the prices that apply to the user, and `app/plans/cost.py` scales each recipe to the planned servings and prices each line with `estimate_cost()`. Lines without an amount or a price are counted as unpriced. Costs are prorated; whole packages are the shopping list's job.
+
 ### Crawling (TYL-26)
 
 - `crawl_pages` is the queue: one row per sitemap URL with its `lastmod` and what happened when we fetched it. `crawl_enqueue()` adds new URLs and re-queues a page only when its `lastmod` moves forward; blocked and disallowed pages are never re-queued automatically.

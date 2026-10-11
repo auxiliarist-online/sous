@@ -1568,3 +1568,143 @@ describe('hand-typed recipes', () => {
     )
   })
 })
+
+describe('meal planner', () => {
+  const DAVE = '00000000-0000-0000-0000-00000000000d'
+  const MONDAY = '2026-10-12'
+  let soup, alicesSecret, peanutNoodles
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1)', [DAVE])
+    const lentils = await ingredient('red lentils')
+    const peanuts = await ingredient('peanut butter', ['peanut'])
+    soup = await recipe('Planner soup', [[lentils]])
+    await db.query('update recipes set servings = 4 where id = $1', [soup])
+    await db.query(
+      `update recipe_ingredients set quantity = 2, unit = 'cup' where recipe_id = $1`,
+      [soup],
+    )
+    peanutNoodles = await recipe('Planner peanut noodles', [[peanuts]])
+    alicesSecret = await recipe('Alice planner secret', [[lentils]], {
+      visibility: 'private',
+      addedBy: ALICE,
+    })
+  })
+
+  const asDave = (sql, params) =>
+    as('authenticated', DAVE, async () => (await db.query(sql, params)).rows)
+
+  it('adds recipes to a week, creating the plan once', async () => {
+    await asDave('select add_to_meal_plan($1, $2, 2)', [MONDAY, soup])
+    await asDave('select add_to_meal_plan($1, $2, 3, $3)', [
+      MONDAY,
+      soup,
+      '2026-10-14',
+    ])
+    const rows = await asDave(
+      `select e.servings::int, e.planned_for::text, e.position
+       from meal_plan_entries e join meal_plans p on p.id = e.meal_plan_id
+       where p.week_start = $1 order by e.position`,
+      [MONDAY],
+    )
+    assert.deepEqual(rows, [
+      { servings: 2, planned_for: null, position: 0 },
+      { servings: 3, planned_for: '2026-10-14', position: 1 },
+    ])
+    const plans = await asDave('select count(*)::int as n from meal_plans')
+    assert.equal(plans[0].n, 1)
+  })
+
+  it('only plans weeks that start on Monday, and days inside the week', async () => {
+    await assert.rejects(
+      asDave('select add_to_meal_plan($1, $2, 2)', ['2026-10-13', soup]),
+      /meal_plans_week_starts_monday/,
+    )
+    await assert.rejects(
+      asDave('select add_to_meal_plan($1, $2, 2, $3)', [
+        MONDAY,
+        soup,
+        '2026-10-20',
+      ]),
+      /not in this week/,
+    )
+  })
+
+  it("won't plan someone else's private recipe", async () => {
+    await assert.rejects(
+      asDave('select add_to_meal_plan($1, $2, 2)', [MONDAY, alicesSecret]),
+      /row-level security/,
+    )
+  })
+
+  it('copies a week to another, keeping weekdays', async () => {
+    const [{ n }] = await asDave('select copy_meal_plan($1, $2) as n', [
+      MONDAY,
+      '2026-10-19',
+    ])
+    assert.equal(n, 2)
+    const days = await asDave(
+      `select e.planned_for::text as day from meal_plan_entries e
+       join meal_plans p on p.id = e.meal_plan_id
+       where p.week_start = '2026-10-19' order by e.position`,
+    )
+    assert.deepEqual(
+      days.map((d) => d.day),
+      [null, '2026-10-21'],
+    )
+    const [{ none }] = await asDave('select copy_meal_plan($1, $2) as none', [
+      '2026-01-05',
+      '2026-10-26',
+    ])
+    assert.equal(none, 0, 'nothing to copy from an empty week')
+  })
+
+  it("tells the user how recipes fit what they've ruled out", async () => {
+    await db.query(
+      `insert into profiles (user_id, allergens) values ($1, '{peanut}')
+       on conflict (user_id) do update set allergens = excluded.allergens`,
+      [DAVE],
+    )
+    const rows = await asDave(
+      'select recipe_id, fit from my_recipe_fits($1) order by fit',
+      [[soup, peanutNoodles, alicesSecret]],
+    )
+    assert.deepEqual(rows, [
+      { recipe_id: peanutNoodles, fit: 'excluded' },
+      { recipe_id: soup, fit: 'fits' },
+    ])
+  })
+
+  it('gives the API what it needs to price a week, and only the API', async () => {
+    const lentils = await ingredient('red lentils')
+    await db.query(
+      `insert into prices (source, ingredient_id, price_cents, quantity, unit, user_id)
+       values ('seed', $1, 300, 1, 'lb', null), ('user', $1, 250, 1, 'lb', $2),
+              ('user', $1, 1, 1, 'lb', $3)`,
+      [lentils, DAVE, ALICE],
+    )
+    await db.query(
+      `update profiles set weekly_budget_cents = 8000 where user_id = $1`,
+      [DAVE],
+    )
+    const r = await as('service_role', null, async () => {
+      const { rows } = await db.query('select plan_cost_inputs($1, $2) as r', [
+        DAVE,
+        MONDAY,
+      ])
+      return rows[0].r
+    })
+    assert.equal(r.budget_cents, 8000)
+    assert.equal(r.entries.length, 2)
+    assert.deepEqual(r.entries[0].lines, [
+      { ingredient_id: lentils, quantity: 2, unit: 'cup' },
+    ])
+    assert.equal(r.entries[0].recipe_servings, 4)
+    assert.ok(r.ingredients[lentils])
+    assert.deepEqual(r.prices.map((p) => p.price_cents).sort(), [250, 300])
+    await assert.rejects(
+      asDave('select plan_cost_inputs($1, $2)', [DAVE, MONDAY]),
+      /only callable by the API/,
+    )
+  })
+})

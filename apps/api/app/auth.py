@@ -16,7 +16,7 @@ async def current_user_id(
 ) -> str:
     """Ask Supabase Auth who the token belongs to; 401 if it's missing or invalid."""
     if creds is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in to import recipes.")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in first.")
     async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/auth/v1/user",

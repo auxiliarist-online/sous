@@ -1,9 +1,7 @@
 """Calls to Supabase (Auth and the import_recipe RPC), with HTTP mocked."""
 
 import asyncio
-import functools
 import json
-from collections.abc import Callable
 
 import httpx2 as httpx
 import pytest
@@ -15,29 +13,7 @@ from app.config import settings
 from app.recipes import store
 from app.recipes.extract import extract_recipe
 from tests.helpers import RECIPE_LD, page_html
-
-Handler = Callable[[httpx.Request], httpx.Response]
-Install = Callable[[Handler], list[httpx.Request]]
-
-
-@pytest.fixture
-def supabase(monkeypatch: pytest.MonkeyPatch) -> Install:
-    """Route every AsyncClient through `handler`; returns the requests made."""
-    monkeypatch.setattr(settings, "supabase_url", "https://proj.supabase.co")
-    monkeypatch.setattr(settings, "supabase_service_role_key", "service-key")
-
-    def install(handler: Handler) -> list[httpx.Request]:
-        seen: list[httpx.Request] = []
-
-        def record(request: httpx.Request) -> httpx.Response:
-            seen.append(request)
-            return handler(request)
-
-        client = functools.partial(httpx.AsyncClient, transport=httpx.MockTransport(record))
-        monkeypatch.setattr(httpx, "AsyncClient", client)
-        return seen
-
-    return install
+from tests.unit.conftest import Install
 
 
 def bearer(token: str) -> HTTPAuthorizationCredentials:

@@ -7,6 +7,7 @@ these make sure the two agree on the payload.
 import json
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from datetime import date
 from typing import Any
 
 import psycopg
@@ -208,3 +209,40 @@ def test_a_hand_typed_recipe_is_parsed_labelled_and_private(
         "select name, section from recipe_ingredients where recipe_id = %s order by line_no", [rid]
     ).fetchall()
     assert sections[-1] == ("plain yogurt", "For serving")
+
+
+def test_a_planned_week_is_priced_from_the_database(
+    db: psycopg.Connection, make_user: Callable[[], str]
+) -> None:
+    from app.plans.cost import plan_cost
+    from app.recipes.routes import ManualRecipe, _manual_payload
+
+    user = make_user()
+    body = ManualRecipe(title="Rice bowl", ingredients="1 cup red lentils\nsalt", servings=2)
+    row = db.execute(
+        "select save_manual_recipe(%s::jsonb)", [json.dumps(_manual_payload(body, user, None))]
+    ).fetchone()
+    assert row is not None
+    lentils = db.execute("select id from ingredients where lower(name) = 'red lentils'").fetchone()
+    assert lentils is not None
+    db.execute(
+        "insert into prices (source, ingredient_id, user_id, price_cents, quantity, unit)"
+        " values ('user', %s, %s, 400, 2, 'cup')",
+        [lentils[0], user],
+    )
+    plan = db.execute(
+        "insert into meal_plans (user_id, week_start, budget_cents) values (%s, '2026-10-12', 6000)"
+        " returning id",
+        [user],
+    ).fetchone()
+    assert plan is not None
+    db.execute(
+        "insert into meal_plan_entries (meal_plan_id, recipe_id, servings) values (%s, %s, 4)",
+        [plan[0], row[0]["recipe_id"]],
+    )
+    inputs = db.execute("select plan_cost_inputs(%s, '2026-10-12')", [user]).fetchone()
+    assert inputs is not None
+    cost = plan_cost(inputs[0], on=date(2026, 10, 12))
+    # Doubled to 2 cups at the user's $2/cup; salt has no quantity to price.
+    assert (cost.total_cents, cost.budget_cents, cost.unpriced_lines) == (400, 6000, 1)
+    assert not cost.estimated
