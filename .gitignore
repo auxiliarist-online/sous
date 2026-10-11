@@ -36,3 +36,6 @@ htmlcov/
 
 # Recovery phrase for SousBot email
 sousbot-proton-recovery-phrase.pdf
+
+# NLTK data for the ingredient parser, downloaded by apps/api/scripts/fetch_nltk_data.py
+apps/api/nltk_data/
