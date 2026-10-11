@@ -974,3 +974,195 @@ describe('browser import', () => {
     )
   })
 })
+
+describe('ingredient parsing', () => {
+  const ingredientId = async (name) =>
+    (
+      await db.query('select id from ingredients where lower(name) = $1', [
+        name,
+      ])
+    ).rows[0]?.id
+  const match = async (candidates) =>
+    (await db.query('select match_ingredient($1) as id', [candidates])).rows[0]
+      .id
+
+  it('seeds aliases that all point at real ingredients', async () => {
+    const { rows } = await db.query(
+      'select count(*)::int as n from ingredient_aliases',
+    )
+    assert.equal(rows[0].n, 146)
+    assert.equal(await match(['green onions']), await ingredientId('scallions'))
+    assert.equal(await match(['kosher salt']), await ingredientId('salt'))
+  })
+
+  it('takes the first candidate that names an ingredient or alias', async () => {
+    const canned = await ingredientId('canned chickpeas')
+    assert.equal(
+      await match(['canned chickpeas', 'chickpeas', 'dried chickpeas']),
+      canned,
+    )
+    assert.equal(
+      await match(['large ripe avocados', 'ripe avocados', 'avocados']),
+      await ingredientId('avocado'),
+    )
+    assert.equal(await match(['dragon fruit', 'dragon fruits']), null)
+    assert.equal(await match([]), null)
+  })
+
+  it('stores parsed lines, alternatives as options, and flags what it cannot match', async () => {
+    const id = await recipe('Parsed stew', [])
+    const n = (
+      await as('service_role', null, () =>
+        db.query('select set_recipe_ingredients($1, $2) as n', [
+          id,
+          JSON.stringify([
+            {
+              line_no: 0,
+              raw_text: '1 (15 oz) can chickpeas',
+              name: 'chickpeas',
+              candidates: ['canned chickpeas', 'chickpeas'],
+              quantity: 15,
+              unit: 'oz',
+              note: '1 can',
+              parse_confidence: 0.96,
+            },
+            {
+              line_no: 1,
+              option_no: 1,
+              raw_text: '2 tbsp yuzu kosho (or soy sauce)',
+              name: 'yuzu kosho',
+              candidates: ['yuzu kosho'],
+              quantity: 2,
+              unit: 'tbsp',
+            },
+            {
+              line_no: 1,
+              option_no: 2,
+              raw_text: '2 tbsp yuzu kosho (or soy sauce)',
+              name: 'soy sauce',
+              candidates: ['soy sauce'],
+              quantity: 2,
+              unit: 'tbsp',
+              needs_review: true,
+            },
+            { line_no: 2, raw_text: 'For the topping:' },
+            { line_no: 3, raw_text: '' },
+          ]),
+        ]),
+      )
+    ).rows[0].n
+    assert.equal(n, 4)
+    const { rows } = await db.query(
+      `select line_no, option_no, name, ingredient_id is not null as matched, quantity::float,
+              unit, note, needs_review
+       from recipe_ingredients where recipe_id = $1 order by line_no, option_no`,
+      [id],
+    )
+    assert.deepEqual(rows, [
+      {
+        line_no: 0,
+        option_no: 1,
+        name: 'chickpeas',
+        matched: true,
+        quantity: 15,
+        unit: 'oz',
+        note: '1 can',
+        needs_review: false,
+      },
+      {
+        line_no: 1,
+        option_no: 1,
+        name: 'yuzu kosho',
+        matched: false,
+        quantity: 2,
+        unit: 'tbsp',
+        note: null,
+        needs_review: true,
+      },
+      {
+        line_no: 1,
+        option_no: 2,
+        name: 'soy sauce',
+        matched: true,
+        quantity: 2,
+        unit: 'tbsp',
+        note: null,
+        needs_review: true,
+      },
+      {
+        line_no: 2,
+        option_no: 1,
+        name: null,
+        matched: false,
+        quantity: null,
+        unit: null,
+        note: null,
+        needs_review: false,
+      },
+    ])
+  })
+
+  it('replaces the lines when a recipe is parsed again', async () => {
+    const id = await recipe('Reparsed', [])
+    const set = (rows) =>
+      as('service_role', null, () =>
+        db.query('select set_recipe_ingredients($1, $2)', [
+          id,
+          JSON.stringify(rows),
+        ]),
+      )
+    await set([{ line_no: 0, raw_text: 'old line', name: 'old' }])
+    await set([
+      { line_no: 0, raw_text: '1 onion', name: 'onion', candidates: ['onion'] },
+    ])
+    const { rows } = await db.query(
+      'select raw_text, name from recipe_ingredients where recipe_id = $1',
+      [id],
+    )
+    assert.deepEqual(rows, [{ raw_text: '1 onion', name: 'onion' }])
+  })
+
+  it('imports parsed lines through import_recipe', async () => {
+    const r = await as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [
+        {
+          added_by: ALICE,
+          source: { domain: 'parsed-blog.example' },
+          recipe: {
+            source_url: 'https://parsed-blog.example/soup/',
+            title: 'Soup',
+          },
+          ingredients: [
+            {
+              line_no: 0,
+              raw_text: '3 green onions, sliced',
+              name: 'green onions',
+              candidates: ['green onions', 'green onion'],
+              quantity: 3,
+              unit: 'each',
+              preparation: 'sliced',
+            },
+          ],
+        },
+      ])
+      return rows[0].r
+    })
+    const { rows } = await db.query(
+      `select ri.preparation, i.name as ingredient
+       from recipe_ingredients ri left join ingredients i on i.id = ri.ingredient_id
+       where ri.recipe_id = $1`,
+      [r.recipe_id],
+    )
+    assert.deepEqual(rows, [{ preparation: 'sliced', ingredient: 'scallions' }])
+  })
+
+  it('only lets the API replace ingredient lines', async () => {
+    const id = await recipe('Locked', [])
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query('select set_recipe_ingredients($1, $2)', [id, '[]']),
+      ),
+      /only callable by the API/,
+    )
+  })
+})

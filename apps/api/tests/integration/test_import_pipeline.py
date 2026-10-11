@@ -137,3 +137,28 @@ def test_a_browser_import_is_a_private_copy_per_user(
         "select origin, added_by::text from recipes where id = %s", [mine["recipe_id"]]
     ).fetchone()
     assert origin == ("browser", alice)
+
+
+def test_ingredient_lines_are_parsed_and_matched(db: psycopg.Connection) -> None:
+    draft = extract_recipe(page_html(RECIPE_LD), URL)
+    result = import_draft(db, draft, None)
+    rows = db.execute(
+        """
+        select ri.raw_text, ri.name, ri.quantity::float, ri.unit, ri.note, i.name
+        from recipe_ingredients ri left join ingredients i on i.id = ri.ingredient_id
+        where ri.recipe_id = %s order by ri.line_no, ri.option_no
+        """,
+        [result["recipe_id"]],
+    ).fetchall()
+    assert rows == [
+        (
+            "1 (15 oz) can black beans, drained",
+            "black beans",
+            15.0,
+            "oz",
+            "1 can",
+            "canned black beans",
+        ),
+        ("8 corn tortillas", "corn tortillas", 8.0, "each", None, "corn tortillas"),
+        ("1 avocado", "avocado", 1.0, "each", None, "avocado"),
+    ]

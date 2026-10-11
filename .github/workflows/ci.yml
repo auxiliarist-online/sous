@@ -47,6 +47,8 @@ jobs:
           cache: pip
           cache-dependency-path: apps/api/pyproject.toml
       - run: pip install -e '.[dev]'
+      # The ingredient parser's NLTK data (Vercel downloads it at build time too).
+      - run: python scripts/fetch_nltk_data.py
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy app tests

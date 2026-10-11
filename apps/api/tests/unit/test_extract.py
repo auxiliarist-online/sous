@@ -40,11 +40,21 @@ class TestExtract:
         p = draft.payload("user-1")
         assert p["added_by"] == "user-1"
         assert p["source"]["domain"] == "example-blog.com"
-        assert p["ingredients"][0] == {
-            "line_no": 0,
-            "raw_text": "1 (15 oz) can black beans, drained",
-            "section": None,
-        }
+        first = p["ingredients"][0]
+        assert (first["line_no"], first["option_no"], first["raw_text"], first["section"]) == (
+            0,
+            1,
+            "1 (15 oz) can black beans, drained",
+            None,
+        )
+        # Parsed: the can's size becomes the amount, so it can be priced.
+        assert (first["name"], first["quantity"], first["unit"], first["note"]) == (
+            "black beans",
+            15.0,
+            "oz",
+            "1 can",
+        )
+        assert first["candidates"][0] == "canned black beans"
 
 
 def test_canonical_url_drops_tracking_and_fragments() -> None:

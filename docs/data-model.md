@@ -161,6 +161,13 @@ Users get three kinds of control (TYL-32):
 - `crawl_enabled` is only set after the per-site check, recorded in `crawl_notes`.
 - New recipes start as `needs_review` and aren't shown publicly until they're `active`.
 
+### Ingredient lines (TYL-9)
+
+- Each line is parsed by the API (`app/recipes/ingredients.py`, using `ingredient-parser-nlp`) into `quantity` (and `quantity_max` for ranges), `unit`, `name`, `preparation`, `note` and `is_optional`, with `parse_confidence`. Units use the names in `app/pricing/units.py` (`cup`, `tbsp`, `oz`, `each`…) or a plain singular word (`clove`, `pinch`). "1 (15 oz) can beans" is stored as 15 oz with the note "1 can".
+- "A or B" lines become one row per option, sharing `line_no`. "Salt and pepper" stays one row, flagged for review.
+- `ingredient_id` comes from `match_ingredient()`: the first of the API's candidate names (as written, then without words like "fresh" or "large", singular/plural, "canned …" for cans) that is a canonical ingredient or an `ingredient_aliases` entry. Unmatched lines keep their `name` and get `needs_review`.
+- `set_recipe_ingredients()` replaces a recipe's lines; `scripts/reparse_ingredients.py` re-parses stored recipes after the parser or aliases change.
+
 ### Browser imports (TYL-35)
 
 - `recipes.origin` is `fetched` (Sous read the page, or a user typed the recipe) or `browser` (sent from a user's browser for a site that blocks Sous).

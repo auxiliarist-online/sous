@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { Auth } from './auth.ts'
+import { sendError } from './signInErrors.ts'
 
 type Status =
   | { state: 'idle' }
@@ -25,10 +26,7 @@ export function SignIn({ auth }: { auth: Auth }) {
     })
     setStatus(
       error
-        ? {
-            state: 'error',
-            message: "We couldn't send the link. Try again in a minute.",
-          }
+        ? { state: 'error', message: sendError(error) }
         : { state: 'sent', email: address },
     )
   }
