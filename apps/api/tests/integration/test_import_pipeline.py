@@ -223,8 +223,11 @@ def test_a_planned_week_is_priced_from_the_database(
         "select save_manual_recipe(%s::jsonb)", [json.dumps(_manual_payload(body, user, None))]
     ).fetchone()
     assert row is not None
-    lentils = db.execute("select id from ingredients where lower(name) = 'red lentils'").fetchone()
-    assert lentils is not None
+    lentils = db.execute(
+        "select ingredient_id from recipe_ingredients where recipe_id = %s and line_no = 0",
+        [row[0]["recipe_id"]],
+    ).fetchone()
+    assert lentils is not None and lentils[0] is not None
     db.execute(
         "insert into prices (source, ingredient_id, user_id, price_cents, quantity, unit)"
         " values ('user', %s, %s, 400, 2, 'cup')",
