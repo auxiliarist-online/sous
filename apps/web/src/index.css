@@ -195,7 +195,7 @@ a.button {
 
 .recipes .remove {
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 1 / span 3;
   min-width: 44px;
   min-height: 44px;
   padding: 0;
@@ -241,4 +241,25 @@ a.bookmarklet {
   font-weight: 600;
   text-decoration: none;
   cursor: grab;
+}
+
+.diets {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.diet {
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.diet-note {
+  flex-basis: 100%;
 }

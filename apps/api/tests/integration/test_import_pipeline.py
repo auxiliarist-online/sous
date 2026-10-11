@@ -162,3 +162,18 @@ def test_ingredient_lines_are_parsed_and_matched(db: psycopg.Connection) -> None
         ("8 corn tortillas", "corn tortillas", 8.0, "each", None, "corn tortillas"),
         ("1 avocado", "avocado", 1.0, "each", None, "avocado"),
     ]
+
+
+def test_an_imported_recipe_gets_diet_labels_from_its_ingredients(db: psycopg.Connection) -> None:
+    # black beans, corn tortillas, avocado: vegan; the publisher's claim is only a hint
+    ld = {**RECIPE_LD, "suitableForDiet": ["https://schema.org/VegetarianDiet"]}
+    result = import_draft(db, extract_recipe(page_html(ld), URL), None)
+    labels = {
+        (slug, source)
+        for slug, source in db.execute(
+            "select diet_slug, source from recipe_diets where recipe_id = %s",
+            [result["recipe_id"]],
+        ).fetchall()
+    }
+    assert {("vegan", "derived"), ("vegetarian", "derived"), ("gluten_free", "derived")} <= labels
+    assert not any(source == "publisher" for _, source in labels)  # derived won

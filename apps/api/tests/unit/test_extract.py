@@ -62,3 +62,22 @@ def test_canonical_url_drops_tracking_and_fragments() -> None:
         canonical_url("https://Example.com/a/?utm_medium=x&page=2&fbclid=1#recipe")
         == "https://example.com/a/?page=2"
     )
+
+
+def test_keeps_the_publishers_diet_tags_as_hints() -> None:
+    ld = {
+        **RECIPE_LD,
+        "suitableForDiet": [
+            "https://schema.org/VegetarianDiet",
+            "http://schema.org/GlutenFreeDiet",
+            "LowLactoseDiet",
+        ],
+    }
+    draft = extract_recipe(page_html(ld), "https://example-blog.com/tacos/")
+    assert draft.publisher_diets == ["gluten_free", "vegetarian"]
+    assert draft.payload(None)["publisher_diets"] == ["gluten_free", "vegetarian"]
+
+
+def test_no_diet_tags_means_no_hints() -> None:
+    draft = extract_recipe(page_html(RECIPE_LD), "https://example-blog.com/tacos/")
+    assert draft.publisher_diets == []

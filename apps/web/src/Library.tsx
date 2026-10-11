@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { bookmarklet } from './bookmarklet.ts'
 import {
+  dietLabels,
   ImportError,
   recipeTitle,
   type ImportResult,
@@ -178,6 +179,7 @@ export function Library({
                   {sourceLabel(r.sourceName, r.sourceUrl)}
                   {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
                 </span>
+                <DietChips diets={r.diets} />
                 <button
                   type="button"
                   className="remove"
@@ -189,6 +191,12 @@ export function Library({
               </li>
             ))}
           </ul>
+        )}
+        {!!recipes?.length && (
+          <p className="muted small">
+            Diet labels come from the ingredients Sous recognizes. For
+            allergies, always check the packaging.
+          </p>
         )}
       </section>
     </>
@@ -301,5 +309,24 @@ function BrowserImportHelp({ open }: { open: boolean }) {
         </li>
       </ol>
     </details>
+  )
+}
+
+function DietChips({ diets }: { diets: SavedRecipe['diets'] }) {
+  const { labels, notes } = dietLabels(diets)
+  if (!labels.length) return null
+  return (
+    <span className="diets">
+      {labels.map((d) => (
+        <span key={d} className="diet">
+          {d}
+        </span>
+      ))}
+      {notes.map((n) => (
+        <span key={n} className="muted small diet-note">
+          * {n}
+        </span>
+      ))}
+    </span>
   )
 }

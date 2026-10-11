@@ -120,7 +120,11 @@ erDiagram
   - **true** when every required line has at least one option that fits;
   - **false** when some line has no option that fits;
   - **null** when it can't tell (an option isn't mapped to a canonical ingredient yet). Unknown recipes get no label rather than a wrong one.
-- Results are stored in `recipe_diets` with where they came from (`derived`, `publisher`, `manual`).
+- Results are stored in `recipe_diets` with where they came from (`derived`, `publisher`, `manual`):
+  - **derived** labels are recomputed by `refresh_recipe_diets()` whenever a recipe's ingredients are stored (`set_recipe_ingredients()`: imports, re-imports, re-parses). A recipe earns a diet when every required line fits. If it fits only when some ingredient is bought without something some brands add (refried beans without lard), it still earns the label, and `checks` names those ingredients and what they may contain (`recipe_label_checks()`). "Can't tell" (unmatched ingredients) earns nothing, and a recipe with no ingredient lines gets no labels.
+  - **publisher** rows are the source's own `suitableForDiet` tags, kept as a hint; a derived label for the same diet replaces them, and the app never shows them.
+  - **manual** labels from a reviewer are never overwritten.
+- The app shows Vegan (instead of Vegetarian), Vegetarian, Gluten-free and Dairy-free. A label with checks is starred, with a note like "Check the refried beans: some brands contain meat." A general note says to check packaging for allergies.
 
 ### Diet customization
 
