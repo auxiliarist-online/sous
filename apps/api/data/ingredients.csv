@@ -1,0 +1,270 @@
+name,aisle,contains,may_contain,aliases
+parsley,produce,,,flat-leaf parsley|italian parsley|curly parsley|parsley leaves
+basil,produce,,,basil leaves|sweet basil|thai basil
+mint,produce,,,mint leaves|fresh mint
+dill,produce,,,fresh dill|dill fronds
+thyme,produce,,,thyme leaves|thyme sprigs
+rosemary,produce,,,rosemary sprigs
+sage,produce,,,sage leaves
+chives,produce,,,
+tarragon,produce,,,
+lemongrass,produce,,,lemongrass stalks
+shallots,produce,,,shallot
+leeks,produce,,,leek
+yellow squash,produce,,,summer squash
+eggplant,produce,,,aubergine|japanese eggplant
+arugula,produce,,,rocket|baby arugula
+mixed greens,produce,,,spring mix|salad greens
+bok choy,produce,,,baby bok choy|pak choi
+napa cabbage,produce,,,chinese cabbage
+swiss chard,produce,,,chard|rainbow chard
+beets,produce,,,beet|beetroot
+parsnips,produce,,,parsnip
+turnips,produce,,,turnip
+sugar snap peas,produce,,,snap peas
+snow peas,produce,,,
+bean sprouts,produce,,,mung bean sprouts
+fennel,produce,,,fennel bulb
+poblano peppers,produce,,,poblano|poblano pepper
+serrano peppers,produce,,,serrano|serrano pepper
+habanero peppers,produce,,,habanero
+thai chilies,produce,,,bird's eye chilies|red chilies|red chili|fresh red chilies
+yellow bell pepper,produce,,,
+orange bell pepper,produce,,,
+shiitake mushrooms,produce,,,shiitake
+portobello mushrooms,produce,,,portobello|portabella mushrooms
+oyster mushrooms,produce,,,
+corn on the cob,produce,,,ears of corn|fresh corn
+grapefruit,produce,,,
+cherries,produce,,,
+raspberries,produce,,,
+blackberries,produce,,,
+watermelon,produce,,,
+cantaloupe,produce,,,
+kiwi,produce,,,kiwis|kiwifruit
+plums,produce,,,plum
+nectarines,produce,,,nectarine
+pomegranate,produce,,,pomegranate seeds|pomegranate arils
+figs,produce,,,fig|fresh figs
+plantains,produce,,,plantain
+papaya,produce,,,
+clementines,produce,,,mandarins|satsumas|mandarin oranges
+heavy cream,dairy_eggs,dairy,,heavy whipping cream|whipping cream|double cream
+half-and-half,dairy_eggs,dairy,,half and half
+sour cream,dairy_eggs,dairy,,
+cream cheese,dairy_eggs,dairy,,
+buttermilk,dairy_eggs,dairy,,
+mozzarella,dairy_eggs,dairy,animal_rennet,mozzarella cheese|fresh mozzarella|shredded mozzarella|low-moisture mozzarella
+ricotta,dairy_eggs,dairy,,ricotta cheese
+monterey jack,dairy_eggs,dairy,animal_rennet,monterey jack cheese|pepper jack|pepper jack cheese
+goat cheese,dairy_eggs,dairy,animal_rennet,chevre|crumbled goat cheese
+gruyere,dairy_eggs,dairy,animal_rennet,gruyere cheese
+swiss cheese,dairy_eggs,dairy,animal_rennet,
+provolone,dairy_eggs,dairy,animal_rennet,provolone cheese
+blue cheese,dairy_eggs,dairy,animal_rennet,gorgonzola|crumbled blue cheese
+pecorino romano,dairy_eggs,dairy,animal_rennet,pecorino|pecorino cheese
+queso fresco,dairy_eggs,dairy,animal_rennet,
+cotija,dairy_eggs,dairy,animal_rennet,cotija cheese
+paneer,dairy_eggs,dairy,,
+halloumi,dairy_eggs,dairy,animal_rennet,
+brie,dairy_eggs,dairy,animal_rennet,
+mascarpone,dairy_eggs,dairy,,
+cottage cheese,dairy_eggs,dairy,animal_rennet,
+american cheese,dairy_eggs,dairy,animal_rennet,
+ghee,dairy_eggs,dairy,,clarified butter
+evaporated milk,pantry,dairy,,
+sweetened condensed milk,pantry,dairy,,condensed milk
+egg whites,dairy_eggs,egg,,egg white
+egg yolks,dairy_eggs,egg,,egg yolk
+oat milk,dairy_eggs,,gluten,
+almond milk,dairy_eggs,tree_nut,,unsweetened almond milk
+soy milk,dairy_eggs,soy,,
+chicken thighs,meat_seafood,poultry,,boneless skinless chicken thighs|boneless chicken thighs|bone-in chicken thighs|chicken thigh
+chicken wings,meat_seafood,poultry,,
+ground chicken,meat_seafood,poultry,,
+ground turkey,meat_seafood,poultry,,
+turkey breast,meat_seafood,poultry,,
+rotisserie chicken,meat_seafood,poultry,,
+ground pork,meat_seafood,meat|pork,,
+pork shoulder,meat_seafood,meat|pork,,pork butt
+pork tenderloin,meat_seafood,meat|pork,,
+ham,meat_seafood,meat|pork,,diced ham|cooked ham
+prosciutto,meat_seafood,meat|pork,,
+pancetta,meat_seafood,meat|pork,,
+italian sausage,meat_seafood,meat|pork,,sweet italian sausage|hot italian sausage
+chorizo,meat_seafood,meat|pork,,mexican chorizo|spanish chorizo
+sausage,meat_seafood,meat,pork|poultry,sausages|smoked sausage
+steak,meat_seafood,meat,,flank steak|skirt steak|sirloin steak|ribeye|ribeye steak|strip steak
+chuck roast,meat_seafood,meat,,beef chuck roast|pot roast
+short ribs,meat_seafood,meat,,beef short ribs
+lamb,meat_seafood,meat,,ground lamb|lamb chops|leg of lamb|lamb shoulder
+salmon,meat_seafood,fish,,salmon fillets|salmon fillet
+cod,meat_seafood,fish,,cod fillets
+tilapia,meat_seafood,fish,,tilapia fillets
+white fish,meat_seafood,fish,,white fish fillets|halibut|haddock
+smoked salmon,meat_seafood,fish,,lox
+shrimp,meat_seafood,shellfish,,prawns|large shrimp|raw shrimp|frozen shrimp
+scallops,meat_seafood,shellfish,,sea scallops
+mussels,meat_seafood,shellfish,,
+clams,meat_seafood,shellfish,,
+crab meat,meat_seafood,shellfish,,lump crab meat|crab
+sourdough bread,bakery,gluten,,sourdough
+whole wheat bread,bakery,gluten,,
+hamburger buns,bakery,gluten,dairy|egg,burger buns|buns
+baguette,bakery,gluten,,french bread
+pita bread,bakery,gluten,,pita|pitas
+naan,bakery,gluten|dairy,egg,naan bread
+bagels,bakery,gluten,,bagel
+english muffins,bakery,gluten,dairy,
+brioche buns,bakery,gluten|dairy|egg,,brioche
+ciabatta,bakery,gluten,,
+brown sugar,pantry,,,light brown sugar|dark brown sugar|packed brown sugar
+powdered sugar,pantry,,,confectioners' sugar|confectioners sugar|icing sugar
+honey,pantry,honey,,
+maple syrup,pantry,,,pure maple syrup
+molasses,pantry,,,
+agave nectar,pantry,,,agave|agave syrup
+vanilla extract,pantry,,alcohol,pure vanilla extract|vanilla
+baking soda,pantry,,,bicarbonate of soda
+baking powder,pantry,,,
+cornstarch,pantry,,,corn starch
+yeast,pantry,,,active dry yeast|instant yeast
+cocoa powder,pantry,,,unsweetened cocoa powder|cocoa
+chocolate chips,pantry,,dairy,semisweet chocolate chips|semi-sweet chocolate chips|dark chocolate chips
+dark chocolate,pantry,,dairy,bittersweet chocolate|semisweet chocolate
+bread flour,pantry,gluten,,
+whole wheat flour,pantry,gluten,,
+almond flour,pantry,tree_nut,,almond meal
+cornmeal,pantry,,,yellow cornmeal
+breadcrumbs,pantry,gluten,dairy|egg,bread crumbs|plain breadcrumbs
+panko,pantry,gluten,,panko breadcrumbs|panko bread crumbs
+brown rice,pantry,,,
+arborio rice,pantry,,,risotto rice
+couscous,pantry,gluten,,pearl couscous|israeli couscous
+bulgur,pantry,gluten,,bulgur wheat
+farro,pantry,gluten,,
+barley,pantry,gluten,,pearl barley
+polenta,pantry,,,
+egg noodles,pantry,gluten|egg,,
+rice noodles,pantry,,,rice vermicelli|pad thai noodles
+ramen noodles,pantry,gluten,,ramen
+udon noodles,international,gluten,,udon
+soba noodles,international,gluten,,soba
+lasagna noodles,pantry,gluten,,lasagna sheets
+tomato paste,pantry,,,
+tomato sauce,pantry,,,canned tomato sauce
+marinara sauce,pantry,,dairy,pasta sauce|marinara|jarred marinara
+coconut cream,pantry,,,
+chicken broth,pantry,poultry,,chicken stock|low-sodium chicken broth
+beef broth,pantry,meat,,beef stock
+canned tuna,pantry,fish,,tuna|tuna in water|chunk light tuna
+anchovies,pantry,fish,,anchovy fillets|anchovy
+artichoke hearts,pantry,,,marinated artichoke hearts
+roasted red peppers,pantry,,,jarred roasted red peppers
+sun-dried tomatoes,pantry,,,sundried tomatoes|sun dried tomatoes
+capers,pantry,,,
+dill pickles,pantry,,,pickles|pickle
+canned green chiles,pantry,,,green chiles|diced green chiles
+chipotle peppers in adobo,international,,,chipotles in adobo|chipotle in adobo|adobo sauce
+refried beans,pantry,,meat|pork,
+salsa,pantry,,,jarred salsa
+enchilada sauce,pantry,,,red enchilada sauce
+almonds,pantry,tree_nut,,sliced almonds|slivered almonds
+walnuts,pantry,tree_nut,,chopped walnuts
+pecans,pantry,tree_nut,,chopped pecans
+cashews,pantry,tree_nut,,raw cashews
+pistachios,pantry,tree_nut,,
+pine nuts,pantry,tree_nut,,
+peanuts,pantry,peanut,,roasted peanuts
+sesame seeds,pantry,sesame,,toasted sesame seeds
+chia seeds,pantry,,,
+flaxseed,pantry,,,ground flaxseed|flax seeds|flaxseed meal
+sunflower seeds,pantry,,,
+pumpkin seeds,pantry,,,pepitas
+shredded coconut,pantry,,,coconut flakes|desiccated coconut|unsweetened shredded coconut
+almond butter,pantry,tree_nut,,
+tahini,pantry,sesame,,
+coconut oil,pantry,,,
+sesame oil,pantry,sesame,,toasted sesame oil
+avocado oil,pantry,,,
+white vinegar,pantry,,,distilled white vinegar
+apple cider vinegar,pantry,,,cider vinegar
+red wine vinegar,pantry,,,
+balsamic vinegar,pantry,,,
+rice vinegar,pantry,,,rice wine vinegar
+white wine vinegar,pantry,,,
+dijon mustard,pantry,,,dijon
+yellow mustard,pantry,,,mustard
+whole grain mustard,pantry,,,grainy mustard
+ketchup,pantry,,,
+mayonnaise,pantry,egg,,mayo
+hot sauce,pantry,,,
+sriracha,pantry,,,
+worcestershire sauce,pantry,fish,,worcestershire
+bbq sauce,pantry,,,barbecue sauce
+nutritional yeast,pantry,,,
+pesto,pantry,dairy|tree_nut,animal_rennet,basil pesto
+fish sauce,international,fish,,
+oyster sauce,international,shellfish,,
+hoisin sauce,international,soy,gluten,hoisin
+sweet chili sauce,international,,,thai sweet chili sauce
+gochujang,international,soy|gluten,,
+miso paste,international,soy,,white miso|red miso|miso
+mirin,international,alcohol,,
+shaoxing wine,international,alcohol|gluten,,chinese cooking wine|rice wine
+sake,beverages,alcohol,,
+thai red curry paste,international,,fish|shellfish,red curry paste
+thai green curry paste,international,,fish|shellfish,green curry paste
+harissa,international,,,harissa paste
+kimchi,international,,fish|shellfish,
+nori,international,,,nori sheets|seaweed
+rice paper,international,,,rice paper wrappers
+silken tofu,international,soy,,
+seitan,international,gluten,,
+tamarind paste,international,,,tamarind
+coconut aminos,international,,,
+white wine,beverages,alcohol,,dry white wine
+red wine,beverages,alcohol,,dry red wine
+beer,beverages,alcohol|gluten,,
+coffee,beverages,,,brewed coffee|strong coffee
+dried oregano,spices,,,oregano
+dried basil,spices,,,
+dried thyme,spices,,,
+dried rosemary,spices,,,
+dried parsley,spices,,,parsley flakes
+dried dill,spices,,,dill weed
+bay leaves,spices,,,bay leaf
+cinnamon,spices,,,ground cinnamon|cinnamon stick|cinnamon sticks
+nutmeg,spices,,,ground nutmeg
+ground cloves,spices,,,whole cloves
+allspice,spices,,,ground allspice
+ground ginger,spices,,,
+turmeric,spices,,,ground turmeric
+ground coriander,spices,,,coriander seeds
+paprika,spices,,,sweet paprika
+cayenne pepper,spices,,,cayenne
+red pepper flakes,spices,,,crushed red pepper|crushed red pepper flakes|chili flakes
+garam masala,spices,,,
+italian seasoning,spices,,,
+onion powder,spices,,,
+garlic powder,spices,,,granulated garlic
+cumin seeds,spices,,,
+mustard seeds,spices,,,
+fennel seeds,spices,,,
+cardamom,spices,,,ground cardamom|cardamom pods
+star anise,spices,,,
+chinese five spice,spices,,,five spice powder|five spice
+za'atar,spices,sesame,,zaatar
+sumac,spices,,,
+white pepper,spices,,,ground white pepper
+everything bagel seasoning,spices,sesame,,
+taco seasoning,spices,,,
+saffron,spices,,,saffron threads
+frozen mixed vegetables,frozen,,,mixed vegetables
+edamame,frozen,soy,,shelled edamame
+frozen mango,frozen,,,
+cauliflower rice,frozen,,,riced cauliflower
+gelatin,pantry,gelatin,,unflavored gelatin|gelatine
+marshmallows,pantry,gelatin,,mini marshmallows
+water,other,,,cold water|warm water|hot water|boiling water|ice water
+ice,other,,,ice cubes
