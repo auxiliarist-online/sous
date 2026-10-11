@@ -1,8 +1,44 @@
 -- Diet labels on recipes (TYL-10). Labels are derived from the parsed,
--- matched ingredients with recipe_meets_diet(): a recipe earns a diet only
--- when every required line clearly fits it. "Check the label" and "can't
--- tell" (unmatched ingredients) earn nothing. The source's own tags are kept
--- as source = 'publisher' hints and never shown as labels.
+-- matched ingredients (recipe_rule_status()):
+--   * every required line clearly fits          -> the label
+--   * it fits if certain ingredients are bought
+--     without something some brands add         -> the label, with `checks`
+--     (refried beans without lard)                 naming those ingredients
+--   * a line can't be judged (unmatched) or
+--     clearly doesn't fit                       -> no label
+-- The source's own tags are kept as source = 'publisher' hints and never shown.
+
+-- What to check on a label: [{ingredient, may_contain: [categories]}].
+alter table public.recipe_diets add column checks jsonb not null default '[]';
+
+-- The ingredients that decide a "check the label" result for some excluded
+-- categories: lines with no option that clearly fits but one that may, and
+-- what each may contain that the diet excludes.
+create function public.recipe_label_checks(p_recipe_id uuid, p_excludes text[]) returns jsonb
+language sql stable as $$
+  with options as (
+    select
+      ri.line_no,
+      ri.option_no,
+      coalesce(ri.name, i.name) as ingredient,
+      i.id is not null and not (i.contains && p_excludes) and not (i.may_contain && p_excludes) as clear,
+      i.id is not null and not (i.contains && p_excludes) and (i.may_contain && p_excludes) as maybe,
+      array(select c from unnest(i.may_contain) as c where c = any(p_excludes) order by c) as reasons
+    from public.recipe_ingredients ri
+    left join public.ingredients i on i.id = ri.ingredient_id
+    where ri.recipe_id = p_recipe_id and not ri.is_optional
+  ),
+  deciding as (
+    select line_no from options group by line_no having not bool_or(clear) and bool_or(maybe)
+  )
+  select coalesce(
+    jsonb_agg(jsonb_build_object('ingredient', o.ingredient, 'may_contain', to_jsonb(o.reasons))
+              order by o.line_no, o.option_no),
+    '[]'
+  )
+  from options o join deciding d using (line_no)
+  where o.maybe
+$$;
 
 -- Recompute a recipe's derived labels. Called whenever its ingredients change.
 create function public.refresh_recipe_diets(p_recipe uuid) returns integer
@@ -21,11 +57,14 @@ begin
   ) then
     return 0;
   end if;
-  insert into public.recipe_diets (recipe_id, diet_slug, source)
-  select p_recipe, d.slug, 'derived'
+  insert into public.recipe_diets (recipe_id, diet_slug, source, checks)
+  select
+    p_recipe, d.slug, 'derived',
+    case when s.status = 'check_label' then public.recipe_label_checks(p_recipe, d.excludes) else '[]' end
   from public.diets d
-  where public.recipe_meets_diet(p_recipe, d.slug)
-  on conflict (recipe_id, diet_slug) do update set source = 'derived'
+  cross join lateral (select public.recipe_rule_status(p_recipe, d.excludes, false) as status) s
+  where s.status in ('fits', 'check_label')
+  on conflict (recipe_id, diet_slug) do update set source = 'derived', checks = excluded.checks
     where recipe_diets.source = 'publisher';
   get diagnostics v_count = row_count;
   return v_count;

@@ -179,15 +179,7 @@ export function Library({
                   {sourceLabel(r.sourceName, r.sourceUrl)}
                   {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
                 </span>
-                {dietLabels(r.diets).length > 0 && (
-                  <span className="diets">
-                    {dietLabels(r.diets).map((d) => (
-                      <span key={d} className="diet">
-                        {d}
-                      </span>
-                    ))}
-                  </span>
-                )}
+                <DietChips diets={r.diets} />
                 <button
                   type="button"
                   className="remove"
@@ -317,5 +309,24 @@ function BrowserImportHelp({ open }: { open: boolean }) {
         </li>
       </ol>
     </details>
+  )
+}
+
+function DietChips({ diets }: { diets: SavedRecipe['diets'] }) {
+  const { labels, notes } = dietLabels(diets)
+  if (!labels.length) return null
+  return (
+    <span className="diets">
+      {labels.map((d) => (
+        <span key={d} className="diet">
+          {d}
+        </span>
+      ))}
+      {notes.map((n) => (
+        <span key={n} className="muted small diet-note">
+          * {n}
+        </span>
+      ))}
+    </span>
   )
 }

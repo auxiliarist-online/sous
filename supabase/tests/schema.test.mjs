@@ -1302,18 +1302,48 @@ describe('diet labels', () => {
     }
   })
 
-  it('gives no label when it cannot tell or a label needs checking', async () => {
+  it('gives no label when it cannot tell', async () => {
     const unknown = await label('Mystery stew', [
       line(0, 'onion'),
       line(1, 'dragonfruit jam'),
     ])
     assert.ok(!(await diets(unknown)).includes('vegetarian'))
-    // refried beans may contain lard: fits only if bought without it
-    const maybe = await label('Bean burritos', [
+  })
+
+  it('labels a recipe that fits depending on brand, naming what to check', async () => {
+    // refried beans may contain lard (meat, pork); vegetarian excludes meat, no-pork excludes pork
+    const id = await label('Bean burritos', [
       line(0, 'refried beans'),
       line(1, 'onion'),
     ])
-    assert.ok(!(await diets(maybe)).includes('vegetarian'))
+    const { rows } = await db.query(
+      `select diet_slug, checks from recipe_diets where recipe_id = $1 and source = 'derived'`,
+      [id],
+    )
+    const by = Object.fromEntries(rows.map((r) => [r.diet_slug, r.checks]))
+    assert.deepEqual(by.vegetarian, [
+      { ingredient: 'refried beans', may_contain: ['meat'] },
+    ])
+    assert.deepEqual(by.no_pork, [
+      { ingredient: 'refried beans', may_contain: ['pork'] },
+    ])
+    assert.deepEqual(by.gluten_free, [], 'nothing to check for gluten')
+  })
+
+  it('only checks lines that have no clearly fitting option', async () => {
+    // corn tortillas clearly fit, so the flour tortilla option needs no check
+    const id = await label('Tacos', [
+      line(0, 'flour tortillas', { option_no: 1 }),
+      line(0, 'corn tortillas', { option_no: 2 }),
+      line(1, 'refried beans'),
+    ])
+    const { rows } = await db.query(
+      `select checks from recipe_diets where recipe_id = $1 and diet_slug = 'vegetarian'`,
+      [id],
+    )
+    assert.deepEqual(rows[0].checks, [
+      { ingredient: 'refried beans', may_contain: ['meat'] },
+    ])
   })
 
   it('counts an alternative that fits, and ignores optional lines', async () => {

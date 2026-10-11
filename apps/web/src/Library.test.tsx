@@ -11,7 +11,11 @@ const DAL: SavedRecipe = {
   sourceName: null,
   totalMinutes: 35,
   savedAt: '2026-10-09T00:00:00Z',
-  diets: ['vegetarian', 'vegan', 'gluten_free'],
+  diets: [
+    { slug: 'vegetarian', checks: [] },
+    { slug: 'vegan', checks: [] },
+    { slug: 'gluten_free', checks: [] },
+  ],
 }
 
 const SAVED: ImportResult = {

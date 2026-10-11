@@ -91,8 +91,8 @@ describe('savedRecipes', () => {
           total_minutes: 30,
           source: { name: 'Example Blog' },
           diets: [
-            { diet_slug: 'vegan', source: 'derived' },
-            { diet_slug: 'gluten_free', source: 'publisher' },
+            { diet_slug: 'vegan', source: 'derived', checks: [] },
+            { diet_slug: 'gluten_free', source: 'publisher', checks: [] },
           ],
         },
       },
@@ -109,7 +109,7 @@ describe('savedRecipes', () => {
         sourceName: 'Example Blog',
         totalMinutes: 30,
         savedAt: '2026-10-09T10:00:00Z',
-        diets: ['vegan'],
+        diets: [{ slug: 'vegan', checks: [] }],
       },
     ])
     expect(order).toHaveBeenCalledWith('created_at', { ascending: false })
@@ -151,14 +151,39 @@ describe('recipeTitle', () => {
 })
 
 describe('dietLabels', () => {
+  const d = (
+    slug: string,
+    checks: { ingredient: string; may_contain: string[] }[] = [],
+  ) => ({
+    slug,
+    checks,
+  })
+
   it('shows the common diets, with vegan standing in for vegetarian', () => {
     expect(
-      dietLabels(['vegetarian', 'vegan', 'gluten_free', 'egg_free']),
-    ).toEqual(['Vegan', 'Gluten-free'])
-    expect(dietLabels(['vegetarian', 'dairy_free'])).toEqual([
-      'Vegetarian',
-      'Dairy-free',
-    ])
-    expect(dietLabels([])).toEqual([])
+      dietLabels([
+        d('vegetarian'),
+        d('vegan'),
+        d('gluten_free'),
+        d('egg_free'),
+      ]),
+    ).toEqual({ labels: ['Vegan', 'Gluten-free'], notes: [] })
+    expect(dietLabels([])).toEqual({ labels: [], notes: [] })
+  })
+
+  it('stars a label that depends on brand and says what to check', () => {
+    const lard = { ingredient: 'refried beans', may_contain: ['meat'] }
+    expect(
+      dietLabels([
+        d('vegetarian', [lard]),
+        d('dairy_free'),
+        d('gluten_free', [
+          { ingredient: 'refried beans', may_contain: ['gluten'] },
+        ]),
+      ]),
+    ).toEqual({
+      labels: ['Vegetarian*', 'Gluten-free*', 'Dairy-free'],
+      notes: ['Check the refried beans: some brands contain gluten or meat.'],
+    })
   })
 })

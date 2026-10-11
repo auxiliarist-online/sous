@@ -20,7 +20,14 @@ export interface SavedRecipe {
   totalMinutes: number | null
   savedAt: string
   /** Diet labels earned from the ingredients (or set by a reviewer). */
-  diets: string[]
+  diets: DietLabel[]
+}
+
+/** A diet a recipe fits. `checks` lists ingredients whose brand decides it:
+ *  "refried beans may contain meat" (lard). */
+export interface DietLabel {
+  slug: string
+  checks: { ingredient: string; may_contain: string[] }[]
 }
 
 export class ImportError extends Error {
@@ -99,7 +106,13 @@ interface SavedRow {
     source_url: string | null
     total_minutes: number | null
     source: { name: string } | null
-    diets: { diet_slug: string; source: string }[] | null
+    diets:
+      | {
+          diet_slug: string
+          source: string
+          checks: DietLabel['checks'] | null
+        }[]
+      | null
   } | null
 }
 
@@ -109,7 +122,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
   const { data, error } = await db
     .from('user_saved_recipes')
     .select(
-      'created_at, recipe:recipes(id, title, source_url, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source))',
+      'created_at, recipe:recipes(id, title, source_url, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -125,7 +138,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
       // The publisher's own tags are only hints; show what the ingredients prove.
       diets: (row.recipe!.diets ?? [])
         .filter((d) => d.source !== 'publisher')
-        .map((d) => d.diet_slug),
+        .map((d) => ({ slug: d.diet_slug, checks: d.checks ?? [] })),
     }))
 }
 
@@ -189,10 +202,42 @@ const SHOWN_DIETS: [slug: string, label: string][] = [
   ['dairy_free', 'Dairy-free'],
 ]
 
-/** The labels worth showing on a card: vegan already says vegetarian. */
-export function dietLabels(diets: string[]): string[] {
-  const has = new Set(diets)
-  return SHOWN_DIETS.filter(
-    ([slug]) => has.has(slug) && !(slug === 'vegetarian' && has.has('vegan')),
-  ).map(([, label]) => label)
+const CATEGORY_NAMES: Record<string, string> = {
+  animal_rennet: 'animal rennet',
+  tree_nut: 'tree nuts',
+  peanut: 'peanuts',
+}
+
+function list(words: string[]): string {
+  return words.length < 2
+    ? words.join('')
+    : `${words.slice(0, -1).join(', ')} or ${words.at(-1)}`
+}
+
+/** The labels worth showing on a card (vegan already says vegetarian), each
+ *  starred when it depends on brand, and one note per ingredient to check. */
+export function dietLabels(diets: DietLabel[]): {
+  labels: string[]
+  notes: string[]
+} {
+  const bySlug = new Map(diets.map((d) => [d.slug, d]))
+  const shown = SHOWN_DIETS.filter(
+    ([slug]) =>
+      bySlug.has(slug) && !(slug === 'vegetarian' && bySlug.has('vegan')),
+  )
+  const checks = new Map<string, Set<string>>()
+  const labels = shown.map(([slug, label]) => {
+    const d = bySlug.get(slug)!
+    for (const c of d.checks) {
+      const set = checks.get(c.ingredient) ?? new Set<string>()
+      c.may_contain.forEach((m) => set.add(CATEGORY_NAMES[m] ?? m))
+      checks.set(c.ingredient, set)
+    }
+    return d.checks.length ? `${label}*` : label
+  })
+  const notes = [...checks].map(
+    ([ingredient, cats]) =>
+      `Check the ${ingredient}: some brands contain ${list([...cats].sort())}.`,
+  )
+  return { labels, notes }
 }

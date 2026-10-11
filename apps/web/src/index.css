@@ -259,3 +259,7 @@ a.bookmarklet {
   font-size: 0.75rem;
   font-weight: 600;
 }
+
+.diet-note {
+  flex-basis: 100%;
+}
