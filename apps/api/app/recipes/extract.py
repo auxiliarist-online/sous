@@ -40,6 +40,15 @@ CUISINES = {
 }  # fmt: skip
 
 
+# schema.org RestrictedDiet values that mean the same as one of our diets.
+# Others (LowLactoseDiet, HalalDiet...) don't map to a diet we label.
+PUBLISHER_DIETS = {
+    "vegetarian diet": "vegetarian",
+    "vegan diet": "vegan",
+    "gluten free diet": "gluten_free",
+}
+
+
 @dataclass
 class Ingredient:
     line_no: int
@@ -62,6 +71,8 @@ class RecipeDraft:
     instructions: list[str] | None = None
     cuisines: list[str] = field(default_factory=list)
     ingredients: list[Ingredient] = field(default_factory=list)
+    # The source's own diet tags: a hint only; labels come from the ingredients.
+    publisher_diets: list[str] = field(default_factory=list)
 
     def payload(self, user_id: str | None) -> dict[str, Any]:
         """The argument for import_recipe()."""
@@ -84,6 +95,7 @@ class RecipeDraft:
                 "instructions": self.instructions,
             },
             "cuisines": self.cuisines,
+            "publisher_diets": self.publisher_diets,
             # Parsed into amounts, units and names; see app/recipes/ingredients.py.
             "ingredients": [
                 row.payload()
@@ -127,6 +139,11 @@ def _servings(yields: str | None) -> float | None:
 def _cuisines(raw: str | None) -> list[str]:
     found = [CUISINES.get(part.strip().lower()) for part in re.split(r"[,/|;]", raw or "")]
     return sorted({c for c in found if c})
+
+
+def _publisher_diets(tags: list[str] | None) -> list[str]:
+    found = (PUBLISHER_DIETS.get(re.sub(r"[^a-z ]", " ", t.lower()).strip()) for t in tags or [])
+    return sorted({d for d in found if d})
 
 
 def _no_recipe() -> FetchError:
@@ -207,5 +224,6 @@ def extract_recipe(page: str, url: str) -> RecipeDraft:
         summary=_field(scraper.description),
         instructions=_field(scraper.instructions_list),
         cuisines=_cuisines(_field(scraper.cuisine)),
+        publisher_diets=_publisher_diets(_field(scraper.dietary_restrictions)),
         ingredients=ingredients,
     )

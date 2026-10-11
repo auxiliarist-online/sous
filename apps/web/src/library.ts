@@ -19,6 +19,8 @@ export interface SavedRecipe {
   sourceName: string | null
   totalMinutes: number | null
   savedAt: string
+  /** Diet labels earned from the ingredients (or set by a reviewer). */
+  diets: string[]
 }
 
 export class ImportError extends Error {
@@ -97,6 +99,7 @@ interface SavedRow {
     source_url: string | null
     total_minutes: number | null
     source: { name: string } | null
+    diets: { diet_slug: string; source: string }[] | null
   } | null
 }
 
@@ -106,7 +109,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
   const { data, error } = await db
     .from('user_saved_recipes')
     .select(
-      'created_at, recipe:recipes(id, title, source_url, total_minutes, source:recipe_sources(name))',
+      'created_at, recipe:recipes(id, title, source_url, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -119,6 +122,10 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
       sourceName: row.recipe!.source?.name ?? null,
       totalMinutes: row.recipe!.total_minutes,
       savedAt: row.created_at,
+      // The publisher's own tags are only hints; show what the ingredients prove.
+      diets: (row.recipe!.diets ?? [])
+        .filter((d) => d.source !== 'publisher')
+        .map((d) => d.diet_slug),
     }))
 }
 
@@ -173,4 +180,19 @@ export function recipeTitle(ld: string[]): string | null {
     if (recipe && typeof recipe.name === 'string') return recipe.name.trim()
   }
   return null
+}
+
+const SHOWN_DIETS: [slug: string, label: string][] = [
+  ['vegan', 'Vegan'],
+  ['vegetarian', 'Vegetarian'],
+  ['gluten_free', 'Gluten-free'],
+  ['dairy_free', 'Dairy-free'],
+]
+
+/** The labels worth showing on a card: vegan already says vegetarian. */
+export function dietLabels(diets: string[]): string[] {
+  const has = new Set(diets)
+  return SHOWN_DIETS.filter(
+    ([slug]) => has.has(slug) && !(slug === 'vegetarian' && has.has('vegan')),
+  ).map(([, label]) => label)
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { bookmarklet } from './bookmarklet.ts'
 import {
+  dietLabels,
   ImportError,
   recipeTitle,
   type ImportResult,
@@ -178,6 +179,15 @@ export function Library({
                   {sourceLabel(r.sourceName, r.sourceUrl)}
                   {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
                 </span>
+                {dietLabels(r.diets).length > 0 && (
+                  <span className="diets">
+                    {dietLabels(r.diets).map((d) => (
+                      <span key={d} className="diet">
+                        {d}
+                      </span>
+                    ))}
+                  </span>
+                )}
                 <button
                   type="button"
                   className="remove"
@@ -189,6 +199,12 @@ export function Library({
               </li>
             ))}
           </ul>
+        )}
+        {!!recipes?.length && (
+          <p className="muted small">
+            Diet labels come from the ingredients Sous recognizes. For
+            allergies, always check the packaging.
+          </p>
         )}
       </section>
     </>

@@ -11,6 +11,7 @@ const DAL: SavedRecipe = {
   sourceName: null,
   totalMinutes: 35,
   savedAt: '2026-10-09T00:00:00Z',
+  diets: ['vegetarian', 'vegan', 'gluten_free'],
 }
 
 const SAVED: ImportResult = {
@@ -43,6 +44,10 @@ describe('Library', () => {
     const link = await screen.findByRole('link', { name: 'Red lentil dal' })
     expect(link).toHaveAttribute('href', DAL.sourceUrl)
     expect(screen.getByText('example-blog.com · 35 min')).toBeInTheDocument()
+    expect(screen.getByText('Vegan')).toBeInTheDocument()
+    expect(screen.getByText('Gluten-free')).toBeInTheDocument()
+    expect(screen.queryByText('Vegetarian')).toBeNull()
+    expect(screen.getByText(/always check the packaging/)).toBeInTheDocument()
   })
 
   it('says how to start when nothing is saved', async () => {

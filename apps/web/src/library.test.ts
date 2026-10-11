@@ -1,6 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  dietLabels,
   ImportError,
   firstUrl,
   importPage,
@@ -89,6 +90,10 @@ describe('savedRecipes', () => {
           source_url: 'https://blog.example/dal/',
           total_minutes: 30,
           source: { name: 'Example Blog' },
+          diets: [
+            { diet_slug: 'vegan', source: 'derived' },
+            { diet_slug: 'gluten_free', source: 'publisher' },
+          ],
         },
       },
       { created_at: '2026-10-08T10:00:00Z', recipe: null },
@@ -104,6 +109,7 @@ describe('savedRecipes', () => {
         sourceName: 'Example Blog',
         totalMinutes: 30,
         savedAt: '2026-10-09T10:00:00Z',
+        diets: ['vegan'],
       },
     ])
     expect(order).toHaveBeenCalledWith('created_at', { ascending: false })
@@ -141,5 +147,18 @@ describe('recipeTitle', () => {
     expect(
       recipeTitle([JSON.stringify({ '@type': 'Organization', name: 'Blog' })]),
     ).toBeNull()
+  })
+})
+
+describe('dietLabels', () => {
+  it('shows the common diets, with vegan standing in for vegetarian', () => {
+    expect(
+      dietLabels(['vegetarian', 'vegan', 'gluten_free', 'egg_free']),
+    ).toEqual(['Vegan', 'Gluten-free'])
+    expect(dietLabels(['vegetarian', 'dairy_free'])).toEqual([
+      'Vegetarian',
+      'Dairy-free',
+    ])
+    expect(dietLabels([])).toEqual([])
   })
 })

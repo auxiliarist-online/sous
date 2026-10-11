@@ -1246,3 +1246,154 @@ describe('ingredient list (apps/api/data/ingredients.csv)', () => {
     }
   })
 })
+
+describe('diet labels', () => {
+  const line = (n, name, extra = {}) => ({
+    line_no: n,
+    raw_text: name,
+    name,
+    candidates: [name],
+    ...extra,
+  })
+  const label = async (title, lines) => {
+    const id = await recipe(title, [])
+    await as('service_role', null, () =>
+      db.query('select set_recipe_ingredients($1, $2)', [
+        id,
+        JSON.stringify(lines),
+      ]),
+    )
+    return id
+  }
+  const diets = async (id, source = 'derived') =>
+    (
+      await db.query(
+        'select diet_slug from recipe_diets where recipe_id = $1 and source = $2 order by 1',
+        [id, source],
+      )
+    ).rows.map((r) => r.diet_slug)
+
+  it('labels a recipe with every diet its ingredients clearly fit', async () => {
+    const id = await label('Garlic pasta', [
+      line(0, 'pasta'),
+      line(1, 'garlic'),
+      line(2, 'olive oil'),
+      line(3, 'parmesan'),
+    ])
+    const got = await diets(id)
+    assert.ok(got.includes('vegetarian'))
+    assert.ok(got.includes('egg_free'))
+    assert.ok(!got.includes('vegan'), 'parmesan is dairy')
+    assert.ok(!got.includes('gluten_free'), 'pasta has gluten')
+  })
+
+  it('never calls a recipe vegetarian when a line has meat, fish or gelatin', async () => {
+    for (const hidden of [
+      'chicken broth',
+      'worcestershire sauce',
+      'gelatin',
+      'anchovies',
+    ]) {
+      const id = await label(`Soup with ${hidden}`, [
+        line(0, 'onion'),
+        line(1, hidden),
+      ])
+      assert.ok(!(await diets(id)).includes('vegetarian'), hidden)
+    }
+  })
+
+  it('gives no label when it cannot tell or a label needs checking', async () => {
+    const unknown = await label('Mystery stew', [
+      line(0, 'onion'),
+      line(1, 'dragonfruit jam'),
+    ])
+    assert.ok(!(await diets(unknown)).includes('vegetarian'))
+    // refried beans may contain lard: fits only if bought without it
+    const maybe = await label('Bean burritos', [
+      line(0, 'refried beans'),
+      line(1, 'onion'),
+    ])
+    assert.ok(!(await diets(maybe)).includes('vegetarian'))
+  })
+
+  it('counts an alternative that fits, and ignores optional lines', async () => {
+    const id = await label('Stir fry', [
+      line(0, 'firm tofu'),
+      line(1, 'fish sauce', { option_no: 1 }),
+      line(1, 'soy sauce', { option_no: 2 }),
+      line(2, 'chicken thighs', { is_optional: true }),
+    ])
+    assert.ok((await diets(id)).includes('vegetarian'))
+  })
+
+  it('gives a recipe with no ingredient lines no labels', async () => {
+    const id = await label('Empty', [
+      { line_no: 0, raw_text: 'For the sauce:' },
+    ])
+    assert.deepEqual(await diets(id), [])
+  })
+
+  it('updates labels when the ingredients change', async () => {
+    const id = await label('Changing', [line(0, 'onion')])
+    assert.ok((await diets(id)).includes('vegan'))
+    await as('service_role', null, () =>
+      db.query('select set_recipe_ingredients($1, $2)', [
+        id,
+        JSON.stringify([line(0, 'onion'), line(1, 'butter')]),
+      ]),
+    )
+    const got = await diets(id)
+    assert.ok(!got.includes('vegan'))
+    assert.ok(got.includes('vegetarian'))
+  })
+
+  it('keeps publisher tags as hints and lets derived labels win', async () => {
+    const r = await as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [
+        {
+          added_by: ALICE,
+          source: { domain: 'hint-blog.example' },
+          recipe: {
+            source_url: 'https://hint-blog.example/x/',
+            title: 'Claims',
+          },
+          publisher_diets: ['vegetarian', 'vegan', 'not_a_diet'],
+          ingredients: [line(0, 'onion'), line(1, 'butter')],
+        },
+      ])
+      return rows[0].r
+    })
+    // butter: vegetarian is derived, vegan stays only a publisher claim
+    assert.ok((await diets(r.recipe_id)).includes('vegetarian'))
+    assert.deepEqual(await diets(r.recipe_id, 'publisher'), ['vegan'])
+  })
+
+  it('leaves a reviewer’s manual label alone', async () => {
+    const id = await recipe('Reviewed', [])
+    await db.query(
+      `insert into recipe_diets (recipe_id, diet_slug, source) values ($1, 'vegetarian', 'manual')`,
+      [id],
+    )
+    await as('service_role', null, () =>
+      db.query('select set_recipe_ingredients($1, $2)', [
+        id,
+        JSON.stringify([line(0, 'onion')]),
+      ]),
+    )
+    const { rows } = await db.query(
+      `select source from recipe_diets where recipe_id = $1 and diet_slug = 'vegetarian'`,
+      [id],
+    )
+    assert.deepEqual(rows, [{ source: 'manual' }])
+  })
+
+  it('only lets the API refresh labels', async () => {
+    const id = await recipe('Locked labels', [])
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query('select refresh_recipe_diets($1)', [id]),
+      ),
+      /only callable by the API/,
+    )
+  })
+})
