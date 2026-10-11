@@ -112,6 +112,15 @@ class TestLines:
             False,
         )
 
+    @pytest.mark.parametrize("bullet", ["\u25a2 ", "\u2610 ", "\u2022 ", "- ", "* "])
+    def test_leading_checkboxes_and_bullets_are_dropped(self, bullet: str) -> None:
+        (row,) = parse_line(0, f"{bullet}1/2 teaspoon sea salt")
+        assert (row.raw_text, row.name, row.needs_review) == (
+            "1/2 teaspoon sea salt",
+            "sea salt",
+            False,
+        )
+
     def test_blank_lines_are_dropped(self) -> None:
         assert parse_line(0, "   ") == []
 
