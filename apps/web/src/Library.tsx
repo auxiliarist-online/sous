@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type FormEvent,
+} from 'react'
 import { bookmarklet } from './bookmarklet.ts'
 import {
   dietLabels,
@@ -12,13 +19,20 @@ import {
   type RecipeFilter,
   type SavedRecipe,
 } from './library.ts'
+import { ingredientsFromText, titleFromUrl } from './paste.ts'
 import { Link } from './router.tsx'
+import type { Shared } from './share.ts'
 
 /** What the screen needs from the API and database; tests pass fakes. */
 export interface LibraryApi {
   list(): Promise<SavedRecipe[]>
   save(url: string): Promise<ImportResult>
   savePage(page: PageData): Promise<ImportResult>
+  saveText(recipe: {
+    url: string
+    title: string
+    ingredients: string[]
+  }): Promise<ImportResult>
   remove(recipeId: string): Promise<void>
 }
 
@@ -30,13 +44,14 @@ type Status =
 
 export function Library({
   api,
-  sharedUrl,
+  shared,
   sharedPage,
   myDiets = [],
   onboarded = true,
 }: {
   api: LibraryApi
-  sharedUrl?: string | null
+  /** A link (and maybe copied ingredients) shared to Sous. */
+  shared?: Shared | null
   /** A page sent by the Save to Sous bookmarklet, waiting for the user's OK. */
   sharedPage?: PageData | null
   /** The user's own diets, for the "Fits my diets" filter. */
@@ -45,7 +60,15 @@ export function Library({
   onboarded?: boolean
 }) {
   const [filter, setFilter] = useState<RecipeFilter>(NO_FILTER)
+  const sharedUrl = shared && !shared.ingredients ? shared.url : null
   const [url, setUrl] = useState(sharedUrl ?? '')
+  // A site that blocks Sous, or a shared text selection: the user pastes or
+  // has shared the ingredients, and Sous saves them with the link.
+  const [paste, setPaste] = useState<PasteState | null>(
+    shared?.ingredients
+      ? { url: shared.url, text: shared.ingredients, reason: 'shared' }
+      : null,
+  )
   const [page, setPage] = useState(sharedPage ?? null)
   const [status, setStatus] = useState<Status>({ state: 'idle' })
   const [recipes, setRecipes] = useState<SavedRecipe[] | null>(null)
@@ -80,7 +103,32 @@ export function Library({
     const target = link.trim()
     if (!target) return
     const full = target.includes('://') ? target : `https://${target}`
-    if (await run(() => api.save(full))) setUrl('')
+    setPaste(null)
+    try {
+      setStatus({ state: 'saving' })
+      setStatus({ state: 'saved', result: await api.save(full) })
+      setUrl('')
+      refresh()
+    } catch (e) {
+      const code = e instanceof ImportError ? e.code : 'error'
+      if (code === 'blocked' || code === 'robots_disallowed') {
+        // Not a dead end: offer to save it from what the user can copy.
+        setStatus({ state: 'idle' })
+        setPaste({ url: full, text: '', reason: code })
+        return
+      }
+      setStatus({ state: 'error', message: (e as Error).message, code })
+    }
+  }
+
+  async function saveText(p: PasteState, title: string, lines: string[]) {
+    const ok = await run(() =>
+      api.saveText({ url: p.url, title, ingredients: lines }),
+    )
+    if (ok) {
+      setPaste(null)
+      setUrl('')
+    }
   }
 
   async function savePage(data: PageData) {
@@ -149,6 +197,16 @@ export function Library({
         </Link>
       </form>
 
+      {paste && (
+        <PasteRecipe
+          key={paste.url}
+          paste={paste}
+          saving={status.state === 'saving'}
+          onSave={(title, lines) => void saveText(paste, title, lines)}
+          onDismiss={() => setPaste(null)}
+        />
+      )}
+
       {page && (
         <SharedPage
           page={page}
@@ -167,16 +225,12 @@ export function Library({
         {status.state === 'error' && (
           <p className="card error" role="alert">
             {status.message}
-            {status.code === 'blocked' &&
-              ' You can still save it with Save to Sous, below.'}
           </p>
         )}
         {status.state === 'saved' && <Saved result={status.result} />}
       </div>
 
-      <BrowserImportHelp
-        open={status.state === 'error' && status.code === 'blocked'}
-      />
+      <BrowserImportHelp />
 
       <section className="card">
         <h2>Your recipes</h2>
@@ -234,6 +288,113 @@ function Saved({ result }: { result: ImportResult }) {
   )
 }
 
+interface PasteState {
+  url: string
+  /** Text to start from: a shared selection, or empty. */
+  text: string
+  /** Why we're asking: the site blocks Sous, or the user shared text. */
+  reason: 'blocked' | 'robots_disallowed' | 'shared'
+}
+
+/** Save a recipe from what the user copied off the page. Only the
+ *  ingredients are kept; the steps stay on the author's page (policy). */
+function PasteRecipe({
+  paste,
+  saving,
+  onSave,
+  onDismiss,
+}: {
+  paste: PasteState
+  saving: boolean
+  onSave: (title: string, lines: string[]) => void
+  onDismiss: () => void
+}) {
+  const site = sourceLabel(null, paste.url)
+  const [title, setTitle] = useState(() => titleFromUrl(paste.url))
+  const [text, setText] = useState(() =>
+    ingredientsFromText(paste.text).join('\n'),
+  )
+  const lines = ingredientsFromText(text)
+  // "For the sauce:" starts a section; it isn't an ingredient.
+  const count = lines.filter((l) => !l.endsWith(':')).length
+  const card = useRef<HTMLFormElement>(null)
+
+  // On a phone the card appears below the fold: bring it into view.
+  useEffect(() => {
+    card.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    // Pasting a whole page into the empty box keeps just the ingredients.
+    if (text.trim()) return
+    const pasted = e.clipboardData.getData('text')
+    if (!pasted) return
+    e.preventDefault()
+    setText(ingredientsFromText(pasted).join('\n'))
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (title.trim()) onSave(title.trim(), lines)
+  }
+
+  return (
+    <form className="card paste" onSubmit={submit} ref={card}>
+      <h2>
+        {paste.reason === 'shared'
+          ? 'Save the ingredients you shared?'
+          : `${site} doesn't let apps read its recipes`}
+      </h2>
+      {paste.reason !== 'shared' && (
+        <p>
+          You can still save it: copy the ingredients from the page and paste
+          them here. Pasting the whole page works too.
+        </p>
+      )}
+      <a
+        className="small"
+        href={paste.url}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open the recipe on {site}
+      </a>
+      <label htmlFor="paste-title">Name</label>
+      <input
+        id="paste-title"
+        required
+        maxLength={200}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <label htmlFor="paste-ingredients">Ingredients</label>
+      <textarea
+        id="paste-ingredients"
+        rows={8}
+        placeholder="Paste the ingredient list here"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onPaste={onPaste}
+      />
+      <p className="muted small" aria-live="polite">
+        {count ? `${count} ingredient${count === 1 ? '' : 's'}. ` : ''}
+        Only the ingredients are saved; the steps stay on {site}. Only you can
+        see this recipe.
+      </p>
+      <button type="submit" disabled={saving || !title.trim()}>
+        {saving
+          ? 'Saving…'
+          : lines.length
+            ? 'Save to my recipes'
+            : 'Save the link for now'}
+      </button>
+      <button type="button" className="link" onClick={onDismiss}>
+        Not now
+      </button>
+    </form>
+  )
+}
+
 function SharedPage({
   page,
   saving,
@@ -262,37 +423,23 @@ function SharedPage({
   )
 }
 
-/** How to set up Save to Sous, for sites that block Sous's server. */
-function BrowserImportHelp({ open }: { open: boolean }) {
+/** On a computer, the Save to Sous bookmark sends a blocked site's recipe
+ *  from the page itself. Phones use copy and paste (PasteRecipe) instead. */
+function BrowserImportHelp() {
   const code = bookmarklet(window.location.origin)
   const link = useRef<HTMLAnchorElement>(null)
-  const [copied, setCopied] = useState(false)
 
   // React refuses javascript: URLs in JSX, so set the bookmarklet by hand.
   useEffect(() => {
     link.current?.setAttribute('href', code)
   }, [code])
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
-  }
-
   return (
-    <details className="card help" open={open || undefined}>
-      <summary>Recipe from a site that blocks Sous?</summary>
+    <details className="card help">
+      <summary>On a computer? Add the Save to Sous bookmark</summary>
       <p>
-        Some sites turn away Sous's server. <strong>Save to Sous</strong> is a
-        bookmark that sends the recipe from the page you're looking at instead.
-        Nothing is sent until you tap Save in Sous.
-      </p>
-      <h3>On a computer</h3>
-      <p>
-        Drag this to your bookmarks bar:{' '}
+        For sites that turn Sous away, drag this to your bookmarks bar, then
+        click it on a recipe page:{' '}
         <a
           ref={link}
           className="bookmarklet"
@@ -301,22 +448,10 @@ function BrowserImportHelp({ open }: { open: boolean }) {
           Save to Sous
         </a>
       </p>
-      <h3>On Android (Chrome)</h3>
-      <ol>
-        <li>
-          <button type="button" className="link" onClick={() => void copy()}>
-            {copied ? 'Copied' : 'Copy the Save to Sous code'}
-          </button>
-        </li>
-        <li>Bookmark any page (⋮ → ☆), then edit that bookmark.</li>
-        <li>
-          Name it <strong>Save to Sous</strong> and paste the code as its URL.
-        </li>
-        <li>
-          On a recipe page, tap the address bar, type <em>Save to Sous</em> and
-          tap the bookmark.
-        </li>
-      </ol>
+      <p className="muted small">
+        It sends the recipe from the page you're looking at. Nothing is saved
+        until you tap Save in Sous.
+      </p>
     </details>
   )
 }

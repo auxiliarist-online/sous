@@ -34,12 +34,14 @@ function fakeApi(recipes: SavedRecipe[] = []): LibraryApi & {
   list: ReturnType<typeof vi.fn>
   save: ReturnType<typeof vi.fn>
   savePage: ReturnType<typeof vi.fn>
+  saveText: ReturnType<typeof vi.fn>
   remove: ReturnType<typeof vi.fn>
 } {
   return {
     list: vi.fn(async () => recipes),
     save: vi.fn(async () => SAVED),
     savePage: vi.fn(async () => SAVED),
+    saveText: vi.fn(async () => SAVED),
     remove: vi.fn(async () => {}),
   }
 }
@@ -85,7 +87,10 @@ describe('Library', () => {
   it("shows the API's explanation when a recipe can't be saved", async () => {
     const api = fakeApi()
     api.save.mockRejectedValueOnce(
-      new ImportError('blocked', 'This site blocks automated imports.'),
+      new ImportError(
+        'not_a_recipe',
+        "We couldn't find a recipe on that page.",
+      ),
     )
     render(<Library api={api} />)
     await userEvent.type(
@@ -94,13 +99,18 @@ describe('Library', () => {
     )
     await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This site blocks automated imports.',
+      "We couldn't find a recipe on that page.",
     )
   })
 
   it('fills in a shared link but saves it only when the user taps Save', async () => {
     const api = fakeApi()
-    render(<Library api={api} sharedUrl={SAVED.source_url} />)
+    render(
+      <Library
+        api={api}
+        shared={{ url: SAVED.source_url, ingredients: null }}
+      />,
+    )
     expect(
       screen.getByRole('heading', { name: 'Save the recipe you shared?' }),
     ).toBeInTheDocument()
@@ -149,23 +159,110 @@ describe('Library', () => {
     expect(api.savePage).not.toHaveBeenCalled()
   })
 
-  it('opens the Save to Sous help when a site blocks Sous', async () => {
+  it.each([
+    ['blocked', 'This site blocks automated imports.'],
+    ['robots_disallowed', 'This site asks apps not to read its pages.'],
+  ])(
+    'offers to paste the ingredients when a site turns Sous away (%s)',
+    async (code, message) => {
+      const api = fakeApi()
+      api.save.mockRejectedValueOnce(new ImportError(code, message))
+      render(<Library api={api} />)
+      await userEvent.type(
+        screen.getByLabelText('Recipe link'),
+        'https://www.seriouseats.com/the-best-chili-recipe-5089384',
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+      expect(
+        await screen.findByRole('heading', {
+          name: "seriouseats.com doesn't let apps read its recipes",
+        }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByLabelText('Name')).toHaveValue('The Best Chili Recipe')
+      expect(
+        screen.getByRole('link', {
+          name: 'Open the recipe on seriouseats.com',
+        }),
+      ).toHaveAttribute(
+        'href',
+        'https://www.seriouseats.com/the-best-chili-recipe-5089384',
+      )
+
+      // Pasting the whole page keeps only the ingredients.
+      await userEvent.click(screen.getByLabelText('Ingredients'))
+      await userEvent.paste(
+        'The Best Chili\nIngredients\n▢ 2 lb ground beef\n• 1 onion, diced\nDirections\nBrown the beef.',
+      )
+      expect(screen.getByLabelText('Ingredients')).toHaveValue(
+        '2 lb ground beef\n1 onion, diced',
+      )
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Save to my recipes' }),
+      )
+      expect(api.saveText).toHaveBeenCalledWith({
+        url: 'https://www.seriouseats.com/the-best-chili-recipe-5089384',
+        title: 'The Best Chili Recipe',
+        ingredients: ['2 lb ground beef', '1 onion, diced'],
+      })
+      expect(await screen.findByText('Black bean tacos')).toBeInTheDocument()
+      expect(screen.queryByLabelText('Ingredients')).toBeNull()
+    },
+  )
+
+  it('can save just the link when nothing is pasted', async () => {
     const api = fakeApi()
-    api.save.mockRejectedValueOnce(
-      new ImportError('blocked', 'This site blocks automated imports.'),
-    )
+    api.save.mockRejectedValueOnce(new ImportError('blocked', 'Blocked.'))
     render(<Library api={api} />)
-    const help = screen
-      .getByText('Recipe from a site that blocks Sous?')
-      .closest('details')!
-    expect(help).not.toHaveAttribute('open')
     await userEvent.type(
       screen.getByLabelText('Recipe link'),
-      'https://x.example/',
+      'https://blocked.example/soup/',
     )
     await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Save to Sous')
-    expect(help).toHaveAttribute('open')
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Save the link for now' }),
+    )
+    expect(api.saveText).toHaveBeenCalledWith({
+      url: 'https://blocked.example/soup/',
+      title: 'Soup',
+      ingredients: [],
+    })
+  })
+
+  it('saves a shared selection of ingredients only when the user taps Save', async () => {
+    const api = fakeApi()
+    render(
+      <Library
+        api={api}
+        shared={{
+          url: 'https://blocked.example/green-curry/',
+          ingredients: '1 can coconut milk\n2 tbsp green curry paste',
+        }}
+      />,
+    )
+    expect(
+      screen.getByRole('heading', { name: 'Save the ingredients you shared?' }),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Ingredients')).toHaveValue(
+      '1 can coconut milk\n2 tbsp green curry paste',
+    )
+    expect(screen.getByText(/2 ingredients/)).toBeInTheDocument()
+    expect(api.saveText).not.toHaveBeenCalled()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save to my recipes' }),
+    )
+    expect(api.saveText).toHaveBeenCalledWith({
+      url: 'https://blocked.example/green-curry/',
+      title: 'Green Curry',
+      ingredients: ['1 can coconut milk', '2 tbsp green curry paste'],
+    })
+  })
+
+  it('keeps the Save to Sous bookmark for computers', () => {
+    render(<Library api={fakeApi()} />)
+    expect(
+      screen.getByText('On a computer? Add the Save to Sous bookmark'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Save to Sous', { selector: 'a' })).toHaveAttribute(
       'href',
       expect.stringMatching(/^javascript:/),

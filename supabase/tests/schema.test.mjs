@@ -989,7 +989,8 @@ describe('ingredient parsing', () => {
     const { rows } = await db.query(
       'select count(*)::int as n from ingredient_aliases',
     )
-    assert.equal(rows[0].n, 159 + 283)
+    // Seed migration + more_ingredients + everyday_ingredients (TYL-60).
+    assert.equal(rows[0].n, 159 + 283 + 235)
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
@@ -1827,5 +1828,216 @@ describe('buying: packages, recipe sizes and the pantry', () => {
       pantry_staple: true,
       pantry: 'out',
     })
+  })
+})
+
+describe('ingredient weights and the everyday list (TYL-60)', () => {
+  const one = async (name) =>
+    (
+      await db.query(
+        `select grams_per_cup::float as cup, grams_per_each::float as each,
+                sold_by, package_quantity::float as qty, package_unit, contains, may_contain
+         from ingredients where name = $1`,
+        [name],
+      )
+    ).rows[0]
+
+  it('fills in cup and item weights from USDA data', async () => {
+    assert.equal((await one('heavy cream')).cup, 238)
+    assert.equal((await one('carrots')).each, 61)
+    assert.equal((await one('tomatillos')).each, 34)
+    assert.equal(
+      (await one('mixed greens')).each,
+      null,
+      'one "mixed green" is meaningless',
+    )
+  })
+
+  it('keeps weights that were set by hand', async () => {
+    // onion: 150 g each in the baseline migration; USDA says 110 for a medium one.
+    assert.deepEqual(
+      [(await one('onion')).cup, (await one('onion')).each],
+      [160, 150],
+    )
+    assert.equal((await one('eggs')).each, 50)
+  })
+
+  it('adds everyday ingredients with packaging and diet categories', async () => {
+    assert.deepEqual(await one('tortellini'), {
+      cup: null,
+      each: null,
+      sold_by: 'package',
+      qty: 9,
+      package_unit: 'oz',
+      contains: ['gluten', 'egg', 'dairy'],
+      may_contain: ['animal_rennet'],
+    })
+    assert.equal((await one('lard')).contains.includes('pork'), true)
+    assert.deepEqual((await one('hummus')).contains, ['sesame'])
+    const { rows } = await db.query(
+      `select count(*)::int as n from ingredients i
+       where i.name in ('jicama', 'gouda', 'halibut', 'wasabi', 'cream of tartar')
+         and i.sold_by is not null`,
+    )
+    // halibut was already an alias, so it isn't a new ingredient.
+    assert.equal(rows[0].n, 4)
+  })
+})
+
+describe('openly licensed sources (TYL-45)', () => {
+  const importAs = (p) =>
+    as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [p])
+      return rows[0].r
+    })
+  const publish = (sourceId) =>
+    as('service_role', null, async () => {
+      const { rows } = await db.query(
+        'select publish_licensed_recipes($1) as n',
+        [sourceId],
+      )
+      return rows[0].n
+    })
+
+  it('records the Wikibooks Cookbook with its license', async () => {
+    const { rows } = await db.query(
+      `select name, content_rights, crawl_enabled, license_name, license_url, attribution
+       from recipe_sources where domain = 'en.wikibooks.org'`,
+    )
+    assert.deepEqual(rows[0], {
+      name: 'Wikibooks Cookbook',
+      content_rights: 'licensed',
+      crawl_enabled: false,
+      license_name: 'CC BY-SA 4.0',
+      license_url: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      attribution: 'Wikibooks contributors',
+    })
+  })
+
+  it('stores steps, then publishes recipes with ingredients and steps', async () => {
+    const recipe = (title, steps) => ({
+      source: { domain: 'en.wikibooks.org', name: 'Wikibooks Cookbook' },
+      recipe: {
+        source_url: `https://en.wikibooks.org/wiki/Cookbook:${title}`,
+        title,
+        instructions: steps,
+      },
+      ingredients: [
+        {
+          line_no: 0,
+          raw_text: '1 cup red lentils',
+          name: 'red lentils',
+          candidates: ['red lentils'],
+        },
+      ],
+    })
+    const good = await importAs(recipe('Dal_Test', ['Simmer the lentils.']))
+    const noSteps = await importAs(recipe('No_Steps_Test', []))
+    const before = await as(
+      'anon',
+      null,
+      async () =>
+        (
+          await db.query(
+            'select count(*)::int as n from recipes where id = $1',
+            [good.recipe_id],
+          )
+        ).rows[0].n,
+    )
+    assert.equal(before, 0, 'not public until published')
+
+    const { rows: src } = await db.query(
+      "select id from recipe_sources where domain = 'en.wikibooks.org'",
+    )
+    assert.equal(await publish(src[0].id), 1)
+    const seen = await as('anon', null, async () => {
+      const { rows } = await db.query(
+        'select id, instructions from recipes where id = any($1)',
+        [[good.recipe_id, noSteps.recipe_id]],
+      )
+      return rows
+    })
+    assert.deepEqual(seen, [
+      { id: good.recipe_id, instructions: ['Simmer the lentils.'] },
+    ])
+  })
+
+  it('refuses link-only sources, and anyone but the API', async () => {
+    await db.query(
+      `insert into recipe_sources (name, domain) values ('A blog', 'licensed-test-blog.example')`,
+    )
+    const { rows } = await db.query(
+      "select id from recipe_sources where domain = 'licensed-test-blog.example'",
+    )
+    await assert.rejects(publish(rows[0].id), /can't be published/)
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query('select publish_licensed_recipes($1)', [rows[0].id]),
+      ),
+      /only callable by the API/,
+    )
+  })
+})
+
+describe('saving recipes from the browser', () => {
+  const save = (user, id) =>
+    as('authenticated', user, () =>
+      db.query(
+        'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+        [user, id],
+      ),
+    )
+
+  it('saves public recipes and the user’s own', async () => {
+    await save(BOB, await recipe('Saved public test', []))
+    await save(
+      ALICE,
+      await recipe('Saved own test', [], {
+        visibility: 'private',
+        addedBy: ALICE,
+      }),
+    )
+  })
+
+  it('won’t save, and so can’t reveal, someone else’s private recipe', async () => {
+    // Alice's private copy of a page from a site that blocks Sous.
+    const secret = await recipe('Alice browser copy test', [], {
+      visibility: 'private',
+      addedBy: ALICE,
+      url: 'https://blocked.example/alice-secret/',
+    })
+    await assert.rejects(save(BOB, secret), /row-level security/)
+    const seen = await as('authenticated', BOB, async () => {
+      const { rows } = await db.query(
+        'select count(*)::int as n from recipes where id = $1',
+        [secret],
+      )
+      return rows[0].n
+    })
+    assert.equal(seen, 0)
+  })
+
+  it('still lets the importer save fetched recipes awaiting review', async () => {
+    const r = await as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [
+        {
+          added_by: BOB,
+          source: { domain: 'review-blog.example' },
+          recipe: {
+            source_url: 'https://review-blog.example/x/',
+            title: 'Pending',
+          },
+        },
+      ])
+      return rows[0].r
+    })
+    const seen = await as('authenticated', BOB, async () => {
+      const { rows } = await db.query(
+        'select count(*)::int as n from recipes where id = $1',
+        [r.recipe_id],
+      )
+      return rows[0].n
+    })
+    assert.equal(seen, 1, 'readable through the user’s own saved row')
   })
 })

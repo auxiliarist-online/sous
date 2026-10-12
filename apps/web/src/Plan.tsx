@@ -509,10 +509,12 @@ function AddRecipe({
   return (
     <section className="add-to-plan">
       <h3>Add a recipe</h3>
+      <Link to="/browse" className="small">
+        Find more recipes
+      </Link>
       {recipes.length === 0 ? (
         <p className="muted small">
-          Save some recipes first, then plan them here.{' '}
-          <Link to="/">Your recipes</Link>
+          Save some recipes, or find one and add it to this week from its page.
         </p>
       ) : (
         <>

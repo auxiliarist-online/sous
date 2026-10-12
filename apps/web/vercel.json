@@ -7,7 +7,7 @@
       "destination": "https://sous-api-five.vercel.app/api/:path*"
     },
     {
-      "source": "/(share|new|settings|plan)",
+      "source": "/(share|new|settings|plan|browse)",
       "destination": "/"
     },
     {

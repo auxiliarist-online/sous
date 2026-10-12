@@ -49,6 +49,16 @@ Rules that follow from this:
 - Shopping lists and meal plans keep the source name and link next to each recipe.
 - The assistant always gives the link whenever it names a recipe.
 
+### Openly licensed sources
+
+The Wikibooks Cookbook (CC BY-SA 4.0) is the first: `content_rights = 'licensed'`, with `license_name`, `license_url` and `attribution` on the source.
+
+- **Steps are stored and shown**, because the license allows it.
+- **Credit on every recipe page:** a link to the original page, "by Wikibooks contributors", the license name linking to its text, and a note that Sous reformatted the ingredients and steps and shares this version under the same license (share-alike).
+- **Fetched through the MediaWiki API, not crawled** (`scripts/import_wikibooks.py`): one request at a time, the SousBot user agent with its contact link (Wikimedia's API etiquette asks for one), and `maxlag` to back off when their servers are busy.
+- **Published after import** with `publish_licensed_recipes()`, only for recipes with ingredients and steps, and only while the source isn't opted out.
+- Images stay out: each Wikimedia Commons image has its own license.
+
 ## Images
 
 - **Show the source's own image by its URL; don't copy, cache, crop into new files, or re-host it.** Images are the most clearly copyrighted part of a recipe page, and a hotlinked image stays under the blogger's control.
@@ -83,7 +93,10 @@ A user pasting a URL (TYL-8) follows the same storage rules as the crawler. The 
 
 ### Import from the user's browser
 
-For sites that block Sous's server, the user's own browser sends the recipe data from a page they're viewing (a bookmarklet reads the page's schema.org JSON-LD; `POST /recipes/import-page`).
+For sites that block Sous's server, the user's own browser hands Sous the recipe from a page they're viewing:
+
+- **Copy and paste (phones, the main path):** when a link is turned away, Sous offers to save it anyway. The user copies the ingredients (or the whole page) and pastes them; Sous keeps only the ingredient lines, between an "Ingredients" heading and "Directions" or similar. Sharing a text selection from Chrome to Sous does the same. `POST /recipes/import-text` takes the link, a title and the lines. With no lines, the recipe is saved as a link to come back to. Never steps or descriptions: those stay on the author's page.
+- **Save to Sous bookmark (computers):** a bookmarklet reads the page's schema.org JSON-LD (`POST /recipes/import-page`).
 
 - **No fetch, so no robots.txt check.** The user visited the page themselves; Sous doesn't contact the site. This is the honest alternative to getting around a block, not a way around one: Sous's server still never fetches a page that refuses it.
 - **Same storage rules.** The data goes through the same extractor, so `link_only` sources still lose the description and instructions.

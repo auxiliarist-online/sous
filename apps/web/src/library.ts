@@ -182,6 +182,16 @@ export async function importPage(
   })
 }
 
+/** A link plus ingredient lines the user copied from a page that blocks Sous
+ *  (TYL-59). With no lines it's saved as a link to come back to. */
+export async function importText(
+  session: Session,
+  recipe: { url: string; title: string; ingredients: string[] },
+  send: typeof apiFetch = apiFetch,
+): Promise<ImportResult> {
+  return importVia(send, session, '/recipes/import-text', recipe)
+}
+
 function isRecipe(node: unknown): node is { name?: unknown } {
   if (!node || typeof node !== 'object') return false
   const type = (node as { '@type'?: unknown })['@type']
