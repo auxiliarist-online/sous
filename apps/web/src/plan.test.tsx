@@ -212,6 +212,8 @@ const DETAIL: RecipeDetail = {
   sourceUrl: null,
   sourceName: null,
   sourceNote: null,
+  license: null,
+  saved: true,
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,

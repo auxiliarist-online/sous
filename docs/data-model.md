@@ -174,6 +174,11 @@ Users get three kinds of control (TYL-32):
 - **Weights** (`grams_per_cup`, `grams_per_each`) let the planner turn cups and items into weights to add up and price. They come from USDA FoodData Central, SR Legacy (public domain): `apps/api/data/fdc_map.csv` names each ingredient's FDC food (checked by hand) and, when needed, which portion counts as "one" (or `-` for none); `scripts/build_weights.py <fdc_dir> <version>_<name>` writes `data/ingredient_weights.csv` and a migration. Weights set by hand earlier are kept.
 - `set_recipe_ingredients()` replaces a recipe's lines; `scripts/reparse_ingredients.py` re-parses stored recipes after the parser or aliases change.
 
+### Openly licensed sources (TYL-45)
+
+- `recipe_sources.license_name`, `license_url` and `attribution` record a source's license; the recipe page shows them. The Wikibooks Cookbook is seeded as `licensed` (CC BY-SA 4.0), not `crawl_enabled`: `scripts/import_wikibooks.py` reads it through the MediaWiki API and `app/recipes/wikibooks.py` parses each page.
+- Imported recipes start private and `needs_review`, like any import with no `added_by`. `publish_licensed_recipes(source)` (service role only) makes the ones with ingredients and steps public and active.
+
 ### Browser imports (TYL-35)
 
 - `recipes.origin` is `fetched` (Sous read the page, or a user typed the recipe) or `browser` (sent from a user's browser for a site that blocks Sous).

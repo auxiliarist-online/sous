@@ -247,11 +247,17 @@ def parse_line(line_no: int, raw: str, section: str | None = None) -> list[Parse
     text = BULLET.sub("", raw).strip()
     if not text:
         return []
-    parsed = _parser()(text)
-    options = _options(parsed, text)
-    if not options:  # a heading like "For the sauce:", or something we can't read
+    try:
+        parsed = _parser()(text)
+        options = _options(parsed, text)
+        amounts = _amounts(parsed) if options else None
+    except (TypeError, ValueError, ArithmeticError):
+        # The parser chokes on some amounts ("1 cup + 2 tbsp (200 g + 25 g)
+        # sugar"). Keep the line as written, unmatched, for a person to look at.
+        return [ParsedLine(line_no, text, section, needs_review=True)]
+    if not options or amounts is None:  # a heading like "For the sauce:"
         return [ParsedLine(line_no, text, section)]
-    qty, qty_max, unit, amount_note, amount_conf, canned = _amounts(parsed)
+    qty, qty_max, unit, amount_note, amount_conf, canned = amounts
     comment = parsed.comment.text if parsed.comment else None
     notes = [n for n in (amount_note, comment) if n]
     optional = bool(re.search(r"\boptional\b", text, re.I))

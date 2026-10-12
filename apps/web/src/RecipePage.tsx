@@ -9,6 +9,7 @@ import { ingredientLines, type RecipeDetail } from './sous.ts'
 export interface RecipePageApi {
   recipe(id: string): Promise<RecipeDetail | null>
   remove(recipeId: string): Promise<void>
+  saveToLibrary(recipeId: string): Promise<void>
   addToPlan(
     weekStart: string,
     recipeId: string,
@@ -70,6 +71,11 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     navigate('/')
   }
 
+  async function save(r: RecipeDetail) {
+    await api.saveToLibrary(r.id)
+    setRecipe({ ...r, saved: true })
+  }
+
   if (failed) {
     return (
       <p className="card error" role="alert">
@@ -106,7 +112,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       <h2>{recipe.title}</h2>
       <p className="muted small">{facts.join(' · ')}</p>
       <DietChips diets={recipe.diets} />
-      {recipe.sourceUrl && (
+      {recipe.sourceUrl && !recipe.license && (
         // The author's page is the main action: their instructions live there (policy).
         <a
           className="button"
@@ -162,6 +168,31 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         </>
       )}
 
+      {recipe.license && recipe.sourceUrl && (
+        // Openly licensed: credit the source and license, as the license asks.
+        <p className="muted small attribution">
+          From the{' '}
+          <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer">
+            {recipe.sourceName ?? sourceLabel(null, recipe.sourceUrl)}
+          </a>
+          {recipe.license.attribution && `, by ${recipe.license.attribution}`},
+          under{' '}
+          {recipe.license.url ? (
+            <a
+              href={recipe.license.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {recipe.license.name}
+            </a>
+          ) : (
+            recipe.license.name
+          )}
+          . Sous reformatted the ingredients and steps; this version is shared
+          under the same license.
+        </p>
+      )}
+
       <div className="actions">
         {fit === 'excluded' ? (
           <p className="muted small">
@@ -191,13 +222,23 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
             Edit recipe
           </Link>
         )}
-        <button
-          type="button"
-          className="link"
-          onClick={() => void remove(recipe)}
-        >
-          Remove from my recipes
-        </button>
+        {recipe.saved ? (
+          <button
+            type="button"
+            className="link"
+            onClick={() => void remove(recipe)}
+          >
+            Remove from my recipes
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="link"
+            onClick={() => void save(recipe)}
+          >
+            Save to my recipes
+          </button>
+        )}
       </div>
     </article>
   )

@@ -49,6 +49,16 @@ Rules that follow from this:
 - Shopping lists and meal plans keep the source name and link next to each recipe.
 - The assistant always gives the link whenever it names a recipe.
 
+### Openly licensed sources
+
+The Wikibooks Cookbook (CC BY-SA 4.0) is the first: `content_rights = 'licensed'`, with `license_name`, `license_url` and `attribution` on the source.
+
+- **Steps are stored and shown**, because the license allows it.
+- **Credit on every recipe page:** a link to the original page, "by Wikibooks contributors", the license name linking to its text, and a note that Sous reformatted the ingredients and steps and shares this version under the same license (share-alike).
+- **Fetched through the MediaWiki API, not crawled** (`scripts/import_wikibooks.py`): one request at a time, the SousBot user agent with its contact link (Wikimedia's API etiquette asks for one), and `maxlag` to back off when their servers are busy.
+- **Published after import** with `publish_licensed_recipes()`, only for recipes with ingredients and steps, and only while the source isn't opted out.
+- Images stay out: each Wikimedia Commons image has its own license.
+
 ## Images
 
 - **Show the source's own image by its URL; don't copy, cache, crop into new files, or re-host it.** Images are the most clearly copyrighted part of a recipe page, and a hotlinked image stays under the blogger's control.

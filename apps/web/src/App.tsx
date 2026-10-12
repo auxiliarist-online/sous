@@ -15,6 +15,7 @@ import {
   savedRecipes,
 } from './library.ts'
 import { route, usePath } from './navigation.ts'
+import { Browse, type BrowseApi } from './Browse.tsx'
 import { clearPage, pendingPage } from './page.ts'
 import { PlanPage, type PlanApi } from './Plan.tsx'
 import {
@@ -42,6 +43,8 @@ import {
   referenceOptions,
   saveManual,
   savePreferences,
+  saveToLibrary,
+  searchCatalog,
   searchIngredients,
   type Preferences,
 } from './sous.ts'
@@ -51,7 +54,8 @@ export type SousApi = LibraryApi &
   RecipePageApi &
   RecipeFormApi &
   SettingsApi &
-  PlanApi
+  PlanApi &
+  BrowseApi
 
 function liveApi(db: SupabaseClient, session: Session): SousApi {
   const userId = session.user.id
@@ -74,6 +78,8 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     copyPlan: (from, to) => copyPlan(db, from, to),
     planCost: (week) => planCost(session, week),
     recipeFits: (ids) => recipeFits(db, ids),
+    searchCatalog: (q) => searchCatalog(db, q),
+    saveToLibrary: (id) => saveToLibrary(db, userId, id),
     setPantry: (ingredientId, status) =>
       setPantry(db, userId, ingredientId, status),
   }
@@ -137,6 +143,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         {signedIn && (
           <nav className="app-nav" aria-label="Main">
             <Link to="/">Recipes</Link>
+            <Link to="/browse">Find</Link>
             <Link to="/plan">Plan</Link>
             <Link to="/settings">Preferences</Link>
           </nav>
@@ -175,6 +182,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
           {at.page === 'edit' && (
             <RecipeForm key={at.id} api={api} recipeId={at.id} />
           )}
+          {at.page === 'browse' && <Browse api={api} />}
           {at.page === 'plan' && <PlanPage key={week} api={api} week={week} />}
           {at.page === 'settings' && (
             <Settings

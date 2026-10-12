@@ -1883,3 +1883,98 @@ describe('ingredient weights and the everyday list (TYL-60)', () => {
     assert.equal(rows[0].n, 4)
   })
 })
+
+describe('openly licensed sources (TYL-45)', () => {
+  const importAs = (p) =>
+    as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [p])
+      return rows[0].r
+    })
+  const publish = (sourceId) =>
+    as('service_role', null, async () => {
+      const { rows } = await db.query(
+        'select publish_licensed_recipes($1) as n',
+        [sourceId],
+      )
+      return rows[0].n
+    })
+
+  it('records the Wikibooks Cookbook with its license', async () => {
+    const { rows } = await db.query(
+      `select name, content_rights, crawl_enabled, license_name, license_url, attribution
+       from recipe_sources where domain = 'en.wikibooks.org'`,
+    )
+    assert.deepEqual(rows[0], {
+      name: 'Wikibooks Cookbook',
+      content_rights: 'licensed',
+      crawl_enabled: false,
+      license_name: 'CC BY-SA 4.0',
+      license_url: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      attribution: 'Wikibooks contributors',
+    })
+  })
+
+  it('stores steps, then publishes recipes with ingredients and steps', async () => {
+    const recipe = (title, steps) => ({
+      source: { domain: 'en.wikibooks.org', name: 'Wikibooks Cookbook' },
+      recipe: {
+        source_url: `https://en.wikibooks.org/wiki/Cookbook:${title}`,
+        title,
+        instructions: steps,
+      },
+      ingredients: [
+        {
+          line_no: 0,
+          raw_text: '1 cup red lentils',
+          name: 'red lentils',
+          candidates: ['red lentils'],
+        },
+      ],
+    })
+    const good = await importAs(recipe('Dal_Test', ['Simmer the lentils.']))
+    const noSteps = await importAs(recipe('No_Steps_Test', []))
+    const before = await as(
+      'anon',
+      null,
+      async () =>
+        (
+          await db.query(
+            'select count(*)::int as n from recipes where id = $1',
+            [good.recipe_id],
+          )
+        ).rows[0].n,
+    )
+    assert.equal(before, 0, 'not public until published')
+
+    const { rows: src } = await db.query(
+      "select id from recipe_sources where domain = 'en.wikibooks.org'",
+    )
+    assert.equal(await publish(src[0].id), 1)
+    const seen = await as('anon', null, async () => {
+      const { rows } = await db.query(
+        'select id, instructions from recipes where id = any($1)',
+        [[good.recipe_id, noSteps.recipe_id]],
+      )
+      return rows
+    })
+    assert.deepEqual(seen, [
+      { id: good.recipe_id, instructions: ['Simmer the lentils.'] },
+    ])
+  })
+
+  it('refuses link-only sources, and anyone but the API', async () => {
+    await db.query(
+      `insert into recipe_sources (name, domain) values ('A blog', 'licensed-test-blog.example')`,
+    )
+    const { rows } = await db.query(
+      "select id from recipe_sources where domain = 'licensed-test-blog.example'",
+    )
+    await assert.rejects(publish(rows[0].id), /can't be published/)
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query('select publish_licensed_recipes($1)', [rows[0].id]),
+      ),
+      /only callable by the API/,
+    )
+  })
+})

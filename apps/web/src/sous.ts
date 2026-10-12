@@ -25,6 +25,12 @@ export interface RecipeDetail {
   sourceUrl: string | null
   sourceName: string | null
   sourceNote: string | null
+  /** For openly licensed sources (Wikibooks): the license and credit line. */
+  license: {
+    name: string
+    url: string | null
+    attribution: string | null
+  } | null
   servings: number | null
   prepMinutes: number | null
   cookMinutes: number | null
@@ -32,6 +38,8 @@ export interface RecipeDetail {
   instructions: string[] | null
   /** True for a recipe the user typed in themselves (they can edit it). */
   handTyped: boolean
+  /** In the user's own recipes. */
+  saved: boolean
   ingredients: IngredientLine[]
   diets: DietLabel[]
   cuisines: string[]
@@ -48,7 +56,12 @@ interface RecipeRow {
   total_minutes: number | null
   instructions: string[] | null
   added_by: string | null
-  source: { name: string } | null
+  source: {
+    name: string
+    license_name: string | null
+    license_url: string | null
+    attribution: string | null
+  } | null
   ingredients: {
     line_no: number
     option_no: number
@@ -74,11 +87,17 @@ export async function recipeDetail(
   userId: string,
   id: string,
 ): Promise<RecipeDetail | null> {
+  const savedQuery = db
+    .from('user_saved_recipes')
+    .select('recipe_id')
+    .eq('user_id', userId)
+    .eq('recipe_id', id)
+    .maybeSingle()
   const { data, error } = await db
     .from('recipes')
     .select(
       `id, title, source_url, source_note, servings, prep_minutes, cook_minutes, total_minutes,
-       instructions, added_by, source:recipe_sources(name),
+       instructions, added_by, source:recipe_sources(name, license_name, license_url, attribution),
        ingredients:recipe_ingredients(line_no, option_no, raw_text, section, name, quantity, quantity_max, unit, preparation, is_optional),
        diets:recipe_diets(diet_slug, source, checks), cuisines:recipe_cuisines(cuisine_slug)`,
     )
@@ -86,6 +105,7 @@ export async function recipeDetail(
     .maybeSingle()
   if (error) throw error
   if (!data) return null
+  const saved = await savedQuery
   const r = data as unknown as RecipeRow
   return {
     id: r.id,
@@ -93,12 +113,20 @@ export async function recipeDetail(
     sourceUrl: r.source_url,
     sourceName: r.source?.name ?? null,
     sourceNote: r.source_note,
+    license: r.source?.license_name
+      ? {
+          name: r.source.license_name,
+          url: r.source.license_url,
+          attribution: r.source.attribution,
+        }
+      : null,
     servings: r.servings,
     prepMinutes: r.prep_minutes,
     cookMinutes: r.cook_minutes,
     totalMinutes: r.total_minutes,
     instructions: r.instructions,
     handTyped: !r.source_url && r.added_by === userId,
+    saved: !!saved.data,
     ingredients: [...r.ingredients]
       .sort((a, b) => a.line_no - b.line_no || a.option_no - b.option_no)
       .map((i) => ({
@@ -376,4 +404,61 @@ export async function searchIngredients(
     .limit(8)
   if (error) throw error
   return data as IngredientRef[]
+}
+
+// ---------- the shared catalog ----------
+
+export interface CatalogRecipe {
+  id: string
+  title: string
+  sourceName: string | null
+  totalMinutes: number | null
+}
+
+/** Public recipes anyone can plan (Wikibooks, federal and licensed sources),
+ *  by title. With no query, the newest ones. */
+export async function searchCatalog(
+  db: SupabaseClient,
+  query: string,
+  limit = 40,
+): Promise<CatalogRecipe[]> {
+  let q = db
+    .from('recipes')
+    .select('id, title, total_minutes, source:recipe_sources(name)')
+    .eq('visibility', 'public')
+    .eq('status', 'active')
+    .limit(limit)
+  const term = query.trim().replace(/[%_,()]/g, '')
+  q = term
+    ? q.ilike('title', `%${term}%`).order('title')
+    : q.order('created_at', { ascending: false })
+  const { data, error } = await q
+  if (error) throw error
+  return (
+    data as unknown as {
+      id: string
+      title: string
+      total_minutes: number | null
+      source: { name: string } | null
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    title: r.title,
+    sourceName: r.source?.name ?? null,
+    totalMinutes: r.total_minutes,
+  }))
+}
+
+export async function saveToLibrary(
+  db: SupabaseClient,
+  userId: string,
+  recipeId: string,
+): Promise<void> {
+  const { error } = await db
+    .from('user_saved_recipes')
+    .upsert(
+      { user_id: userId, recipe_id: recipeId },
+      { ignoreDuplicates: true },
+    )
+  if (error) throw error
 }

@@ -283,3 +283,39 @@ def test_a_planned_week_is_priced_from_the_database(
     # Salt is a staple: on hand, so not bought.
     assert by_name["salt"].buy is False
     assert (cost.total_cents, cost.budget_cents, cost.estimated) == (300, 6000, False)
+
+
+def test_a_wikibooks_recipe_is_stored_in_full_and_published(db: psycopg.Connection) -> None:
+    from app.recipes.wikibooks import parse
+
+    page = (
+        "{{recipesummary|category=Soup recipes|servings=4|time=40 minutes}}\n"
+        "== Ingredients ==\n* 1 cup [[Cookbook:Lentil|red lentils]]\n* 1 [[Cookbook:Onion|onion]]\n"
+        "== Procedure ==\n# Simmer the lentils.\n# Stir in the onion.\n"
+        "[[Category:Indian recipes]]\n"
+    )
+    draft = parse("Cookbook:Integration Test Dal", page)
+    assert draft is not None
+    row = db.execute(
+        "select import_recipe(%s::jsonb)", [json.dumps(draft.payload(None))]
+    ).fetchone()
+    assert row is not None
+    rid = row[0]["recipe_id"]
+    source = db.execute(
+        "select id from recipe_sources where domain = 'en.wikibooks.org'"
+    ).fetchone()
+    assert source is not None
+    published = db.execute("select publish_licensed_recipes(%s)", [source[0]]).fetchone()
+    assert published is not None and published[0] >= 1
+    recipe = db.execute(
+        "select visibility, status, instructions,"
+        " (select array_agg(cuisine_slug) from recipe_cuisines where recipe_id = r.id)"
+        " from recipes r where id = %s",
+        [rid],
+    ).fetchone()
+    assert recipe == (
+        "public",
+        "active",
+        ["Simmer the lentils.", "Stir in the onion."],
+        ["indian"],
+    )

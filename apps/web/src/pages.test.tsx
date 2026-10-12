@@ -40,6 +40,8 @@ const BURRITOS: RecipeDetail = {
   sourceUrl: 'https://example-blog.com/burritos/',
   sourceName: 'Example Blog',
   sourceNote: null,
+  license: null,
+  saved: true,
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,
@@ -88,6 +90,7 @@ describe('route', () => {
     [`/edit/${SOUP.id}/`, { page: 'edit', id: SOUP.id }],
     ['/new', { page: 'new' }],
     ['/settings', { page: 'settings' }],
+    ['/browse', { page: 'browse' }],
     ['/recipe/not-an-id', { page: 'library' }],
     ['/plan', { page: 'plan', week: null }],
     ['/plan/2026-10-12', { page: 'plan', week: '2026-10-12' }],
@@ -100,6 +103,7 @@ describe('RecipePage', () => {
   const api = (r: RecipeDetail | null, fit: Fit = 'fits') => ({
     recipe: vi.fn(async () => r),
     remove: vi.fn(async () => {}),
+    saveToLibrary: vi.fn(async (_id: string) => {}),
     addToPlan: vi.fn(async (_week: string, _id: string, _scale?: Scale) => {}),
     recipeFits: vi.fn(async (ids: string[]) =>
       Object.fromEntries(ids.map((id) => [id, fit])),
@@ -162,6 +166,47 @@ describe('RecipePage', () => {
     expect(
       screen.queryByRole('button', { name: "Add to this week's plan" }),
     ).toBeNull()
+  })
+
+  it('credits an openly licensed recipe and shows its steps', async () => {
+    const dal: RecipeDetail = {
+      ...SOUP,
+      id: '00000000-0000-0000-0000-000000000003',
+      title: 'Dal',
+      sourceUrl: 'https://en.wikibooks.org/wiki/Cookbook:Dal',
+      sourceName: 'Wikibooks Cookbook',
+      sourceNote: null,
+      handTyped: false,
+      instructions: ['Simmer the lentils.'],
+      license: {
+        name: 'CC BY-SA 4.0',
+        url: 'https://creativecommons.org/licenses/by-sa/4.0/',
+        attribution: 'Wikibooks contributors',
+      },
+    }
+    render(<RecipePage id={dal.id} api={api(dal)} />)
+    expect(await screen.findByText('Simmer the lentils.')).toBeInTheDocument()
+    expect(screen.getByText(/by Wikibooks contributors/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'CC BY-SA 4.0' })).toHaveAttribute(
+      'href',
+      'https://creativecommons.org/licenses/by-sa/4.0/',
+    )
+    expect(
+      screen.getByRole('link', { name: 'Wikibooks Cookbook' }),
+    ).toHaveAttribute('href', dal.sourceUrl)
+    expect(screen.queryByRole('link', { name: /View full recipe/ })).toBeNull()
+  })
+
+  it('saves a recipe from the catalog to the user’s recipes', async () => {
+    const fake = api({ ...BURRITOS, saved: false })
+    render(<RecipePage id={BURRITOS.id} api={fake} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Save to my recipes' }),
+    )
+    expect(fake.saveToLibrary).toHaveBeenCalledWith(BURRITOS.id)
+    expect(
+      await screen.findByRole('button', { name: 'Remove from my recipes' }),
+    ).toBeInTheDocument()
   })
 
   it('says when a recipe is not found', async () => {

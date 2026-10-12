@@ -61,6 +61,8 @@ const library = (): SousApi => ({
   })),
   recipeFits: vi.fn(async () => ({})),
   setPantry: vi.fn(async () => {}),
+  searchCatalog: vi.fn(async () => []),
+  saveToLibrary: vi.fn(async () => {}),
 })
 
 describe('App', () => {

@@ -124,6 +124,15 @@ class TestLines:
     def test_blank_lines_are_dropped(self) -> None:
         assert parse_line(0, "   ") == []
 
+    def test_a_line_the_parser_cant_read_is_kept_for_review(self) -> None:
+        (row,) = parse_line(3, "1 cup + 2 Tablespoons (200 g + 25 g) granulated sugar")
+        assert (row.raw_text, row.name, row.quantity, row.needs_review) == (
+            "1 cup + 2 Tablespoons (200 g + 25 g) granulated sugar",
+            None,
+            None,
+            True,
+        )
+
     def test_payload_has_every_column(self) -> None:
         (row,) = parse_line(0, "1 cup rolled oats")
         assert set(row.payload()) >= {
