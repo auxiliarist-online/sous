@@ -76,17 +76,29 @@ def pages(client: httpx.Client, limit: int | None) -> list[tuple[str, str]]:
         time.sleep(PAUSE)
 
 
-async def save(drafts: list[RecipeDraft]) -> int:
+async def save(drafts: list[RecipeDraft], concurrency: int) -> int:
+    """Save every draft, several at a time: each save is a round trip to the
+    database plus its parsing and diet labelling, so one at a time is slow."""
     key = settings.supabase_service_role_key
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
     base = f"{settings.supabase_url}/rest/v1"
-    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
-        for n, draft in enumerate(drafts, 1):
-            resp = await client.post(f"{base}/rpc/import_recipe", json={"p": draft.payload(None)})
+    gate = asyncio.Semaphore(concurrency)
+    done = 0
+    async with httpx.AsyncClient(timeout=60.0, headers=headers) as client:
+
+        async def one(draft: RecipeDraft) -> None:
+            nonlocal done
+            async with gate:
+                resp = await client.post(
+                    f"{base}/rpc/import_recipe", json={"p": draft.payload(None)}
+                )
             if resp.status_code != 200:
                 print(f"failed: {draft.title}: {resp.text[:200]}", file=sys.stderr)
-            if n % 100 == 0:
-                print(f"{n} saved", file=sys.stderr)
+            done += 1
+            if done % 250 == 0:
+                print(f"{done} saved", file=sys.stderr)
+
+        await asyncio.gather(*(one(d) for d in drafts))
         source = await client.get(
             f"{base}/recipe_sources", params={"select": "id", "domain": f"eq.{DOMAIN}"}
         )
@@ -103,6 +115,9 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="read at most this many pages")
     ap.add_argument("--dry-run", action="store_true", help="parse and report; save nothing")
     ap.add_argument("--out", type=Path, help="write the parsed recipes here as JSON")
+    ap.add_argument(
+        "--concurrency", type=int, default=8, help="saves in flight at once (default 8)"
+    )
     args = ap.parse_args()
     if not settings.sousbot_contact_url:
         sys.exit("Set SOUSBOT_CONTACT_URL: Wikimedia asks for contact details in the user agent")
@@ -120,7 +135,7 @@ def main() -> None:
         return
     if not settings.supabase_url or not settings.supabase_service_role_key:
         sys.exit("Supabase isn't configured (.env)")
-    print(f"{asyncio.run(save(drafts))} recipes published", file=sys.stderr)
+    print(f"{asyncio.run(save(drafts, args.concurrency))} recipes published", file=sys.stderr)
 
 
 if __name__ == "__main__":
