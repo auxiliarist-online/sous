@@ -183,7 +183,9 @@ async def load(drafts: list[RecipeDraft], batch: int, concurrency: int) -> int:
             async with gate:
                 resp = await client.post(
                     f"{base}/rpc/import_recipes",
-                    json={"p_recipes": [d.payload(None) for d in chunk]},
+                    # refresh: update recipes already in the catalog (new parsing,
+                    # aliases, courses), not just add new ones.
+                    json={"p_recipes": [{**d.payload(None), "refresh": True} for d in chunk]},
                 )
             if resp.status_code != 200:
                 failed.extend({"source_url": d.source_url, "error": resp.text[:200]} for d in chunk)
