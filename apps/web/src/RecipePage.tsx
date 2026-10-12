@@ -35,6 +35,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
   )
   const [failed, setFailed] = useState(false)
   const [fit, setFit] = useState<Fit | null>(null)
+  const [saveFailed, setSaveFailed] = useState(false)
   const [planned, setPlanned] = useState<'idle' | 'adding' | 'added' | 'error'>(
     'idle',
   )
@@ -72,8 +73,12 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
   }
 
   async function save(r: RecipeDetail) {
-    await api.saveToLibrary(r.id)
-    setRecipe({ ...r, saved: true })
+    try {
+      await api.saveToLibrary(r.id)
+      setRecipe({ ...r, saved: true })
+    } catch {
+      setSaveFailed(true)
+    }
   }
 
   if (failed) {
@@ -238,6 +243,11 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
           >
             Save to my recipes
           </button>
+        )}
+        {saveFailed && (
+          <p role="alert" className="error">
+            We couldn't save it. Try again.
+          </p>
         )}
       </div>
     </article>

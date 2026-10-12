@@ -1978,3 +1978,66 @@ describe('openly licensed sources (TYL-45)', () => {
     )
   })
 })
+
+describe('saving recipes from the browser', () => {
+  const save = (user, id) =>
+    as('authenticated', user, () =>
+      db.query(
+        'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+        [user, id],
+      ),
+    )
+
+  it('saves public recipes and the user’s own', async () => {
+    await save(BOB, await recipe('Saved public test', []))
+    await save(
+      ALICE,
+      await recipe('Saved own test', [], {
+        visibility: 'private',
+        addedBy: ALICE,
+      }),
+    )
+  })
+
+  it('won’t save, and so can’t reveal, someone else’s private recipe', async () => {
+    // Alice's private copy of a page from a site that blocks Sous.
+    const secret = await recipe('Alice browser copy test', [], {
+      visibility: 'private',
+      addedBy: ALICE,
+      url: 'https://blocked.example/alice-secret/',
+    })
+    await assert.rejects(save(BOB, secret), /row-level security/)
+    const seen = await as('authenticated', BOB, async () => {
+      const { rows } = await db.query(
+        'select count(*)::int as n from recipes where id = $1',
+        [secret],
+      )
+      return rows[0].n
+    })
+    assert.equal(seen, 0)
+  })
+
+  it('still lets the importer save fetched recipes awaiting review', async () => {
+    const r = await as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipe($1) as r', [
+        {
+          added_by: BOB,
+          source: { domain: 'review-blog.example' },
+          recipe: {
+            source_url: 'https://review-blog.example/x/',
+            title: 'Pending',
+          },
+        },
+      ])
+      return rows[0].r
+    })
+    const seen = await as('authenticated', BOB, async () => {
+      const { rows } = await db.query(
+        'select count(*)::int as n from recipes where id = $1',
+        [r.recipe_id],
+      )
+      return rows[0].n
+    })
+    assert.equal(seen, 1, 'readable through the user’s own saved row')
+  })
+})
