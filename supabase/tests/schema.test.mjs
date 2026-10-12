@@ -989,7 +989,8 @@ describe('ingredient parsing', () => {
     const { rows } = await db.query(
       'select count(*)::int as n from ingredient_aliases',
     )
-    assert.equal(rows[0].n, 159 + 283)
+    // Seed migration + more_ingredients + everyday_ingredients (TYL-60).
+    assert.equal(rows[0].n, 159 + 283 + 235)
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
@@ -1827,5 +1828,58 @@ describe('buying: packages, recipe sizes and the pantry', () => {
       pantry_staple: true,
       pantry: 'out',
     })
+  })
+})
+
+describe('ingredient weights and the everyday list (TYL-60)', () => {
+  const one = async (name) =>
+    (
+      await db.query(
+        `select grams_per_cup::float as cup, grams_per_each::float as each,
+                sold_by, package_quantity::float as qty, package_unit, contains, may_contain
+         from ingredients where name = $1`,
+        [name],
+      )
+    ).rows[0]
+
+  it('fills in cup and item weights from USDA data', async () => {
+    assert.equal((await one('heavy cream')).cup, 238)
+    assert.equal((await one('carrots')).each, 61)
+    assert.equal((await one('tomatillos')).each, 34)
+    assert.equal(
+      (await one('mixed greens')).each,
+      null,
+      'one "mixed green" is meaningless',
+    )
+  })
+
+  it('keeps weights that were set by hand', async () => {
+    // onion: 150 g each in the baseline migration; USDA says 110 for a medium one.
+    assert.deepEqual(
+      [(await one('onion')).cup, (await one('onion')).each],
+      [160, 150],
+    )
+    assert.equal((await one('eggs')).each, 50)
+  })
+
+  it('adds everyday ingredients with packaging and diet categories', async () => {
+    assert.deepEqual(await one('tortellini'), {
+      cup: null,
+      each: null,
+      sold_by: 'package',
+      qty: 9,
+      package_unit: 'oz',
+      contains: ['gluten', 'egg', 'dairy'],
+      may_contain: ['animal_rennet'],
+    })
+    assert.equal((await one('lard')).contains.includes('pork'), true)
+    assert.deepEqual((await one('hummus')).contains, ['sesame'])
+    const { rows } = await db.query(
+      `select count(*)::int as n from ingredients i
+       where i.name in ('jicama', 'gouda', 'halibut', 'wasabi', 'cream of tartar')
+         and i.sold_by is not null`,
+    )
+    // halibut was already an alias, so it isn't a new ingredient.
+    assert.equal(rows[0].n, 4)
   })
 })

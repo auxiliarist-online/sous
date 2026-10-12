@@ -171,6 +171,7 @@ Users get three kinds of control (TYL-32):
 - "A or B" lines become one row per option, sharing `line_no`. "Salt and pepper" stays one row, flagged for review.
 - `ingredient_id` comes from `match_ingredient()`: the first of the API's candidate names (as written, then without words like "fresh" or "large", singular/plural, "canned …" for cans) that is a canonical ingredient or an `ingredient_aliases` entry. Unmatched lines keep their `name` and get `needs_review`.
 - The canonical ingredient list grows from `apps/api/data/ingredients.csv` (name, aisle, `contains`, `may_contain`, aliases): `apps/api/scripts/build_ingredients.py <version>_<name>` validates it and writes a new migration. Existing names and aliases are never overwritten, and the schema tests check every row and alias landed as written.
+- **Weights** (`grams_per_cup`, `grams_per_each`) let the planner turn cups and items into weights to add up and price. They come from USDA FoodData Central, SR Legacy (public domain): `apps/api/data/fdc_map.csv` names each ingredient's FDC food (checked by hand) and, when needed, which portion counts as "one" (or `-` for none); `scripts/build_weights.py <fdc_dir> <version>_<name>` writes `data/ingredient_weights.csv` and a migration. Weights set by hand earlier are kept.
 - `set_recipe_ingredients()` replaces a recipe's lines; `scripts/reparse_ingredients.py` re-parses stored recipes after the parser or aliases change.
 
 ### Browser imports (TYL-35)
