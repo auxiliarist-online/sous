@@ -210,7 +210,7 @@ describe('row level security', () => {
         [ALICE],
       )
       await db.query(
-        'insert into meal_plan_entries (meal_plan_id, recipe_id, servings) values ($1, $2, 2)',
+        'insert into meal_plan_entries (meal_plan_id, recipe_id, scale) values ($1, $2, 2)',
         [rows[0].id, publicRecipe],
       )
     })
@@ -1596,20 +1596,20 @@ describe('meal planner', () => {
 
   it('adds recipes to a week, creating the plan once', async () => {
     await asDave('select add_to_meal_plan($1, $2, 2)', [MONDAY, soup])
-    await asDave('select add_to_meal_plan($1, $2, 3, $3)', [
+    await asDave('select add_to_meal_plan($1, $2, 0.5, $3)', [
       MONDAY,
       soup,
       '2026-10-14',
     ])
     const rows = await asDave(
-      `select e.servings::int, e.planned_for::text, e.position
+      `select e.scale::float as scale, e.planned_for::text, e.position
        from meal_plan_entries e join meal_plans p on p.id = e.meal_plan_id
        where p.week_start = $1 order by e.position`,
       [MONDAY],
     )
     assert.deepEqual(rows, [
-      { servings: 2, planned_for: null, position: 0 },
-      { servings: 3, planned_for: '2026-10-14', position: 1 },
+      { scale: 2, planned_for: null, position: 0 },
+      { scale: 0.5, planned_for: '2026-10-14', position: 1 },
     ])
     const plans = await asDave('select count(*)::int as n from meal_plans')
     assert.equal(plans[0].n, 1)
@@ -1697,14 +1697,135 @@ describe('meal planner', () => {
     assert.equal(r.budget_cents, 8000)
     assert.equal(r.entries.length, 2)
     assert.deepEqual(r.entries[0].lines, [
-      { ingredient_id: lentils, quantity: 2, unit: 'cup' },
+      { ingredient_id: lentils, quantity: 2, unit: 'cup', raw_text: 'line' },
     ])
-    assert.equal(r.entries[0].recipe_servings, 4)
+    assert.equal(r.entries[0].scale, 2)
     assert.ok(r.ingredients[lentils])
     assert.deepEqual(r.prices.map((p) => p.price_cents).sort(), [250, 300])
     await assert.rejects(
       asDave('select plan_cost_inputs($1, $2)', [DAVE, MONDAY]),
       /only callable by the API/,
     )
+  })
+})
+
+describe('buying: packages, recipe sizes and the pantry', () => {
+  it('says how every ingredient is bought', async () => {
+    const { rows } = await db.query(
+      `select count(*)::int as missing from ingredients where sold_by is null`,
+    )
+    // Rows added by earlier tests have no packaging; every seeded one does.
+    const seeded = await db.query(
+      `select count(*)::int as n from ingredients
+       where sold_by is null and name in ('salt', 'eggs', 'carrots', 'lentils')`,
+    )
+    assert.equal(seeded.rows[0].n, 0)
+    assert.ok(rows[0].missing < 20)
+    const { rows: eggs } = await db.query(
+      `select sold_by, package_quantity::int as qty, package_unit, pantry_staple
+       from ingredients where name in ('eggs', 'carrots', 'salt') order by name`,
+    )
+    assert.deepEqual(eggs, [
+      { sold_by: 'loose', qty: null, package_unit: null, pantry_staple: false },
+      {
+        sold_by: 'package',
+        qty: 12,
+        package_unit: 'each',
+        pantry_staple: false,
+      },
+      { sold_by: 'package', qty: 26, package_unit: 'oz', pantry_staple: true },
+    ])
+  })
+
+  it('needs a size for packaged ingredients only', async () => {
+    await assert.rejects(
+      db.query(
+        `insert into ingredients (name, sold_by) values ('test package', 'package')`,
+      ),
+      /ingredients_package_size/,
+    )
+    await assert.rejects(
+      db.query(
+        `insert into ingredients (name, sold_by, package_quantity, package_unit)
+         values ('test loose', 'loose', 1, 'lb')`,
+      ),
+      /ingredients_package_size/,
+    )
+  })
+
+  it('plans recipes at half, full or double size only', async () => {
+    const r = await recipe('Sized soup', [[await ingredient('red lentils')]])
+    await db.query('insert into auth.users (id) values ($1)', [
+      '00000000-0000-0000-0000-0000000000e1',
+    ])
+    await assert.rejects(
+      as('authenticated', '00000000-0000-0000-0000-0000000000e1', () =>
+        db.query("select add_to_meal_plan('2026-10-12', $1, 3)", [r]),
+      ),
+      /scale_check/,
+    )
+  })
+
+  it('keeps each pantry private to its user', async () => {
+    const salt = (
+      await db.query("select id from ingredients where name = 'salt'")
+    ).rows[0].id
+    await as('authenticated', ALICE, () =>
+      db.query(
+        "insert into user_pantry (user_id, ingredient_id, status) values ($1, $2, 'out')",
+        [ALICE, salt],
+      ),
+    )
+    const seen = await as('authenticated', BOB, async () => {
+      const { rows } = await db.query(
+        'select count(*)::int as n from user_pantry',
+      )
+      return rows[0].n
+    })
+    assert.equal(seen, 0)
+    await assert.rejects(
+      as('authenticated', BOB, () =>
+        db.query(
+          "insert into user_pantry (user_id, ingredient_id, status) values ($1, $2, 'have')",
+          [ALICE, salt],
+        ),
+      ),
+      /row-level security/,
+    )
+  })
+
+  it('gives the API how ingredients are bought and what the pantry says', async () => {
+    const USER = '00000000-0000-0000-0000-0000000000e2'
+    await db.query('insert into auth.users (id) values ($1)', [USER])
+    const salt = (
+      await db.query("select id from ingredients where name = 'salt'")
+    ).rows[0].id
+    const r = await recipe('Salted water', [[salt]])
+    await as('authenticated', USER, async () => {
+      await db.query("select add_to_meal_plan('2026-10-12', $1, 2)", [r])
+      await db.query(
+        "insert into user_pantry (user_id, ingredient_id, status) values ($1, $2, 'out')",
+        [USER, salt],
+      )
+    })
+    const inputs = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        "select plan_cost_inputs($1, '2026-10-12') as r",
+        [USER],
+      )
+      return rows[0].r
+    })
+    assert.equal(inputs.entries[0].scale, 2)
+    assert.deepEqual(inputs.ingredients[salt], {
+      name: 'salt',
+      aisle: 'spices',
+      grams_per_cup: inputs.ingredients[salt].grams_per_cup,
+      grams_per_each: null,
+      sold_by: 'package',
+      package_quantity: 26,
+      package_unit: 'oz',
+      pantry_staple: true,
+      pantry: 'out',
+    })
   })
 })

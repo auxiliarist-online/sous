@@ -3,14 +3,20 @@ import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
 import {
   addDays,
   dayName,
+  buyText,
   dollars,
+  formatQuantity,
   scaledLine,
+  SCALES,
   weekDays,
   weekLabel,
   weekOf,
+  type BuyItem,
   type Fit,
+  type PantryStatus,
   type PlanCost,
   type PlanEntry,
+  type Scale,
 } from './plan.ts'
 import { Link } from './router.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
@@ -22,30 +28,23 @@ export interface PlanApi {
   addToPlan(
     weekStart: string,
     recipeId: string,
-    servings: number,
+    scale?: Scale,
     day?: string | null,
   ): Promise<void>
   updateEntry(
     id: string,
-    patch: { servings?: number; day?: string | null },
+    patch: { scale?: Scale; day?: string | null },
   ): Promise<void>
   removeEntry(id: string): Promise<void>
   copyPlan(from: string, to: string): Promise<number>
   planCost(weekStart: string): Promise<PlanCost>
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
+  setPantry(ingredientId: string, status: PantryStatus | null): Promise<void>
 }
 
-/** The week's meals (TYL-15): what's planned on which day, for how many, and
- *  what it's likely to cost against the budget. */
-export function PlanPage({
-  api,
-  week,
-  householdSize,
-}: {
-  api: PlanApi
-  week: string
-  householdSize: number
-}) {
+/** The week's meals (TYL-15): what's planned on which day and at what size,
+ *  and what buying it all is likely to cost against the budget. */
+export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const [entries, setEntries] = useState<PlanEntry[] | null>(null)
   const [cost, setCost] = useState<PlanCost | 'error' | null>(null)
   const [failed, setFailed] = useState(false)
@@ -135,7 +134,17 @@ export function PlanPage({
 
       {entries && (
         <>
-          <Budget cost={cost} empty={entries.length === 0} />
+          <Budget
+            cost={cost}
+            empty={entries.length === 0}
+            busy={busy}
+            onPantry={(item, status) =>
+              void change(
+                () => api.setPantry(item.ingredientId!, status),
+                "We couldn't update your pantry. Try again.",
+              )
+            }
+          />
 
           {entries.length === 0 && (
             <div className="empty">
@@ -163,9 +172,6 @@ export function PlanPage({
                       key={e.id}
                       entry={e}
                       days={days}
-                      cents={
-                        cost && cost !== 'error' ? cost.entries[e.id] : null
-                      }
                       api={api}
                       busy={busy}
                       onChange={(patch) =>
@@ -198,7 +204,7 @@ export function PlanPage({
             busy={busy}
             onAdd={(r) =>
               void change(
-                () => api.addToPlan(week, r.id, householdSize),
+                () => api.addToPlan(week, r.id, 1),
                 `We couldn't add ${r.title}. Try again.`,
               )
             }
@@ -212,9 +218,13 @@ export function PlanPage({
 function Budget({
   cost,
   empty,
+  busy,
+  onPantry,
 }: {
   cost: PlanCost | 'error' | null
   empty: boolean
+  busy: boolean
+  onPantry: (item: BuyItem, status: PantryStatus) => void
 }) {
   if (cost === null) {
     return empty ? null : <p className="muted small">Working out the cost…</p>
@@ -222,9 +232,12 @@ function Budget({
   if (cost === 'error') {
     return <p className="muted small">We couldn't estimate the cost.</p>
   }
+  if (empty) return null
   const approx = cost.estimated ? '~' : ''
   const total = `${approx}${dollars(cost.totalCents)}`
   const over = cost.budgetCents !== null && cost.totalCents > cost.budgetCents
+  const toBuy = cost.items.filter((i) => i.buy)
+  const onHand = cost.items.filter((i) => !i.buy)
   return (
     <div className="budget">
       {cost.budgetCents !== null ? (
@@ -250,21 +263,105 @@ function Budget({
           </Link>
         </p>
       )}
-      {(cost.estimated || cost.unpricedLines > 0) && (
+      {(cost.estimated || cost.unpriced > 0) && (
         <p className="muted small">
           {cost.estimated && 'Rough prices until store prices are in. '}
-          {cost.unpricedLines > 0 &&
-            `${cost.unpricedLines} ingredient${cost.unpricedLines === 1 ? '' : 's'} not priced yet.`}
+          {cost.unpriced > 0 &&
+            `${cost.unpriced} item${cost.unpriced === 1 ? '' : 's'} not priced yet.`}
         </p>
       )}
+      <details className="buying">
+        <summary className="small">
+          What you'll buy ({toBuy.length})
+          {onHand.length > 0 && `, and ${onHand.length} on hand`}
+        </summary>
+        <ul className="buy-list" aria-label="To buy">
+          {toBuy.map((i, n) => (
+            <BuyRow
+              key={i.ingredientId ?? `x${n}`}
+              item={i}
+              busy={busy}
+              onPantry={onPantry}
+            />
+          ))}
+        </ul>
+        {onHand.length > 0 && (
+          <>
+            <h4>On hand</h4>
+            <p className="muted small">
+              Not counted. Staples like salt and oil are assumed on hand until
+              you say you're out.
+            </p>
+            <ul className="buy-list" aria-label="On hand">
+              {onHand.map((i) => (
+                <BuyRow
+                  key={i.ingredientId}
+                  item={i}
+                  busy={busy}
+                  onPantry={onPantry}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+      </details>
     </div>
+  )
+}
+
+function BuyRow({
+  item,
+  busy,
+  onPantry,
+}: {
+  item: BuyItem
+  busy: boolean
+  onPantry: (item: BuyItem, status: PantryStatus) => void
+}) {
+  const amount = buyText(item)
+  const leftover =
+    item.leftover && item.packageQuantity && item.packageUnit !== 'each'
+      ? item.leftover / item.packageQuantity
+      : null
+  return (
+    <li>
+      <span className="buy-name">
+        {item.name}
+        {amount && <span className="muted"> · {amount}</span>}
+        {item.buy && item.amountUnknown && !item.packages && (
+          <span className="muted"> · amount not given</span>
+        )}
+        {leftover !== null && leftover >= 0.25 && (
+          <span className="muted small">
+            {' '}
+            (about {formatQuantity(Math.round(leftover * 4) / 4)} of a package
+            left over)
+          </span>
+        )}
+      </span>
+      <span className="buy-price small">
+        {item.buy ? (item.cents !== null ? dollars(item.cents) : '—') : ''}
+      </span>
+      {item.ingredientId && (
+        <button
+          type="button"
+          className="chip"
+          disabled={busy}
+          onClick={() => onPantry(item, item.buy ? 'have' : 'out')}
+          aria-label={
+            item.buy ? `I have ${item.name} already` : `I'm out of ${item.name}`
+          }
+        >
+          {item.buy ? 'Have it' : "I'm out"}
+        </button>
+      )}
+    </li>
   )
 }
 
 function Entry({
   entry,
   days,
-  cents,
   api,
   busy,
   onChange,
@@ -272,18 +369,17 @@ function Entry({
 }: {
   entry: PlanEntry
   days: string[]
-  cents: number | null | undefined
   api: PlanApi
   busy: boolean
-  onChange: (patch: { servings?: number; day?: string | null }) => void
+  onChange: (patch: { scale?: Scale; day?: string | null }) => void
   onRemove: () => void
 }) {
   const [recipe, setRecipe] = useState<RecipeDetail | null | undefined>(
     undefined,
   )
-  const factor = entry.recipeServings
-    ? entry.servings / entry.recipeServings
-    : 1
+  const serves = entry.recipeServings
+    ? Math.round(entry.recipeServings * entry.scale * 10) / 10
+    : null
 
   function open(isOpen: boolean) {
     if (isOpen && recipe === undefined) {
@@ -295,31 +391,26 @@ function Entry({
     <li className="plan-entry">
       <div className="entry-head">
         <Link to={`/recipe/${entry.recipeId}`}>{entry.title}</Link>
-        {cents != null && cents > 0 && (
-          <span className="muted small">~{dollars(cents)}</span>
-        )}
+        {serves && <span className="muted small">serves {serves}</span>}
       </div>
       <div className="entry-controls">
-        <div className="stepper" role="group" aria-label="Servings">
-          <button
-            type="button"
-            aria-label={`Fewer servings of ${entry.title}`}
-            disabled={busy || entry.servings <= 1}
-            onClick={() => onChange({ servings: entry.servings - 1 })}
-          >
-            −
-          </button>
-          <span aria-live="polite">
-            {entry.servings} serving{entry.servings === 1 ? '' : 's'}
-          </span>
-          <button
-            type="button"
-            aria-label={`More servings of ${entry.title}`}
-            disabled={busy || entry.servings >= 50}
-            onClick={() => onChange({ servings: entry.servings + 1 })}
-          >
-            +
-          </button>
+        <div
+          className="chips sizes"
+          role="group"
+          aria-label={`Size of ${entry.title}`}
+        >
+          {SCALES.map(([scale, label]) => (
+            <button
+              key={scale}
+              type="button"
+              className="chip"
+              aria-pressed={entry.scale === scale}
+              disabled={busy}
+              onClick={() => entry.scale !== scale && onChange({ scale })}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <label className="visually-hidden" htmlFor={`day-${entry.id}`}>
           Day for {entry.title}
@@ -350,7 +441,8 @@ function Entry({
       <details onToggle={(e) => open(e.currentTarget.open)}>
         <summary className="small">
           Ingredients
-          {factor !== 1 && ` for ${entry.servings}`}
+          {entry.scale === 2 && ', doubled'}
+          {entry.scale === 0.5 && ', halved'}
         </summary>
         {recipe === undefined && <p className="muted small">Loading…</p>}
         {recipe === null && (
@@ -360,17 +452,11 @@ function Entry({
           <ul className="ingredients small">
             {ingredientLines(recipe.ingredients).map((l) => (
               <li key={l.lineNo}>
-                {scaledLine(l, factor)}
+                {scaledLine(l, entry.scale)}
                 {l.isOptional && <span className="muted"> (optional)</span>}
               </li>
             ))}
           </ul>
-        )}
-        {!entry.recipeServings && (
-          <p className="muted small">
-            This recipe doesn't say how many it serves, so amounts are as
-            written.
-          </p>
         )}
       </details>
     </li>

@@ -24,6 +24,7 @@ import {
   planCost,
   recipeFits,
   removeEntry,
+  setPantry,
   updateEntry,
   weekOf,
 } from './plan.ts'
@@ -65,13 +66,14 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     options: () => referenceOptions(db),
     searchIngredients: (q) => searchIngredients(db, q),
     plan: (week) => loadPlan(db, week),
-    addToPlan: (week, id, servings, day) =>
-      addToPlan(db, week, id, servings, day),
+    addToPlan: (week, id, scale, day) => addToPlan(db, week, id, scale, day),
     updateEntry: (id, patch) => updateEntry(db, id, patch),
     removeEntry: (id) => removeEntry(db, id),
     copyPlan: (from, to) => copyPlan(db, from, to),
     planCost: (week) => planCost(session, week),
     recipeFits: (ids) => recipeFits(db, ids),
+    setPantry: (ingredientId, status) =>
+      setPantry(db, userId, ingredientId, status),
   }
 }
 
@@ -115,7 +117,6 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
 
   const at = route(path)
   const signedIn = !!(auth && session && api)
-  const householdSize = prefs?.householdSize ?? 1
   // Any date in the address shows the week it falls in.
   const week =
     at.page === 'plan' && at.week
@@ -166,25 +167,13 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
             />
           )}
           {at.page === 'recipe' && (
-            <RecipePage
-              key={at.id}
-              id={at.id}
-              api={api}
-              householdSize={householdSize}
-            />
+            <RecipePage key={at.id} id={at.id} api={api} />
           )}
           {at.page === 'new' && <RecipeForm api={api} />}
           {at.page === 'edit' && (
             <RecipeForm key={at.id} api={api} recipeId={at.id} />
           )}
-          {at.page === 'plan' && (
-            <PlanPage
-              key={week}
-              api={api}
-              week={week}
-              householdSize={householdSize}
-            />
-          )}
+          {at.page === 'plan' && <PlanPage key={week} api={api} week={week} />}
           {at.page === 'settings' && (
             <Settings
               api={api}

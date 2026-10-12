@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { DietChips } from './Library.tsx'
 import { dietLabels, sourceLabel } from './library.ts'
 import { navigate } from './navigation.ts'
-import { weekOf, type Fit } from './plan.ts'
+import { weekOf, type Fit, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
@@ -12,7 +12,7 @@ export interface RecipePageApi {
   addToPlan(
     weekStart: string,
     recipeId: string,
-    servings: number,
+    scale?: Scale,
     day?: string | null,
   ): Promise<void>
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
@@ -28,16 +28,7 @@ function minutes(m: number | null): string | null {
 /** One recipe: where it's from, its diet labels, its ingredients (starred
  *  when their brand decides a label) and, for recipes we may store in full,
  *  its steps. For other people's recipes the source's page is the main action. */
-export function RecipePage({
-  id,
-  api,
-  householdSize = 1,
-}: {
-  id: string
-  api: RecipePageApi
-  /** How many servings to plan by default. */
-  householdSize?: number
-}) {
+export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
   const [recipe, setRecipe] = useState<RecipeDetail | null | undefined>(
     undefined,
   )
@@ -66,7 +57,7 @@ export function RecipePage({
   async function plan() {
     setPlanned('adding')
     try {
-      await api.addToPlan(weekOf(), id, householdSize)
+      await api.addToPlan(weekOf(), id, 1)
       setPlanned('added')
     } catch {
       setPlanned('error')

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
 import { route } from './navigation.ts'
-import { weekOf, type Fit } from './plan.ts'
+import { weekOf, type Fit, type Scale } from './plan.ts'
 import { RecipeForm } from './RecipeForm.tsx'
 import { RecipePage } from './RecipePage.tsx'
 import { Settings } from './Settings.tsx'
@@ -100,9 +100,7 @@ describe('RecipePage', () => {
   const api = (r: RecipeDetail | null, fit: Fit = 'fits') => ({
     recipe: vi.fn(async () => r),
     remove: vi.fn(async () => {}),
-    addToPlan: vi.fn(
-      async (_week: string, _id: string, _servings: number) => {},
-    ),
+    addToPlan: vi.fn(async (_week: string, _id: string, _scale?: Scale) => {}),
     recipeFits: vi.fn(async (ids: string[]) =>
       Object.fromEntries(ids.map((id) => [id, fit])),
     ),
@@ -144,13 +142,13 @@ describe('RecipePage', () => {
     expect(screen.getAllByText('Soup')).toHaveLength(1)
   })
 
-  it('adds the recipe to this week for the household', async () => {
+  it('adds the recipe to this week at full size', async () => {
     const fake = api(SOUP)
-    render(<RecipePage id={SOUP.id} api={fake} householdSize={3} />)
+    render(<RecipePage id={SOUP.id} api={fake} />)
     await userEvent.click(
       await screen.findByRole('button', { name: "Add to this week's plan" }),
     )
-    expect(fake.addToPlan).toHaveBeenCalledWith(weekOf(), SOUP.id, 3)
+    expect(fake.addToPlan).toHaveBeenCalledWith(weekOf(), SOUP.id, 1)
     expect(
       await screen.findByRole('link', { name: 'See the plan' }),
     ).toHaveAttribute('href', '/plan')

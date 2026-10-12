@@ -218,7 +218,7 @@ def test_a_planned_week_is_priced_from_the_database(
     from app.recipes.routes import ManualRecipe, _manual_payload
 
     user = make_user()
-    body = ManualRecipe(title="Rice bowl", ingredients="1 cup red lentils\nsalt", servings=2)
+    body = ManualRecipe(title="Lentils", ingredients="1 cup red lentils\nsalt", servings=2)
     row = db.execute(
         "select save_manual_recipe(%s::jsonb)", [json.dumps(_manual_payload(body, user, None))]
     ).fetchone()
@@ -230,7 +230,7 @@ def test_a_planned_week_is_priced_from_the_database(
     assert lentils is not None and lentils[0] is not None
     db.execute(
         "insert into prices (source, ingredient_id, user_id, price_cents, quantity, unit)"
-        " values ('user', %s, %s, 400, 2, 'cup')",
+        " values ('user', %s, %s, 300, 16, 'oz')",
         [lentils[0], user],
     )
     plan = db.execute(
@@ -240,12 +240,15 @@ def test_a_planned_week_is_priced_from_the_database(
     ).fetchone()
     assert plan is not None
     db.execute(
-        "insert into meal_plan_entries (meal_plan_id, recipe_id, servings) values (%s, %s, 4)",
+        "insert into meal_plan_entries (meal_plan_id, recipe_id, scale) values (%s, %s, 2)",
         [plan[0], row[0]["recipe_id"]],
     )
     inputs = db.execute("select plan_cost_inputs(%s, '2026-10-12')", [user]).fetchone()
     assert inputs is not None
     cost = plan_cost(inputs[0], on=date(2026, 10, 12))
-    # Doubled to 2 cups at the user's $2/cup; salt has no quantity to price.
-    assert (cost.total_cents, cost.budget_cents, cost.unpriced_lines) == (400, 6000, 1)
-    assert not cost.estimated
+    by_name = {i.name: i for i in cost.items}
+    # Doubled, 2 cups of lentils still fit in one 16 oz bag, at the user's price.
+    assert (by_name["lentils"].packages, by_name["lentils"].cents) == (1, 300)
+    # Salt is a staple: on hand, so not bought.
+    assert by_name["salt"].buy is False
+    assert (cost.total_cents, cost.budget_cents, cost.estimated) == (300, 6000, False)
