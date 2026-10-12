@@ -16,6 +16,7 @@ import {
 } from './library.ts'
 import { route, usePath } from './navigation.ts'
 import { Browse, type BrowseApi } from './Browse.tsx'
+import { clearBrowseCache } from './browseCache.ts'
 import { clearPage, pendingPage } from './page.ts'
 import { PlanPage, type PlanApi } from './Plan.tsx'
 import {
@@ -78,7 +79,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     copyPlan: (from, to) => copyPlan(db, from, to),
     planCost: (week) => planCost(session, week),
     recipeFits: (ids) => recipeFits(db, ids),
-    searchCatalog: (q) => searchCatalog(db, q),
+    searchCatalog: (q, offset) => searchCatalog(db, q, offset),
     saveToLibrary: (id) => saveToLibrary(db, userId, id),
     setPantry: (ingredientId, status) =>
       setPantry(db, userId, ingredientId, status),
@@ -188,7 +189,10 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
             <Settings
               api={api}
               email={session.user.email}
-              onSaved={setPrefs}
+              onSaved={(p) => {
+                clearBrowseCache() // Find's ranking depends on preferences
+                setPrefs(p)
+              }}
               onSignOut={() => void auth.signOut()}
             />
           )}

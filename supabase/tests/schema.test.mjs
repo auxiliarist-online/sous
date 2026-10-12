@@ -990,7 +990,7 @@ describe('ingredient parsing', () => {
       'select count(*)::int as n from ingredient_aliases',
     )
     // Seed migration + more_ingredients + everyday_ingredients (TYL-60).
-    assert.equal(rows[0].n, 159 + 283 + 235)
+    assert.equal(rows[0].n, 159 + 283 + 235 + 322) // + ingredients_from_recipes
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
@@ -2143,6 +2143,20 @@ describe('bulk import', () => {
     assert.equal(rows[0].n, 2)
   })
 
+  it('records each catalog recipe’s courses', async () => {
+    await as('service_role', null, () =>
+      db.query('select import_recipes($1)', [
+        JSON.stringify([
+          { ...page('d', 'Bulk D'), courses: ['dessert', 'not-a-course'] },
+        ]),
+      ]),
+    )
+    const { rows } = await db.query(
+      "select courses from recipes where source_url = 'https://bulk-test.example/d/'",
+    )
+    assert.deepEqual(rows[0].courses, ['dessert'])
+  })
+
   it('is only for the API, and only for reasonable batches', async () => {
     await assert.rejects(
       as('authenticated', ALICE, () =>
@@ -2160,5 +2174,187 @@ describe('bulk import', () => {
       ),
       /at most 200/,
     )
+  })
+})
+
+describe('find: search by intent, ranked for the user (Find)', () => {
+  const VEG = '00000000-0000-0000-0000-0000000000a7'
+  const ids = {}
+  const ing = async (name) =>
+    (await db.query('select id from ingredients where name = $1', [name]))
+      .rows[0].id
+
+  // A public recipe with real amounts: [name, quantity, unit].
+  async function dish(title, lines, extra = {}) {
+    const { rows } = await db.query(
+      `insert into recipes (title, source_url, status, visibility, total_minutes)
+       values ($1, $2, 'active', 'public', $3) returning id`,
+      [
+        title,
+        `https://find-test.example/${encodeURIComponent(title)}`,
+        extra.minutes ?? null,
+      ],
+    )
+    const id = rows[0].id
+    for (const [n, [name, qty, unit]] of lines.entries()) {
+      await db.query(
+        `insert into recipe_ingredients (recipe_id, line_no, raw_text, ingredient_id, quantity, unit)
+         values ($1, $2, $3, $4, $5, $6)`,
+        [
+          id,
+          n,
+          `${qty} ${unit} ${name}`,
+          name ? await ing(name) : null,
+          qty,
+          unit,
+        ],
+      )
+    }
+    await db.query('select refresh_recipe_diets($1)', [id])
+    for (const c of extra.cuisines ?? []) {
+      await db.query(
+        'insert into recipe_cuisines (recipe_id, cuisine_slug) values ($1, $2)',
+        [id, c],
+      )
+    }
+    return id
+  }
+
+  const search = (q, user = VEG, limit = 20) =>
+    as(
+      'authenticated',
+      user,
+      async () =>
+        (await db.query('select * from search_recipes($1, $2)', [q, limit]))
+          .rows,
+    )
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1)', [VEG])
+    await db.query(
+      "insert into user_diets (user_id, diet_slug) values ($1, 'vegetarian')",
+      [VEG],
+    )
+    ids.frittata = await dish('Find Frittata', [
+      ['eggs', 8, 'each'],
+      ['cheddar cheese', 0.5, 'cup'],
+    ])
+    ids.cake = await dish(
+      'Find Sponge Cake',
+      [
+        ['eggs', 2, 'each'],
+        ['all-purpose flour', 2, 'cup'],
+        ['sugar', 1.5, 'cup'],
+      ],
+      { minutes: 60 },
+    )
+    ids.chickenEggs = await dish('Find Chicken and Egg Rice', [
+      ['chicken', 1, 'lb'],
+      ['eggs', 2, 'each'],
+    ])
+    ids.mystery = await dish('Find Mystery Egg Pie', [
+      ['eggs', 4, 'each'],
+      [null, 1, 'cup'],
+    ])
+    ids.dal = await dish('Find Quick Dal', [['lentils', 1, 'cup']], {
+      minutes: 25,
+      cuisines: ['indian'],
+    })
+  })
+
+  it('weighs each ingredient line', async () => {
+    const { rows } = await db.query(
+      'select grams::float from recipe_ingredients where recipe_id = $1 order by line_no',
+      [ids.frittata],
+    )
+    assert.equal(rows[0].grams, 400) // 8 eggs × 50 g
+    assert.ok(rows[1].grams > 50)
+  })
+
+  it('finds what features the ingredient, not just what mentions it', async () => {
+    const titles = (await search('eggs')).map((r) => r.title)
+    assert.deepEqual(
+      titles.filter((t) => t.startsWith('Find ')),
+      ['Find Frittata', 'Find Sponge Cake', 'Find Mystery Egg Pie'],
+    )
+  })
+
+  it("leaves out recipes that break the user's diet, and puts unsure ones last", async () => {
+    const rows = await search('eggs')
+    assert.ok(!rows.some((r) => r.title === 'Find Chicken and Egg Rice'))
+    const pie = rows.find((r) => r.title === 'Find Mystery Egg Pie')
+    assert.equal(pie.fit, 'unknown')
+    assert.ok(pie.why.includes('not every ingredient could be checked'))
+    // Without rules, the chicken dish is there.
+    const anyone = (await search('eggs', ALICE)).map((r) => r.title)
+    assert.ok(anyone.includes('Find Chicken and Egg Rice'))
+  })
+
+  it('reads cuisines and time from the query', async () => {
+    assert.deepEqual(
+      (await search('quick indian')).map((r) => r.title),
+      ['Find Quick Dal'],
+    )
+    assert.ok(
+      !(await search('under 30 eggs')).some(
+        (r) => r.title === 'Find Sponge Cake',
+      ),
+    )
+  })
+
+  it('searches titles with words it does not understand', async () => {
+    assert.deepEqual(
+      (await search('sponge')).map((r) => r.title),
+      ['Find Sponge Cake'],
+    )
+  })
+
+  it('sinks recipes with ingredients the user dislikes', async () => {
+    const USER = '00000000-0000-0000-0000-0000000000a8'
+    await db.query('insert into auth.users (id) values ($1)', [USER])
+    await db.query(
+      'insert into user_disliked_ingredients (user_id, ingredient_id) values ($1, $2)',
+      [USER, await ing('cheddar cheese')],
+    )
+    const titles = (await search('eggs', USER))
+      .map((r) => r.title)
+      .filter((t) => t.startsWith('Find '))
+    assert.equal(titles.at(-1), 'Find Frittata')
+  })
+
+  it('filters by course, and sinks sauces unless asked for', async () => {
+    const sauce = await dish('Find Egg Sauce', [['eggs', 6, 'each']])
+    const breakfast = await dish('Find Breakfast Hash', [
+      ['eggs', 2, 'each'],
+      ['potatoes', 2, 'each'],
+    ])
+    await db.query("update recipes set courses = '{sauce}' where id = $1", [
+      sauce,
+    ])
+    await db.query("update recipes set courses = '{breakfast}' where id = $1", [
+      breakfast,
+    ])
+    assert.deepEqual(
+      (await search('breakfast eggs')).map((r) => r.title),
+      ['Find Breakfast Hash'],
+    )
+    const eggs = (await search('eggs', ALICE)).map((r) => r.title)
+    assert.ok(eggs.indexOf('Find Egg Sauce') > eggs.indexOf('Find Frittata'))
+  })
+
+  it('reads the query into parts', async () => {
+    const { rows } = await db.query(
+      "select * from read_search_query('Quick vegetarian Thai red lentils curry')",
+    )
+    const q = rows[0]
+    assert.equal(q.max_minutes, 30)
+    assert.deepEqual(q.diet_slugs, ['vegetarian'])
+    assert.deepEqual(q.cuisine_slugs, ['thai'])
+    assert.equal(q.ingredient_ids.length, 1)
+    assert.equal(q.rest, 'curry')
+    const { rows: d } = await db.query(
+      "select course_slugs from read_search_query('easy desserts')",
+    )
+    assert.deepEqual(d[0].course_slugs, ['dessert'])
   })
 })

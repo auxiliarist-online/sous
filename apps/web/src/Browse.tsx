@@ -1,51 +1,118 @@
-import { useEffect, useState } from 'react'
-import type { Fit } from './plan.ts'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from './router.tsx'
-import type { CatalogRecipe } from './sous.ts'
+import { browseCache as cache, type BrowseResults } from './browseCache.ts'
+import { PAGE_SIZE, type CatalogRecipe } from './sous.ts'
 
 export interface BrowseApi {
-  searchCatalog(query: string): Promise<CatalogRecipe[]>
-  recipeFits(ids: string[]): Promise<Record<string, Fit>>
+  searchCatalog(query: string, offset?: number): Promise<CatalogRecipe[]>
 }
 
-/** Find recipes in the shared catalog (openly licensed and federal sources),
- *  leaving out any that break the user's diets or allergies. */
+type Results = BrowseResults
+
+// Where the user had scrolled to in a list, for Back from a recipe.
+const SCROLL_KEY = 'sous:browse-scroll'
+
+function queryFromAddress(): string {
+  return new URLSearchParams(window.location.search).get('q') ?? ''
+}
+
+function savedScroll(query: string): number | null {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) ?? 'null') as {
+      q: string
+      y: number
+    } | null
+    return saved && saved.q === query ? saved.y : null
+  } catch {
+    return null
+  }
+}
+
+function saveScroll(query: string) {
+  try {
+    sessionStorage.setItem(
+      SCROLL_KEY,
+      JSON.stringify({ q: query, y: window.scrollY }),
+    )
+  } catch {
+    // Storage off: Back still shows the same results, just from the top.
+  }
+}
+
+/** Find recipes in the shared catalog. The search reads what the user means
+ *  ("eggs" finds dishes built on eggs, "quick vegetarian dinner") and ranks
+ *  results for them; recipes that break their rules never show. */
 export function Browse({ api }: { api: BrowseApi }) {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<CatalogRecipe[] | null>(null)
-  const [fits, setFits] = useState<Record<string, Fit>>({})
+  const [query, setQuery] = useState(queryFromAddress)
+  // Results live in the cache; this only makes the page re-render.
+  const [, setVersion] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [failed, setFailed] = useState(false)
+  const restored = useRef(false)
+  const key = query.trim()
+  const results: Results | null = cache.get(key) ?? null
+
+  // Keep the search in the address, so Back and reload return to it.
+  useEffect(() => {
+    const url = key ? `/browse?q=${encodeURIComponent(key)}` : '/browse'
+    if (url !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, '', url)
+    }
+  }, [key])
 
   useEffect(() => {
+    if (cache.has(key)) return
     let live = true
     const timer = setTimeout(() => {
-      api
-        .searchCatalog(query)
-        .then(async (found) => {
-          const f = await api.recipeFits(found.map((r) => r.id))
+      api.searchCatalog(key, 0).then(
+        (items) => {
+          cache.set(key, { items, more: items.length === PAGE_SIZE })
           if (!live) return
-          setFits(f)
-          setResults(found)
+          setVersion((v) => v + 1)
           setFailed(false)
-        })
-        .catch(() => live && setFailed(true))
-    }, 250)
+        },
+        () => live && setFailed(true),
+      )
+    }, 300)
     return () => {
       live = false
       clearTimeout(timer)
     }
-  }, [api, query])
+  }, [api, key])
 
-  const shown = (results ?? []).filter((r) => fits[r.id] !== 'excluded')
-  const hidden = (results?.length ?? 0) - shown.length
+  // Back from a recipe: return to where the user was in the list.
+  useLayoutEffect(() => {
+    if (restored.current || !results) return
+    restored.current = true
+    const y = savedScroll(key)
+    if (y !== null) window.scrollTo?.(0, y)
+  }, [results, key])
+
+  async function showMore() {
+    if (!results) return
+    setLoadingMore(true)
+    try {
+      const next = await api.searchCatalog(key, results.items.length)
+      const r = {
+        items: [...results.items, ...next],
+        more: next.length === PAGE_SIZE,
+      }
+      cache.set(key, r)
+      setVersion((v) => v + 1)
+    } catch {
+      setFailed(true)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   return (
     <section className="card">
       <h2>Find recipes</h2>
       <p className="muted small">
-        Recipes everyone can use, with their steps: the Wikibooks Cookbook and
-        other open sources. Save one to plan it, or add it to this week from its
-        page.
+        Search by ingredient, dish, cuisine or time: “eggs”, “quick vegetarian
+        dinner”, “thai soup”, “dessert”. Recipes that don't fit your diets or
+        allergies are left out.
       </p>
       <label htmlFor="catalog-search" className="visually-hidden">
         Search recipes
@@ -53,7 +120,7 @@ export function Browse({ api }: { api: BrowseApi }) {
       <input
         id="catalog-search"
         type="search"
-        placeholder="Search: dal, chili, banana bread…"
+        placeholder="What do you feel like?"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
@@ -63,40 +130,42 @@ export function Browse({ api }: { api: BrowseApi }) {
         </p>
       )}
       {results === null && !failed && <p className="muted">Loading…</p>}
-      {results && (
-        <ul className="recipes" aria-label="Recipes found">
-          {shown.map((r) => (
+      {results && results.items.length > 0 && (
+        <ul className="recipes found" aria-label="Recipes found">
+          {results.items.map((r) => (
             <li key={r.id}>
-              <Link to={`/recipe/${r.id}`}>{r.title}</Link>
+              <Link to={`/recipe/${r.id}`} onNavigate={() => saveScroll(key)}>
+                {r.title}
+              </Link>
               <span className="small muted">
-                {[r.sourceName, r.totalMinutes ? `${r.totalMinutes} min` : null]
+                {[
+                  r.sourceName,
+                  r.totalMinutes ? `${r.totalMinutes} min` : null,
+                  ...r.why,
+                ]
                   .filter(Boolean)
                   .join(' · ')}
-                {fits[r.id] === 'check_label' && (
-                  <span
-                    className="star"
-                    aria-label="fits if you check the label"
-                  >
-                    {' '}
-                    *
-                  </span>
-                )}
               </span>
             </li>
           ))}
         </ul>
       )}
-      {results && shown.length === 0 && (
+      {results && results.items.length === 0 && (
         <p className="muted small">
-          {query.trim() ? `Nothing matches “${query}”.` : 'No recipes yet.'}
+          {key
+            ? `Nothing that fits your preferences matches “${key}”. Try another ingredient or dish.`
+            : 'No recipes yet.'}
         </p>
       )}
-      {hidden > 0 && (
-        <p className="muted small">
-          {hidden} recipe{hidden === 1 ? '' : 's'} left out because{' '}
-          {hidden === 1 ? "it doesn't" : "they don't"} fit your diets or
-          allergies.
-        </p>
+      {results?.more && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={loadingMore}
+          onClick={() => void showMore()}
+        >
+          {loadingMore ? 'Loading…' : 'Show more'}
+        </button>
       )}
     </section>
   )

@@ -1,56 +1,109 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Browse } from './Browse.tsx'
-import type { Fit } from './plan.ts'
+import { clearBrowseCache } from './browseCache.ts'
 import type { CatalogRecipe } from './sous.ts'
 
-const DAL: CatalogRecipe = {
+const FRITTATA: CatalogRecipe = {
   id: 'a',
-  title: 'Dal',
+  title: 'Frittata',
   sourceName: 'Wikibooks Cookbook',
-  totalMinutes: 40,
+  totalMinutes: 25,
+  fit: 'fits',
+  why: ['a main ingredient'],
 }
-const SATAY: CatalogRecipe = {
+const PIE: CatalogRecipe = {
   id: 'b',
-  title: 'Chicken satay',
+  title: 'Egg pie',
   sourceName: 'Wikibooks Cookbook',
   totalMinutes: null,
+  fit: 'unknown',
+  why: ['not every ingredient could be checked'],
 }
 
-function fakeApi(fits: Record<string, Fit> = {}) {
+function fakeApi(pages: CatalogRecipe[][] = [[FRITTATA, PIE]]) {
   return {
-    searchCatalog: vi.fn(async (_q: string) => [DAL, SATAY]),
-    recipeFits: vi.fn(async (_ids: string[]) => fits),
+    searchCatalog: vi.fn(async (_q: string, offset = 0) =>
+      offset === 0 ? pages[0] : (pages[1] ?? []),
+    ),
   }
 }
 
+afterEach(() => {
+  clearBrowseCache()
+  sessionStorage.clear()
+})
+
 describe('Browse', () => {
-  it('lists catalog recipes with their source, linking to each', async () => {
+  it('shows results with their source, time and why they rank', async () => {
     render(<Browse api={fakeApi()} />)
     const list = await screen.findByRole('list', { name: 'Recipes found' })
-    expect(within(list).getByRole('link', { name: 'Dal' })).toHaveAttribute(
-      'href',
-      '/recipe/a',
-    )
     expect(
-      within(list).getByText('Wikibooks Cookbook · 40 min'),
+      within(list).getByRole('link', { name: 'Frittata' }),
+    ).toHaveAttribute('href', '/recipe/a')
+    expect(
+      within(list).getByText('Wikibooks Cookbook · 25 min · a main ingredient'),
+    ).toBeInTheDocument()
+    expect(
+      within(list).getByText(/not every ingredient could be checked/),
     ).toBeInTheDocument()
   })
 
-  it('leaves out recipes that break the user’s rules', async () => {
-    render(<Browse api={fakeApi({ b: 'excluded' })} />)
-    const list = await screen.findByRole('list', { name: 'Recipes found' })
-    expect(within(list).queryByText('Chicken satay')).toBeNull()
-    expect(screen.getByText(/1 recipe left out/)).toBeInTheDocument()
+  it('keeps the search in the address, and shows it again on Back', async () => {
+    const api = fakeApi()
+    const { unmount } = render(<Browse api={api} />)
+    await userEvent.type(screen.getByLabelText('Search recipes'), 'eggs')
+    await waitFor(() =>
+      expect(api.searchCatalog).toHaveBeenLastCalledWith('eggs', 0),
+    )
+    expect(window.location.search).toBe('?q=eggs')
+    await screen.findByRole('link', { name: 'Frittata' })
+    unmount()
+
+    // Back: the same search, results at once, no new request.
+    const calls = api.searchCatalog.mock.calls.length
+    render(<Browse api={api} />)
+    expect(screen.getByLabelText('Search recipes')).toHaveValue('eggs')
+    expect(screen.getByRole('link', { name: 'Frittata' })).toBeInTheDocument()
+    expect(api.searchCatalog.mock.calls.length).toBe(calls)
   })
 
-  it('searches as the user types', async () => {
-    const api = fakeApi()
+  it('remembers the scroll position when a recipe is opened', async () => {
+    render(<Browse api={fakeApi()} />)
+    await userEvent.click(await screen.findByRole('link', { name: 'Frittata' }))
+    expect(
+      JSON.parse(sessionStorage.getItem('sous:browse-scroll')!),
+    ).toMatchObject({
+      q: '',
+    })
+  })
+
+  it('shows more results on request', async () => {
+    const full = Array.from({ length: 30 }, (_, i) => ({
+      ...FRITTATA,
+      id: `r${i}`,
+      title: `Recipe ${i}`,
+    }))
+    const api = fakeApi([full, [PIE]])
     render(<Browse api={api} />)
-    await userEvent.type(screen.getByLabelText('Search recipes'), 'dal')
-    await waitFor(() =>
-      expect(api.searchCatalog).toHaveBeenLastCalledWith('dal'),
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Show more' }),
     )
+    expect(
+      await screen.findByRole('link', { name: 'Egg pie' }),
+    ).toBeInTheDocument()
+    expect(api.searchCatalog).toHaveBeenLastCalledWith('', 30)
+    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
+  })
+
+  it('explains an empty result', async () => {
+    render(<Browse api={{ searchCatalog: vi.fn(async () => []) }} />)
+    await userEvent.type(screen.getByLabelText('Search recipes'), 'chicken')
+    expect(
+      await screen.findByText(
+        /Nothing that fits your preferences matches “chicken”/,
+      ),
+    ).toBeInTheDocument()
   })
 })

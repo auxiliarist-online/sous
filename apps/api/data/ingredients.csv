@@ -164,7 +164,7 @@ roasted red peppers,pantry,,,jarred roasted red peppers
 sun-dried tomatoes,pantry,,,sundried tomatoes|sun dried tomatoes
 capers,pantry,,,
 dill pickles,pantry,,,pickles|pickle
-canned green chiles,pantry,,,green chiles|diced green chiles
+canned green chiles,pantry,,,diced green chiles
 chipotle peppers in adobo,international,,,chipotles in adobo|chipotle in adobo|adobo sauce
 refried beans,pantry,,meat|pork,
 salsa,pantry,,,jarred salsa
@@ -488,3 +488,69 @@ frozen raspberries,frozen,,,
 frozen cherries,frozen,,,
 frozen peaches,frozen,,,
 frozen dumplings,frozen,gluten,meat|pork|poultry|shellfish|soy|egg,potstickers|gyoza
+beef,meat_seafood,meat,,lean beef|beef meat|stewing beef
+chicken,meat_seafood,poultry,,chicken pieces|chicken meat|boneless chicken meat|cut-up chicken
+pork,meat_seafood,meat|pork,,pork meat
+meat,meat_seafood,meat,pork|poultry,assorted meat|ground meat|minced meat
+turkey,meat_seafood,poultry,,turkey meat
+veal,meat_seafood,meat,,
+mutton,meat_seafood,meat,,
+goat meat,meat_seafood,meat,,goat
+rabbit,meat_seafood,meat,,
+tripe,meat_seafood,meat,,
+corned beef,meat_seafood,meat,,
+salt pork,meat_seafood,meat|pork,,
+suet,meat_seafood,meat,,beef suet
+bacon fat,meat_seafood,meat|pork,,bacon grease|bacon drippings
+fish,meat_seafood,fish,,fresh fish|fish fillets|fish fillet|eel
+dried fish,international,fish,,dryfish|stockfish|smoked fish|dried stockfish
+crayfish,meat_seafood,shellfish,,ground crayfish|dried crayfish
+dashi,international,fish,,dashi stock
+stock,pantry,,meat|poultry|fish,broth
+meat stock,pantry,meat,,
+pork stock,pantry,meat|pork,,pork broth
+bouillon cubes,pantry,,meat|poultry|gluten|soy|dairy,stock cube|stock cubes|seasoning cube|seasoning cubes|maggi cube|bouillon powder|beef bouillon cubes|bouillon cube
+gravy,pantry,,meat|poultry|gluten|dairy,
+cream of mushroom soup,pantry,dairy|gluten,,condensed cream of mushroom soup
+cream of chicken soup,pantry,poultry|dairy|gluten,,condensed cream of chicken soup
+cheese,dairy_eggs,dairy,animal_rennet,white cheese|curd cheese|grated cheese|shredded cheese
+margarine,dairy_eggs,,dairy,
+palm oil,international,,,red palm oil
+lemon juice,produce,,,
+lime juice,produce,,,
+fresh chiles,produce,,,chiles|chile pepper|chile peppers|chillies|chilies|red chillies|red chiles|red chile peppers|green chillies|green chile peppers|green chile pepper|indian green chiles|fresh chile pepper|fresh green chile peppers|fresh red chile pepper
+galangal,produce,,,
+pandan leaves,produce,,,pandan leaf|pandan
+banana leaves,produce,,,banana leaf
+cassava,produce,,,yuca|manioc
+yam,produce,,,yams|white yam
+cocoyam,produce,,,taro|eddoe
+mixed herbs,spices,,,herbs|fresh herbs|bouquet garni|dried mixed herbs
+mixed spice,spices,,,spices|herbs and spices|allspice blend
+mace,spices,,,ground mace
+bbq rub,spices,,,barbecue rub|rib rub|chop rub|steak seasoning|montreal steak seasoning|prime rib seasoning
+semolina,pantry,gluten,,semolina flour|fine semolina|durum semolina
+cassava flour,pantry,,,tapioca flour
+tapioca starch,pantry,,,
+potato starch,pantry,,,potato flour
+arrowroot,pantry,,,arrowroot starch|arrowroot powder
+matzo meal,pantry,gluten,,matzah meal
+split peas,pantry,,,toor dal|moong dal|moong dhal|chana dal|yellow split peas|green split peas
+golden syrup,pantry,,,light treacle
+jaggery,international,,,gur|panela|piloncillo
+vanilla sugar,pantry,,,
+xanthan gum,pantry,,,
+citric acid,pantry,,,
+food coloring,pantry,,,red food coloring|food colouring|green food coloring
+rose water,international,,,rosewater
+orange blossom water,international,,,orange flower water
+maraschino cherries,pantry,,,
+chocolate syrup,pantry,,dairy,
+marzipan,pantry,tree_nut,egg,almond paste
+yellow cake mix,pantry,gluten,egg|dairy|soy,cake mix|white cake mix
+tomato juice,beverages,,,
+cola,beverages,,,coca-cola|coke
+wine,beverages,alcohol,,cooking wine
+tequila,beverages,alcohol,,
+gin,beverages,alcohol,,
+coffee liqueur,beverages,alcohol,,kahlua

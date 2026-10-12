@@ -6,15 +6,19 @@ export function Link({
   to,
   className,
   children,
+  onNavigate,
 }: {
   to: string
   className?: string
   children: ReactNode
+  /** Runs just before navigating (e.g. to remember the scroll position). */
+  onNavigate?: () => void
 }) {
   function click(e: MouseEvent<HTMLAnchorElement>) {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)
       return
     e.preventDefault()
+    onNavigate?.()
     navigate(to)
   }
   return (
