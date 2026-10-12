@@ -1,0 +1,12 @@
+kind,pattern,reason
+ingredient,\bplacenta\b,human placenta
+title,\bplacenta\b,human placenta
+title,^dog biscuits$,pet food
+title,\b(dog|cat) (food|treats?)\b,pet food
+ingredient,\bdog\b.*\bslaughtered\b,dog meat
+ingredient,\bdog meat\b,dog meat
+title,^grilled dog$,dog meat
+ingredient,\bhorse meat\b,horse meat
+title,\bhorse\b,horse meat
+title,\b(green|sea) turtle\b,endangered species
+ingredient,\b(green|sea) turtle\b,endangered species

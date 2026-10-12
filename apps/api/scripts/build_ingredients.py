@@ -16,6 +16,9 @@ from typing import Any
 
 API = Path(__file__).resolve().parents[1]
 CSV = API / "data" / "ingredients.csv"
+# Other names for ingredients that aren't in the CSV (seeded by earlier
+# migrations, like sugar or vegetable oil): alias,ingredient.
+EXTRA_ALIASES = API / "data" / "extra_aliases.csv"
 MIGRATIONS = API.parent.parent / "supabase" / "migrations"
 
 AISLES = {
@@ -75,6 +78,14 @@ def load() -> list[dict[str, Any]]:
         rows.append(
             {"name": name, "aisle": r["aisle"], "contains": contains, "may": may, "aliases": al}
         )
+    for n, r in enumerate(csv.DictReader(EXTRA_ALIASES.open(encoding="utf-8")), 2):
+        a, owner = r["alias"].strip(), r["ingredient"].strip()
+        if a != a.lower():
+            errors.append(f"extra_aliases.csv line {n}: alias must be lowercase: {a}")
+        if a in aliases or a in names:
+            errors.append(f"extra_aliases.csv line {n}: alias {a!r} already used")
+        aliases[a] = owner
+        rows.append({"extra_alias": a, "name": owner})
     for a, owner in aliases.items():
         if a in names:
             errors.append(f"alias {a!r} (of {owner}) is also an ingredient name")
@@ -88,9 +99,18 @@ def migration(rows: list[dict[str, Any]]) -> str:
         f"  ({sql_text(r['name'])}, {sql_text(r['aisle'])}, {sql_array(r['contains'])}, "
         f"{sql_array(r['may'])})"
         for r in rows
+        if "extra_alias" not in r
     )
     aliases = ",\n".join(
-        f"  ({sql_text(a)}, {sql_text(r['name'])})" for r in rows for a in r["aliases"]
+        f"  ({sql_text(a)}, {sql_text(r['name'])})"
+        for r in rows
+        if "extra_alias" not in r
+        for a in r["aliases"]
+    )
+    extra = ",\n".join(
+        f"  ({sql_text(r['extra_alias'])}, {sql_text(r['name'])})"
+        for r in rows
+        if "extra_alias" in r
     )
     return f"""-- More canonical ingredients (TYL-9), generated from apps/api/data/ingredients.csv
 -- by apps/api/scripts/build_ingredients.py. Edit the CSV and generate a new
@@ -111,6 +131,16 @@ from (values
 ) as v(alias, canonical)
 join public.ingredients i on lower(i.name) = v.canonical
 on conflict (alias) do nothing;
+
+-- data/extra_aliases.csv is authoritative: it adds aliases for ingredients
+-- seeded elsewhere, and moves an alias that pointed at the wrong ingredient.
+insert into public.ingredient_aliases (alias, ingredient_id)
+select v.alias, i.id
+from (values
+{extra}
+) as v(alias, canonical)
+join public.ingredients i on lower(i.name) = v.canonical
+on conflict (alias) do update set ingredient_id = excluded.ingredient_id;
 """
 
 
@@ -122,6 +152,6 @@ if __name__ == "__main__":
     if out.exists():
         sys.exit(f"{out.name} exists; migrations are append-only, pick a new name")
     out.write_text(migration(rows), encoding="utf-8")
-    print(
-        f"wrote {out.name}: {len(rows)} ingredients, {sum(len(r['aliases']) for r in rows)} aliases"
-    )
+    ingredients = [r for r in rows if "extra_alias" not in r]
+    total = sum(len(r["aliases"]) for r in ingredients) + len(rows) - len(ingredients)
+    print(f"wrote {out.name}: {len(ingredients)} ingredients, {total} aliases")

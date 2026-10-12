@@ -108,6 +108,40 @@ def _cuisines(wikitext: str, summary_category: str) -> list[str]:
     return sorted(found)
 
 
+# Words in a page's categories -> our courses, most specific first. "Baking
+# recipes" says nothing about the course, so it isn't here.
+COURSE_WORDS = (
+    (
+        r"sauce|condiment|dressing|\bdip\b|spice (mix|blend)|seasoning|marinade|\brubs?\b"
+        r"|paste|chutney|relish|pickle|jam|jelly|preserve",
+        "sauce",
+    ),
+    (r"beverage|drink|cocktail|smoothie|\btea\b|coffee|punch|lemonade|liqueur", "drink"),
+    (r"dessert|cake|cookie|biscuit|\bpies?\b|pudding|candy|confection|sweet", "dessert"),
+    (r"breakfast|brunch", "breakfast"),
+    (r"\bsoup|stew|chowder|broth", "soup"),
+    (r"salad", "salad"),
+    (r"side dish|\bsides?\b", "side"),
+    (r"main (course|dish)|entr[eé]e", "main"),
+    (r"appetizer|snack|hors d", "snack"),
+    (r"\bbreads?\b", "bread"),
+)
+
+
+def _courses(wikitext: str, summary_category: str) -> list[str]:
+    names = [summary_category, *re.findall(r"\[\[\s*Category:([^\]|]+)", wikitext, re.I)]
+    found = set()
+    for name in names:
+        text = name.lower().replace("_", " ")
+        if text.startswith("recipes using") or "recipes with" in text:
+            continue  # "Recipes using sugar" is about an ingredient
+        for pattern, course in COURSE_WORDS:
+            if re.search(pattern, text):
+                found.add(course)
+                break
+    return sorted(found)
+
+
 def _list_items(lines: list[str], marker: str, join_nested: bool = False) -> list[str]:
     """List items. With join_nested (steps), nested lines ("#:" notes, "#*"
     sub-points) belong to the item above them."""
@@ -169,5 +203,6 @@ def parse(title: str, wikitext: str) -> RecipeDraft | None:
         total_minutes=_minutes(info.get("time", "")),
         instructions=steps,
         cuisines=_cuisines(wikitext, info.get("category", "")),
+        courses=_courses(wikitext, info.get("category", "")),
         ingredients=ingredients,
     )

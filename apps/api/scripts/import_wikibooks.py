@@ -15,7 +15,9 @@ contact link, maxlag). The raw pages are kept in .cache/wikibooks/pages.jsonl
 pages that are new or changed, so re-running costs Wikimedia a few requests.
 
 Load: each cached page goes through app/recipes/wikibooks.py (pages that
-aren't usable recipes are skipped), then batches go to import_recipes() in the
+aren't usable recipes are skipped) and the catalog's exclusion rules
+(app/recipes/curation.py: placenta, dog meat, pet food...; excluded recipes
+already in the catalog are hidden). Batches go to import_recipes() in the
 database, a few at a time, and publish_licensed_recipes() makes them public.
 Loading again updates recipes in place. Uses the service role from .env.
 """
@@ -33,6 +35,7 @@ import httpx2 as httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import settings  # noqa: E402
+from app.recipes.curation import excluded  # noqa: E402
 from app.recipes.extract import RecipeDraft  # noqa: E402
 from app.recipes.fetch import user_agent  # noqa: E402
 from app.recipes.wikibooks import DOMAIN, parse  # noqa: E402
@@ -147,6 +150,23 @@ def download() -> dict[int, Page]:
 # ---------- load ----------
 
 
+async def hide(urls: list[str]) -> None:
+    """Hide excluded recipes that are already in the catalog."""
+    if not urls:
+        return
+    key = settings.supabase_service_role_key
+    async with httpx.AsyncClient(
+        timeout=60.0, headers={"apikey": key, "Authorization": f"Bearer {key}"}
+    ) as client:
+        quoted = ",".join(json.dumps(u) for u in urls)
+        resp = await client.patch(
+            f"{settings.supabase_url}/rest/v1/recipes",
+            params={"source_url": f"in.({quoted})", "added_by": "is.null"},
+            json={"status": "hidden"},
+        )
+        resp.raise_for_status()
+
+
 async def load(drafts: list[RecipeDraft], batch: int, concurrency: int) -> int:
     """Save drafts in batches through import_recipes(), a few batches at a
     time, then publish them."""
@@ -202,8 +222,15 @@ def main() -> None:
         return
     if not pages:
         sys.exit(f"No local copy at {CACHE}; run the download step first")
-    drafts = [d for p in pages.values() if (d := parse(p["title"], p["wikitext"]))]
-    print(f"{len(pages)} pages, {len(drafts)} usable recipes", file=sys.stderr)
+    parsed = [d for p in pages.values() if (d := parse(p["title"], p["wikitext"]))]
+    left_out = [(d, reason) for d in parsed if (reason := excluded(d))]
+    drafts = [d for d in parsed if not excluded(d)]
+    for d, reason in left_out:
+        print(f"left out: {d.title} ({reason})", file=sys.stderr)
+    print(
+        f"{len(pages)} pages, {len(parsed)} usable recipes, {len(left_out)} left out",
+        file=sys.stderr,
+    )
     if args.out:
         args.out.write_text(
             json.dumps([d.payload(None) for d in drafts], indent=1, ensure_ascii=False)
@@ -212,6 +239,7 @@ def main() -> None:
         return
     if not settings.supabase_url or not settings.supabase_service_role_key:
         sys.exit("Supabase isn't configured (.env)")
+    asyncio.run(hide([d.source_url for d, _ in left_out]))
     published = asyncio.run(load(drafts, args.batch, args.concurrency))
     print(f"{published} recipes published", file=sys.stderr)
 

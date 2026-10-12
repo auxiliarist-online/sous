@@ -37,6 +37,7 @@ chorizo,link,60,usda
 ciabatta,slice,30,hand
 cilantro,bunch,60,hand
 cilantro,sprig,2.2,usda
+cinnamon,stick,2.6,hand
 cod,fillet,231,usda
 colby jack,slice,28,usda
 collard greens,bunch,250,hand
@@ -74,8 +75,10 @@ kaffir lime leaves,leaf,0.3,hand
 kale,bunch,200,hand
 kohlrabi,slice,16,usda
 leeks,slice,6,usda
+lemon juice,wedge,5.9,usda
 lemongrass,stalk,40,hand
 lemons,wedge,7,usda
+margarine,stick,113,hand
 mint,bunch,30,hand
 mint,leaf,0.1,usda
 mixed greens,head,360,usda
@@ -88,6 +91,7 @@ mustard greens,bunch,250,hand
 nori,sheet,2.6,usda
 okra,pod,11.9,usda
 onion,slice,14,usda
+pandan leaves,bunch,30,hand
 parsley,bunch,60,hand
 parsley,sprig,1,usda
 pineapple,slice,175,usda

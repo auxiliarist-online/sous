@@ -143,3 +143,26 @@ class TestBaselineData:
             "white rice",
         ):
             assert staple in names
+
+
+def test_the_databases_unit_table_matches_units_py() -> None:
+    """supabase/migrations/20261012150000_line_grams.sql copies the unit table;
+    if units.py changes, add a migration that updates public.units."""
+    import re
+    from pathlib import Path
+
+    from app.pricing.units import COUNT, MASS_G, VOLUME_ML
+
+    sql = (
+        Path(__file__).resolve().parents[4] / "supabase/migrations/20261012150000_line_grams.sql"
+    ).read_text()
+    rows = {
+        u: (k, float(f))
+        for u, k, f in re.findall(r"\('([a-z_]+)', '(mass|volume|count)', ([\d.]+)\)", sql)
+    }
+    expected = {
+        **{u: ("mass", f) for u, f in MASS_G.items()},
+        **{u: ("volume", f) for u, f in VOLUME_ML.items()},
+        **{u: ("count", f) for u, f in COUNT.items()},
+    }
+    assert rows == expected

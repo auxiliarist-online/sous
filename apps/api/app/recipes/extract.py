@@ -73,6 +73,8 @@ class RecipeDraft:
     ingredients: list[Ingredient] = field(default_factory=list)
     # The source's own diet tags: a hint only; labels come from the ingredients.
     publisher_diets: list[str] = field(default_factory=list)
+    # Main, side, soup, dessert... (COURSES); for the catalog's search.
+    courses: list[str] = field(default_factory=list)
 
     def payload(self, user_id: str | None) -> dict[str, Any]:
         """The argument for import_recipe()."""
@@ -95,6 +97,7 @@ class RecipeDraft:
                 "instructions": self.instructions,
             },
             "cuisines": self.cuisines,
+            "courses": self.courses,
             "publisher_diets": self.publisher_diets,
             # Parsed into amounts, units and names; see app/recipes/ingredients.py.
             "ingredients": [

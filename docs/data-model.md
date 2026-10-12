@@ -180,6 +180,14 @@ Users get three kinds of control (TYL-32):
 - `recipe_sources.license_name`, `license_url` and `attribution` record a source's license; the recipe page shows them. The Wikibooks Cookbook is seeded as `licensed` (CC BY-SA 4.0), not `crawl_enabled`: `scripts/import_wikibooks.py` reads it through the MediaWiki API and `app/recipes/wikibooks.py` parses each page.
 - Imported recipes start private and `needs_review`, like any import with no `added_by`. `publish_licensed_recipes(source)` (service role only) makes the ones with ingredients and steps public and active.
 
+### Find: search by intent (search_recipes)
+
+- `read_search_query()` reads a query into ingredients (via `match_ingredient`), cuisines, diets, courses ("dessert", "breakfast", "soup") and time ("quick", "under 30"); leftover words search titles and summaries (`recipes.search`).
+- `recipe_ingredients.grams` is each line's estimated weight (`line_grams()`: the `units` table, a copy of `app/pricing/units.py` kept in step by a unit test, plus `ingredient_units`, `grams_per_cup` and `grams_per_each`), set by a trigger; `refresh_line_grams()` recomputes after weights change.
+- `search_recipes(query, limit, offset)` ranks public, active recipes for the signed-in user: how much of the dish the searched ingredients are by weight, title and text matches, favorite cuisines and ingredients up, disliked ingredients far down, sauces and drinks down unless asked for. `recipe_fit_for_user` leaves out recipes that break the user's rules; for a user with rules, ones Sous can't fully check come after the rest.
+- `recipes.courses` comes from the source's categories (Wikibooks), set by `import_recipes()`.
+- The catalog leaves out what doesn't belong (human placenta, dog meat, pet food, endangered species): `apps/api/data/catalog_exclusions.csv`, applied on import, which also hides excluded recipes already loaded.
+
 ### Browser imports (TYL-35)
 
 - `recipes.origin` is `fetched` (Sous read the page, or a user typed the recipe) or `browser` (sent from a user's browser for a site that blocks Sous).

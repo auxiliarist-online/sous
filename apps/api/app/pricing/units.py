@@ -3,12 +3,12 @@
 # Base units: grams for mass, milliliters for volume, items for count.
 MASS_G = {"mg": 0.001, "g": 1.0, "kg": 1000.0, "oz": 28.3495, "lb": 453.592}
 VOLUME_ML = {
-    # Kitchen measures: a smidgen is 1/32 tsp, a pinch 1/16, a dash 1/8, and a
-    # stick (of butter or shortening) 8 tbsp.
+    # Kitchen measures: a smidgen is 1/32 tsp, a pinch 1/16, a dash 1/8. A
+    # "stick" depends on the ingredient (butter or cinnamon), so it lives in
+    # ingredient_units instead.
     "smidgen": 0.154,
     "pinch": 0.308,
     "dash": 0.616,
-    "stick": 118.294,
     "ml": 1.0,
     "cl": 10.0,
     "dl": 100.0,
@@ -69,7 +69,6 @@ ALIASES = {
     "smidgens": "smidgen",
     "pinches": "pinch",
     "dashes": "dash",
-    "sticks": "stick",
     "item": "each",
     "items": "each",
     "whole": "each",

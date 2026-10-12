@@ -413,39 +413,43 @@ export interface CatalogRecipe {
   title: string
   sourceName: string | null
   totalMinutes: number | null
+  /** How it fits the user's rules: fits, check_label or unknown. */
+  fit: 'fits' | 'check_label' | 'unknown'
+  /** Why it ranks where it does ("a main ingredient", "a favorite cuisine"). */
+  why: string[]
 }
 
-/** Public recipes anyone can plan (Wikibooks, federal and licensed sources),
- *  by title. With no query, the newest ones. */
+export const PAGE_SIZE = 30
+
+/** The shared catalog, searched by what the query means and ranked for the
+ *  signed-in user (search_recipes in the database). */
 export async function searchCatalog(
   db: SupabaseClient,
   query: string,
-  limit = 40,
+  offset = 0,
 ): Promise<CatalogRecipe[]> {
-  let q = db
-    .from('recipes')
-    .select('id, title, total_minutes, source:recipe_sources(name)')
-    .eq('visibility', 'public')
-    .eq('status', 'active')
-    .limit(limit)
-  const term = query.trim().replace(/[%_,()]/g, '')
-  q = term
-    ? q.ilike('title', `%${term}%`).order('title')
-    : q.order('created_at', { ascending: false })
-  const { data, error } = await q
+  const { data, error } = await db.rpc('search_recipes', {
+    p_query: query.trim().slice(0, 200),
+    p_limit: PAGE_SIZE,
+    p_offset: offset,
+  })
   if (error) throw error
   return (
-    data as unknown as {
+    data as {
       id: string
       title: string
+      source_name: string | null
       total_minutes: number | null
-      source: { name: string } | null
+      fit: CatalogRecipe['fit']
+      why: string[] | null
     }[]
   ).map((r) => ({
     id: r.id,
     title: r.title,
-    sourceName: r.source?.name ?? null,
+    sourceName: r.source_name,
     totalMinutes: r.total_minutes,
+    fit: r.fit,
+    why: r.why ?? [],
   }))
 }
 

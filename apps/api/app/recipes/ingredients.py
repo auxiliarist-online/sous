@@ -46,6 +46,29 @@ CONTAINERS = frozenset(
 # Words that describe an ingredient without changing what you'd buy. Dropped
 # one by one to build fallback names: "large ripe avocados" -> "avocados".
 DESCRIPTORS = (
+    # Hyphenated forms first, so "freshly-squeezed lemon juice" -> "lemon juice".
+    "freshly-squeezed",
+    "freshly squeezed",
+    "freshly-ground",
+    "freshly ground",
+    "freshly-grated",
+    "freshly grated",
+    "finely-chopped",
+    "finely chopped",
+    "finely-grated",
+    "finely grated",
+    "coarsely-chopped",
+    "coarsely chopped",
+    "roughly chopped",
+    "thinly sliced",
+    "pitted",
+    "lean",
+    "fragrant",
+    "aromatic",
+    "split",
+    "garden",
+    "boneless, skinless",
+    "standard",
     "freshly",
     "fresh",
     "large",
@@ -94,6 +117,7 @@ DESCRIPTORS = (
     "dried",
     "cooked",
 )
+QUALIFIER = re.compile(r"\s*(\(|\b(preferably|ideally|such as|e\.?\s?g\.?|like)\b).*$")
 DESCRIPTOR = re.compile(r"\b(" + "|".join(re.escape(d) for d in DESCRIPTORS) + r")\b\s*", re.I)
 
 
@@ -174,6 +198,8 @@ def candidates(name: str, canned: bool = False) -> list[str]:
     base = _plain(name)
     # "coconut milk, full fat" -> "coconut milk"
     base = base.split(",")[0].strip()
+    # "butter preferably ghee", "rice (e.g. basmati)", "oil such as canola" -> the first
+    base = QUALIFIER.sub("", base).strip() or base
     stripped = [base]
     current = base
     while True:
