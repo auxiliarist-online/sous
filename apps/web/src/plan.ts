@@ -57,11 +57,20 @@ export function weekDays(weekStart: string): string[] {
 
 // ---------- plans ----------
 
+/** Recipes are planned at half, full or double size. */
+export type Scale = 0.5 | 1 | 2
+
+export const SCALES: [Scale, string][] = [
+  [0.5, 'Half'],
+  [1, 'Full'],
+  [2, 'Double'],
+]
+
 export interface PlanEntry {
   id: string
   recipeId: string
   title: string
-  servings: number
+  scale: Scale
   /** What the recipe makes as written; null when the page didn't say. */
   recipeServings: number | null
   /** The day it's planned for, or null for "some day this week". */
@@ -71,7 +80,7 @@ export interface PlanEntry {
 
 interface EntryRow {
   id: string
-  servings: number
+  scale: number
   planned_for: string | null
   position: number
   recipe: { id: string; title: string; servings: number | null } | null
@@ -84,7 +93,7 @@ export async function loadPlan(
   const { data, error } = await db
     .from('meal_plans')
     .select(
-      'entries:meal_plan_entries(id, servings, planned_for, position, recipe:recipes(id, title, servings))',
+      'entries:meal_plan_entries(id, scale, planned_for, position, recipe:recipes(id, title, servings))',
     )
     .eq('week_start', weekStart)
     .maybeSingle()
@@ -97,7 +106,7 @@ export async function loadPlan(
       id: e.id,
       recipeId: e.recipe!.id,
       title: e.recipe!.title,
-      servings: Number(e.servings),
+      scale: Number(e.scale) as Scale,
       recipeServings: e.recipe!.servings,
       day: e.planned_for,
       position: e.position,
@@ -109,13 +118,13 @@ export async function addToPlan(
   db: SupabaseClient,
   weekStart: string,
   recipeId: string,
-  servings: number,
+  scale: Scale = 1,
   day: string | null = null,
 ): Promise<void> {
   const { error } = await db.rpc('add_to_meal_plan', {
     p_week: weekStart,
     p_recipe: recipeId,
-    p_servings: servings,
+    p_scale: scale,
     p_day: day,
   })
   if (error) throw error
@@ -124,10 +133,10 @@ export async function addToPlan(
 export async function updateEntry(
   db: SupabaseClient,
   id: string,
-  patch: { servings?: number; day?: string | null },
+  patch: { scale?: Scale; day?: string | null },
 ): Promise<void> {
   const row: Record<string, unknown> = {}
-  if (patch.servings !== undefined) row.servings = patch.servings
+  if (patch.scale !== undefined) row.scale = patch.scale
   if (patch.day !== undefined) row.planned_for = patch.day
   const { error } = await db.from('meal_plan_entries').update(row).eq('id', id)
   if (error) throw error
@@ -173,15 +182,79 @@ export async function recipeFits(
   )
 }
 
+// ---------- the pantry (start of TYL-49) ----------
+
+export type PantryStatus = 'have' | 'out'
+
+/** Record what the user has on hand; null forgets it (back to the default:
+ *  staples on hand, everything else bought). */
+export async function setPantry(
+  db: SupabaseClient,
+  userId: string,
+  ingredientId: string,
+  status: PantryStatus | null,
+): Promise<void> {
+  const { error } = status
+    ? await db
+        .from('user_pantry')
+        .upsert({ user_id: userId, ingredient_id: ingredientId, status })
+    : await db
+        .from('user_pantry')
+        .delete()
+        .eq('user_id', userId)
+        .eq('ingredient_id', ingredientId)
+  if (error) throw error
+}
+
 // ---------- cost ----------
+
+/** One thing the week needs, bought the way it's sold. */
+export interface BuyItem {
+  ingredientId: string | null
+  name: string
+  aisle: string | null
+  /** What the recipes need, added up, when it could be. */
+  quantity: number | null
+  unit: string | null
+  amountUnknown: boolean
+  soldBy: 'package' | 'loose' | null
+  packageQuantity: number | null
+  packageUnit: string | null
+  packages: number | null
+  leftover: number | null
+  staple: boolean
+  pantry: PantryStatus | null
+  /** False when it's on hand, so it isn't bought. */
+  buy: boolean
+  cents: number | null
+}
 
 export interface PlanCost {
   budgetCents: number | null
   totalCents: number
   /** True when some prices are rough baseline estimates. */
   estimated: boolean
-  unpricedLines: number
-  entries: Record<string, number>
+  /** Things to buy that have no price yet. */
+  unpriced: number
+  items: BuyItem[]
+}
+
+interface ItemBody {
+  ingredient_id: string | null
+  name: string
+  aisle: string | null
+  quantity: number | null
+  unit: string | null
+  amount_unknown: boolean
+  sold_by: 'package' | 'loose' | null
+  package_quantity: number | null
+  package_unit: string | null
+  packages: number | null
+  leftover: number | null
+  staple: boolean
+  pantry: PantryStatus | null
+  buy: boolean
+  cents: number | null
 }
 
 export async function planCost(
@@ -195,16 +268,48 @@ export async function planCost(
     budget_cents: number | null
     total_cents: number
     estimated: boolean
-    unpriced_lines: number
-    entries: { id: string; cents: number }[]
+    unpriced: number
+    items: ItemBody[]
   }
   return {
     budgetCents: body.budget_cents,
     totalCents: body.total_cents,
     estimated: body.estimated,
-    unpricedLines: body.unpriced_lines,
-    entries: Object.fromEntries(body.entries.map((e) => [e.id, e.cents])),
+    unpriced: body.unpriced,
+    items: body.items.map((i) => ({
+      ingredientId: i.ingredient_id,
+      name: i.name,
+      aisle: i.aisle,
+      quantity: i.quantity,
+      unit: i.unit,
+      amountUnknown: i.amount_unknown,
+      soldBy: i.sold_by,
+      packageQuantity: i.package_quantity,
+      packageUnit: i.package_unit,
+      packages: i.packages,
+      leftover: i.leftover,
+      staple: i.staple,
+      pantry: i.pantry,
+      buy: i.buy,
+      cents: i.cents,
+    })),
   }
+}
+
+/** "2 × 15 oz", "pack of 12", "1.2 lb", or null when the amount isn't known. */
+export function buyText(i: BuyItem): string | null {
+  if (i.packages && i.packageQuantity && i.packageUnit) {
+    const size =
+      i.packageUnit === 'each'
+        ? i.packageQuantity > 1
+          ? `pack of ${formatQuantity(i.packageQuantity)}`
+          : null
+        : amountText(i.packageQuantity, i.packageUnit)
+    if (!size) return String(i.packages)
+    return i.packages > 1 ? `${i.packages} × ${size}` : size
+  }
+  if (i.quantity !== null && i.unit) return amountText(i.quantity, i.unit)
+  return null
 }
 
 export function dollars(cents: number): string {
@@ -238,6 +343,12 @@ export function formatQuantity(n: number): string {
 }
 
 const ABBREVIATIONS = new Set(['g', 'kg', 'oz', 'lb', 'ml', 'l', 'tsp', 'tbsp'])
+
+export function amountText(quantity: number, unit: string): string {
+  return [formatQuantity(quantity), unitText(unit, quantity)]
+    .filter(Boolean)
+    .join(' ')
+}
 
 function unitText(unit: string | null, quantity: number): string {
   if (!unit || unit === 'each') return ''

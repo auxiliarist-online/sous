@@ -13,13 +13,47 @@ from fastapi.testclient import TestClient
 from app.auth import current_user_id
 from app.main import app
 from app.plans import routes, store
-from app.plans.cost import plan_cost
+from app.plans.cost import Item, PlanCost, plan_cost
 from app.recipes.store import StoreError
 from tests.unit.conftest import Install
 
 MONDAY = date(2026, 10, 12)
-RICE = "ing-rice"
-EGGS = "ing-eggs"
+RICE, EGGS, CARROTS, SALT, BASIL = "rice", "eggs", "carrots", "salt", "basil"
+
+INGREDIENTS: dict[str, dict[str, Any]] = {
+    RICE: {
+        "name": "white rice",
+        "aisle": "pantry",
+        "grams_per_cup": 185,
+        "sold_by": "package",
+        "package_quantity": 2,
+        "package_unit": "lb",
+    },
+    EGGS: {
+        "name": "eggs",
+        "aisle": "dairy_eggs",
+        "grams_per_each": 50,
+        "sold_by": "package",
+        "package_quantity": 12,
+        "package_unit": "each",
+    },
+    CARROTS: {"name": "carrots", "aisle": "produce", "grams_per_cup": 128, "sold_by": "loose"},
+    SALT: {
+        "name": "salt",
+        "aisle": "spices",
+        "sold_by": "package",
+        "package_quantity": 26,
+        "package_unit": "oz",
+        "pantry_staple": True,
+    },
+    BASIL: {
+        "name": "basil",
+        "aisle": "produce",
+        "sold_by": "package",
+        "package_quantity": 1,
+        "package_unit": "each",
+    },
+}
 
 
 def seed(ingredient: str, cents: int, qty: float, unit: str, **extra: Any) -> dict[str, Any]:
@@ -33,64 +67,118 @@ def seed(ingredient: str, cents: int, qty: float, unit: str, **extra: Any) -> di
     }
 
 
-def inputs(**overrides: Any) -> dict[str, Any]:
-    base: dict[str, Any] = {
-        "budget_cents": 5000,
-        "entries": [
-            {
-                "id": "e-1",
-                "recipe_id": "r-1",
-                "servings": 8,
-                "recipe_servings": 4,
-                "lines": [
-                    {"ingredient_id": RICE, "quantity": 1, "unit": "lb"},
-                    {"ingredient_id": EGGS, "quantity": 2, "unit": None},
-                    {"ingredient_id": None, "quantity": None, "unit": None},
-                ],
-            }
-        ],
-        "ingredients": {RICE: {"grams_per_cup": 185, "grams_per_each": None}, EGGS: {}},
-        "prices": [seed(RICE, 200, 2, "lb"), seed(EGGS, 360, 12, "each")],
-    }
-    return {**base, **overrides}
+PRICES = [
+    seed(RICE, 200, 1, "lb"),
+    seed(EGGS, 360, 12, "each"),
+    seed(CARROTS, 100, 1, "lb"),
+    seed(SALT, 130, 26, "oz"),
+    seed(BASIL, 250, 1, "each"),
+]
+
+
+def line(ingredient: str | None, quantity: float | None, unit: str | None) -> dict[str, Any]:
+    return {"ingredient_id": ingredient, "quantity": quantity, "unit": unit, "raw_text": "x"}
+
+
+def entry(lines: list[dict[str, Any]], scale: float = 1, id_: str = "e") -> dict[str, Any]:
+    return {"id": id_, "recipe_id": "r", "scale": scale, "lines": lines}
+
+
+def cost_of(*entries: dict[str, Any], pantry: dict[str, str] | None = None) -> PlanCost:
+    ingredients = {k: {**v, "pantry": (pantry or {}).get(k)} for k, v in INGREDIENTS.items()}
+    return plan_cost(
+        {
+            "budget_cents": 5000,
+            "entries": list(entries),
+            "ingredients": ingredients,
+            "prices": PRICES,
+        },
+        on=MONDAY,
+    )
+
+
+def item(cost: PlanCost, name: str) -> Item:
+    return next(i for i in cost.items if i.name == name)
 
 
 class TestPlanCost:
-    def test_scales_each_recipe_to_the_servings_planned(self) -> None:
-        cost = plan_cost(inputs(), on=MONDAY)
-        # Doubled: 2 lb rice at $1/lb, 4 eggs at 30¢.
-        assert cost.entries[0].cents == 200 + 120
-        assert cost.total_cents == 320
+    def test_packages_round_up_across_the_week(self) -> None:
+        # 1 cup + 1.5 cups of rice (185 g/cup) is about 1 lb: one 2 lb bag.
+        cost = cost_of(entry([line(RICE, 1, "cup")]), entry([line(RICE, 1.5, "cups")]))
+        rice = item(cost, "white rice")
+        assert rice.packages == 1
+        assert rice.cents == 400  # the whole bag, not the 1 lb used
+        assert rice.leftover == pytest.approx(2 - 2.5 * 185 / 453.592, abs=0.01)
+        assert cost.total_cents == 400
         assert cost.budget_cents == 5000
-        assert cost.estimated
 
-    def test_counts_lines_it_cannot_price(self) -> None:
-        cost = plan_cost(inputs(prices=[seed(RICE, 200, 2, "lb")]), on=MONDAY)
-        assert (cost.entries[0].priced_lines, cost.entries[0].unpriced_lines) == (1, 2)
-        assert cost.unpriced_lines == 2
+    def test_doubling_a_recipe_can_need_another_package(self) -> None:
+        cost = cost_of(entry([line(EGGS, 8, None)], scale=2))
+        eggs = item(cost, "eggs")
+        assert (eggs.quantity, eggs.packages, eggs.cents) == (16, 2, 720)
 
-    def test_unknown_servings_means_the_recipe_as_written(self) -> None:
-        entry = {**inputs()["entries"][0], "recipe_servings": None}
-        assert plan_cost(inputs(entries=[entry]), on=MONDAY).total_cents == 100 + 60
+    def test_halving_a_recipe(self) -> None:
+        cost = cost_of(entry([line(CARROTS, 2, "lb")], scale=0.5))
+        assert item(cost, "carrots").cents == 100
 
-    def test_a_users_own_price_wins_and_is_not_an_estimate(self) -> None:
+    def test_loose_items_cost_what_is_used(self) -> None:
+        cost = cost_of(entry([line(CARROTS, 1.5, "lb")]), entry([line(CARROTS, 1, "cup")]))
+        carrots = item(cost, "carrots")
+        assert carrots.packages is None
+        assert carrots.quantity == pytest.approx(1.5 + 128 / 453.592)
+        assert carrots.cents == round(100 * (1.5 + 128 / 453.592))
+
+    def test_staples_are_on_hand_until_the_pantry_says_otherwise(self) -> None:
+        salted = entry([line(SALT, 0.125, "tsp"), line(RICE, 1, "lb")])
+        cost = cost_of(salted)
+        salt = item(cost, "salt")
+        assert (salt.buy, salt.cents) == (False, None)
+        assert cost.total_cents == 200 * 2  # just the rice
+        out = cost_of(salted, pantry={SALT: "out"})
+        assert item(out, "salt").cents == 130  # a whole container, not ⅛ tsp
+        have = cost_of(salted, pantry={RICE: "have"})
+        assert have.total_cents == 0
+
+    def test_an_unknown_amount_still_buys_one_package(self) -> None:
+        cost = cost_of(entry([line(BASIL, None, None)]))
+        basil = item(cost, "basil")
+        assert (basil.amount_unknown, basil.packages, basil.cents) == (True, 1, 250)
+
+    def test_lists_what_it_cannot_price(self) -> None:
+        cost = cost_of(
+            entry([line(CARROTS, 2, "clove"), line(None, None, None), line(CARROTS, None, None)])
+        )
+        carrots = item(cost, "carrots")
+        assert carrots.amount_unknown and carrots.cents is None
+        assert [i.name for i in cost.items] == ["carrots", "x"]
+        assert cost.unpriced == 2
+
+    def test_an_empty_week(self) -> None:
+        cost = plan_cost({"budget_cents": None, "entries": []}, on=MONDAY)
+        assert (cost.total_cents, cost.budget_cents, cost.estimated, cost.items) == (
+            0,
+            None,
+            False,
+            [],
+        )
+
+    def test_a_users_own_price_is_not_an_estimate(self) -> None:
         mine = {
-            **seed(RICE, 100, 2, "lb"),
+            **seed(CARROTS, 80, 1, "lb"),
             "source": "user",
             "observed_at": "2026-10-01T12:00:00+00:00",
             "valid_from": "2026-10-01",
             "valid_to": None,
         }
-        entry = {**inputs()["entries"][0], "lines": inputs()["entries"][0]["lines"][:1]}
         cost = plan_cost(
-            inputs(entries=[entry], prices=[seed(RICE, 200, 2, "lb"), mine]), on=MONDAY
+            {
+                "entries": [entry([line(CARROTS, 1, "lb")])],
+                "ingredients": INGREDIENTS,
+                "prices": [*PRICES, mine],
+            },
+            on=MONDAY,
         )
-        assert cost.total_cents == 100
-        assert not cost.estimated
-
-    def test_an_empty_week(self) -> None:
-        cost = plan_cost({"budget_cents": None, "entries": []}, on=MONDAY)
-        assert (cost.total_cents, cost.budget_cents, cost.estimated) == (0, None, False)
+        assert (cost.total_cents, cost.estimated) == (80, False)
 
 
 class TestCostInputs:
@@ -115,7 +203,12 @@ class TestRoute:
             calls.append((user_id, week))
             if week.year == 1999:
                 raise StoreError("down")
-            return inputs()
+            return {
+                "budget_cents": 5000,
+                "entries": [entry([line(EGGS, 2, None)], id_="e-1")],
+                "ingredients": INGREDIENTS,
+                "prices": PRICES,
+            }
 
         monkeypatch.setattr(routes, "cost_inputs", fake_inputs)
         app.dependency_overrides[current_user_id] = lambda: "user-1"
@@ -128,13 +221,9 @@ class TestRoute:
         resp = client.get("/plans/2026-10-12/cost")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["total_cents"] == 320
-        assert body["entries"][0] == {
-            "id": "e-1",
-            "cents": 320,
-            "priced_lines": 2,
-            "unpriced_lines": 1,
-        }
+        assert body["total_cents"] == 360
+        assert body["items"][0]["name"] == "eggs"
+        assert body["items"][0]["packages"] == 1
         assert client.calls == [("user-1", MONDAY)]  # type: ignore[attr-defined]
 
     def test_weeks_start_on_monday(self, client: TestClient) -> None:

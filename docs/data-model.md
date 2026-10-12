@@ -191,9 +191,14 @@ Users get three kinds of control (TYL-32):
 ### Meal plans (TYL-15)
 
 - One `meal_plans` row per user and week; weeks start on Monday (check constraint). `budget_cents` overrides the profile's weekly budget for that week when set.
-- `meal_plan_entries` hold a recipe, the servings planned and optionally a day in the week (null means "some day this week"). Row-level security only lets a user plan recipes they can see, so another user's private recipe can't be planned.
+- `meal_plan_entries` hold a recipe, its size (`scale`: 0.5, 1 or 2 for half, full or double) and optionally a day in the week (null means "some day this week"). Row-level security only lets a user plan recipes they can see, so another user's private recipe can't be planned.
 - The web app edits plans directly. `add_to_meal_plan()` creates the week's plan on first use; `copy_meal_plan()` copies a week into another, keeping weekdays and skipping recipes no longer active. `my_recipe_fits()` returns `recipe_fit_for_user()` for the signed-in user, which the planner uses as a hard filter (`excluded` recipes can't be added).
-- `GET /api/plans/{week}/cost` prices the week: `plan_cost_inputs()` (service role only) returns the entries, their ingredient lines, conversions and the prices that apply to the user, and `app/plans/cost.py` scales each recipe to the planned servings and prices each line with `estimate_cost()`. Lines without an amount or a price are counted as unpriced. Costs are prorated; whole packages are the shopping list's job.
+
+### Buying and the pantry (TYL-15, TYL-18, TYL-49)
+
+- Each ingredient says how it's bought (`apps/api/data/packaging.csv`, turned into a migration by `scripts/build_packaging.py`): `sold_by = 'package'` with a typical `package_quantity` and `package_unit` (a 15 oz can, a 2 lb bag, a bunch, one lemon), or `'loose'`, bought by the amount needed (produce by the pound, meat from the counter). `pantry_staple` marks things most kitchens keep (salt, oil, spices).
+- `user_pantry` is the start of the pantry tracker: per user and ingredient, `have` (on hand, don't buy) or `out` (buy it). With no row, staples count as on hand and everything else is bought.
+- `GET /api/plans/{week}/cost` prices the week like a shopping trip. `plan_cost_inputs()` (service role only) returns the entries, their ingredient lines, how each ingredient is bought, the user's pantry and the prices that apply to them. `app/plans/cost.py` adds each ingredient up across the week (each recipe at its size), rounds packaged ones up to whole packages (an unknown amount, like "salt to taste", buys one), prices loose ones by the amount, and skips what's on hand. It returns the list of items with what to buy, the leftover from the last package, and the price.
 
 ### Crawling (TYL-26)
 
