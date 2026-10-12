@@ -2116,3 +2116,49 @@ describe('measurement equivalencies (TYL-79)', () => {
     assert.ok(n > 100)
   })
 })
+
+describe('bulk import', () => {
+  const page = (slug, title) => ({
+    source: { domain: 'bulk-test.example' },
+    recipe: { source_url: `https://bulk-test.example/${slug}/`, title },
+  })
+
+  it('saves a batch and reports the ones that fail', async () => {
+    const result = await as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipes($1) as r', [
+        JSON.stringify([
+          page('a', 'Bulk A'),
+          page('b', null),
+          page('c', 'Bulk C'),
+        ]),
+      ])
+      return rows[0].r
+    })
+    assert.equal(result.saved, 2)
+    assert.equal(result.failed.length, 1)
+    assert.equal(result.failed[0].source_url, 'https://bulk-test.example/b/')
+    const { rows } = await db.query(
+      "select count(*)::int as n from recipes where source_url like 'https://bulk-test.example/%'",
+    )
+    assert.equal(rows[0].n, 2)
+  })
+
+  it('is only for the API, and only for reasonable batches', async () => {
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query('select import_recipes($1)', [JSON.stringify([])]),
+      ),
+      /only callable by the API/,
+    )
+    await assert.rejects(
+      as('service_role', null, () =>
+        db.query('select import_recipes($1)', [
+          JSON.stringify(
+            Array.from({ length: 201 }, (_, i) => page(`x${i}`, 'X')),
+          ),
+        ]),
+      ),
+      /at most 200/,
+    )
+  })
+})
