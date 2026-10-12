@@ -168,6 +168,7 @@ export function Settings({
     'idle',
   )
   const [loadError, setLoadError] = useState(false)
+  const [household, setHousehold] = useState('')
 
   useEffect(() => {
     let live = true
@@ -175,6 +176,7 @@ export function Settings({
       ([p, o]) => {
         if (!live) return
         setPrefs(p)
+        setHousehold(String(p.householdSize))
         setOptions(o)
       },
       () => live && setLoadError(true),
@@ -297,15 +299,16 @@ export function Settings({
               inputMode="numeric"
               min={1}
               max={20}
-              value={prefs.householdSize}
-              onChange={(e) =>
-                set({
-                  householdSize: Math.min(
-                    20,
-                    Math.max(1, Number(e.target.value) || 1),
-                  ),
-                })
-              }
+              // Free typing (it can be empty for a moment); a whole number
+              // from 1 to 20 is kept when the field is left.
+              value={household}
+              onChange={(e) => {
+                setHousehold(e.target.value)
+                const n = Number(e.target.value)
+                if (Number.isInteger(n) && n >= 1 && n <= 20)
+                  set({ householdSize: n })
+              }}
+              onBlur={() => setHousehold(String(prefs.householdSize))}
             />
           </div>
           <div>

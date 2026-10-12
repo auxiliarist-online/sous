@@ -270,6 +270,31 @@ describe('Settings', () => {
     ),
   })
 
+  it('lets the household size be cleared and retyped', async () => {
+    const a = api()
+    render(
+      <Settings
+        api={a}
+        email="cook@example.com"
+        onSaved={vi.fn()}
+        onSignOut={vi.fn()}
+      />,
+    )
+    const size = await screen.findByLabelText('People you cook for')
+    await userEvent.clear(size)
+    expect(size).toHaveValue(null)
+    await userEvent.type(size, '4')
+    expect(size).toHaveValue(4)
+    await userEvent.clear(size)
+    await userEvent.type(size, '0')
+    await userEvent.tab()
+    expect(size).toHaveValue(4) // out of range: back to the last good size
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save preferences' }),
+    )
+    expect(a.savePreferences.mock.calls[0][0].householdSize).toBe(4)
+  })
+
   it('loads, changes and saves preferences', async () => {
     const a = api()
     const onSaved = vi.fn()
