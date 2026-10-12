@@ -10,6 +10,7 @@ import { Library, type LibraryApi } from './Library.tsx'
 import {
   importPage,
   importRecipe,
+  importText,
   removeSaved,
   savedRecipes,
 } from './library.ts'
@@ -58,6 +59,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     list: () => savedRecipes(db),
     save: (url) => importRecipe(session, url),
     savePage: (page) => importPage(session, page),
+    saveText: (recipe) => importText(session, recipe),
     remove: (id) => removeSaved(db, id),
     recipe: (id) => recipeDetail(db, userId, id),
     saveManual: (input, id) => saveManual(session, input, id),
@@ -160,7 +162,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
           {at.page === 'library' && (
             <Library
               api={api}
-              sharedUrl={shared}
+              shared={shared}
               sharedPage={sharedPage}
               myDiets={prefs?.diets ?? []}
               onboarded={prefs === null || prefs.saved}

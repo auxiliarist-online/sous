@@ -83,7 +83,10 @@ A user pasting a URL (TYL-8) follows the same storage rules as the crawler. The 
 
 ### Import from the user's browser
 
-For sites that block Sous's server, the user's own browser sends the recipe data from a page they're viewing (a bookmarklet reads the page's schema.org JSON-LD; `POST /recipes/import-page`).
+For sites that block Sous's server, the user's own browser hands Sous the recipe from a page they're viewing:
+
+- **Copy and paste (phones, the main path):** when a link is turned away, Sous offers to save it anyway. The user copies the ingredients (or the whole page) and pastes them; Sous keeps only the ingredient lines, between an "Ingredients" heading and "Directions" or similar. Sharing a text selection from Chrome to Sous does the same. `POST /recipes/import-text` takes the link, a title and the lines. With no lines, the recipe is saved as a link to come back to. Never steps or descriptions: those stay on the author's page.
+- **Save to Sous bookmark (computers):** a bookmarklet reads the page's schema.org JSON-LD (`POST /recipes/import-page`).
 
 - **No fetch, so no robots.txt check.** The user visited the page themselves; Sous doesn't contact the site. This is the honest alternative to getting around a block, not a way around one: Sous's server still never fetches a page that refuses it.
 - **Same storage rules.** The data goes through the same extractor, so `link_only` sources still lose the description and instructions.

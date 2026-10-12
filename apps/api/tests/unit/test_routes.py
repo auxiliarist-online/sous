@@ -124,6 +124,70 @@ class TestImportPage:
         assert self.post(client, ld=["{}"] * 21).status_code == 422  # too many blocks
 
 
+class TestImportText:
+    """A link plus ingredients the user copied from a page that blocks Sous."""
+
+    URL = "https://www.blocked-blog.example/the-best-chili-123/?utm_source=x"
+
+    def post(self, client: TestClient, **body: Any) -> Any:
+        return client.post(
+            "/recipes/import-text", json={"url": self.URL, "title": "Best chili", **body}
+        )
+
+    def test_saves_a_private_copy_with_sections(self, client: TestClient) -> None:
+        resp = self.post(
+            client,
+            ingredients=["2 lb ground beef", "", "For the topping:", "1 cup sour cream "],
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["title"] == "Best chili"
+        assert body["source_url"] == "https://www.blocked-blog.example/the-best-chili-123/"
+        assert body["source_name"] is None
+        assert client.origins == ["browser"]  # type: ignore[attr-defined]
+        draft, user = client.saved[0]  # type: ignore[attr-defined]
+        assert user == "user-1"
+        assert [(i.line_no, i.raw_text, i.section) for i in draft.ingredients] == [
+            (0, "2 lb ground beef", None),
+            (1, "1 cup sour cream", "For the topping"),
+        ]
+        assert draft.instructions is None
+
+    def test_saves_just_the_link_when_nothing_was_pasted(self, client: TestClient) -> None:
+        assert self.post(client).status_code == 200
+        draft, _ = client.saved[0]  # type: ignore[attr-defined]
+        assert draft.ingredients == []
+
+    def test_never_fetches_the_page(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def no_fetch(url: str) -> None:
+            raise AssertionError("text import must not fetch")
+
+        monkeypatch.setattr(routes, "fetch_page", no_fetch)
+        assert self.post(client, ingredients=["salt"]).status_code == 200
+
+    @pytest.mark.parametrize(
+        ("body", "code"),
+        [
+            ({"url": "javascript:alert(1)"}, "invalid_url"),
+            ({"url": "ftp://example.com/x"}, "invalid_url"),
+            ({"title": "   "}, "no_title"),
+        ],
+    )
+    def test_explains_what_it_cant_save(
+        self, client: TestClient, body: dict[str, Any], code: str
+    ) -> None:
+        resp = self.post(client, **body)
+        assert resp.status_code == 422
+        assert resp.json()["detail"]["code"] == code
+
+    def test_limits_size(self, client: TestClient) -> None:
+        assert self.post(client, ingredients=["x"] * 201).status_code == 422
+        assert self.post(client, ingredients=["x" * 501]).status_code == 422
+        assert self.post(client, title="x" * 201).status_code == 422
+
+
 class TestPageFromJsonLd:
     def test_a_block_cannot_close_its_script_tag(self) -> None:
         evil = {"@type": "Recipe", "name": "</script><script>alert(1)</script>"}

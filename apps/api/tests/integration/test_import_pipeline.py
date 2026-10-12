@@ -140,6 +140,37 @@ def test_a_browser_import_is_a_private_copy_per_user(
     assert origin == ("browser", alice)
 
 
+def test_a_pasted_recipe_from_a_blocked_site_is_a_private_link(
+    db: psycopg.Connection, make_user: Callable[[], str]
+) -> None:
+    from app.recipes.extract import Ingredient
+
+    user = make_user()
+    url = "https://blocked-blog.example/best-chili/"
+    rid = None
+    for lines in ([], [Ingredient(0, "1 cup red lentils")]):
+        draft = RecipeDraft(
+            source_url=url, domain="blocked-blog.example", site_name=None, title="Best chili",
+            ingredients=lines,
+        )  # fmt: skip
+        row = db.execute(
+            "select import_recipe(%s::jsonb)",
+            [json.dumps({**draft.payload(user), "origin": "browser"})],
+        ).fetchone()
+        assert row is not None
+        assert row[0]["visibility"] == "private"
+        assert rid in (None, row[0]["recipe_id"])
+        rid = row[0]["recipe_id"]
+    saved = db.execute(
+        "select origin, instructions,"
+        " (select count(*) from recipe_ingredients where recipe_id = r.id)"
+        " from recipes r where id = %s",
+        [rid],
+    ).fetchone()
+    # Pasting the ingredients later fills in the same private copy.
+    assert saved == ("browser", None, 1)
+
+
 def test_ingredient_lines_are_parsed_and_matched(db: psycopg.Connection) -> None:
     draft = extract_recipe(page_html(RECIPE_LD), URL)
     result = import_draft(db, draft, None)

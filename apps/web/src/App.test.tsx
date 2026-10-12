@@ -39,6 +39,7 @@ const library = (): SousApi => ({
   list: vi.fn(async () => []),
   save: vi.fn(),
   savePage: vi.fn(),
+  saveText: vi.fn(),
   remove: vi.fn(),
   recipe: vi.fn(async () => null),
   saveManual: vi.fn(),

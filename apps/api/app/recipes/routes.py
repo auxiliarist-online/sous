@@ -3,11 +3,14 @@
 POST /recipes/import       from a link; Sous fetches the page (TYL-8).
 POST /recipes/import-page  from the page data the user's own browser sends,
                            for sites that block Sous's server (TYL-35).
+POST /recipes/import-text  a link plus ingredient lines the user copied from
+                           a page that blocks Sous (TYL-59).
 POST /recipes/manual       a recipe the user types in; PUT /recipes/manual/{id} edits it.
 """
 
 import re
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,7 +20,10 @@ from app.auth import current_user_id
 from app.recipes.extract import (
     MAX_LD_BLOCKS,
     MAX_LD_CHARS,
+    Ingredient,
     RecipeDraft,
+    canonical_url,
+    domain_of,
     extract_recipe,
     page_from_json_ld,
 )
@@ -85,6 +91,60 @@ async def import_page(
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, {"code": e.code, "message": e.message}
         ) from e
+    return _result(draft, await save_recipe(draft, user_id, origin="browser"))
+
+
+class TextImportRequest(BaseModel):
+    """A recipe from a site that blocks Sous: its link, a title, and the
+    ingredient lines the user copied from the page. A line ending in ":"
+    starts a section. No steps: those stay on the author's page."""
+
+    url: str = Field(min_length=1, max_length=2048)
+    title: str = Field(min_length=1, max_length=200)
+    ingredients: list[Annotated[str, Field(max_length=500)]] = Field(
+        default_factory=list, max_length=200
+    )
+
+
+@router.post("/import-text", status_code=status.HTTP_200_OK)
+async def import_text(
+    body: TextImportRequest, user_id: Annotated[str, Depends(current_user_id)]
+) -> ImportResult:
+    """Like import-page, this is only the user's word for what the page says,
+    so it's kept as their private copy. With no ingredients it's still saved,
+    as a link to come back to."""
+    url = body.url.strip()
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {"code": "invalid_url", "message": "That doesn't look like a web address."},
+        )
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {"code": "no_title", "message": "Give the recipe a name."},
+        )
+    ingredients: list[Ingredient] = []
+    section: str | None = None
+    for raw in body.ingredients:
+        line = raw.strip()
+        if not line:
+            continue
+        if line.endswith(":"):
+            section = line[:-1].strip() or None
+            continue
+        ingredients.append(Ingredient(len(ingredients), line, section))
+    source_url = canonical_url(url)
+    draft = RecipeDraft(
+        source_url=source_url,
+        domain=domain_of(source_url),
+        # The page's own name isn't known; the source is shown by its domain.
+        site_name=None,
+        title=title,
+        ingredients=ingredients,
+    )
     return _result(draft, await save_recipe(draft, user_id, origin="browser"))
 
 
