@@ -181,6 +181,54 @@ class TestPlanCost:
         assert (cost.total_cents, cost.estimated) == (80, False)
 
 
+class TestIngredientUnits:
+    """Units that belong to one ingredient (ingredient_units): cloves, bunches."""
+
+    GARLIC = {
+        "name": "garlic",
+        "aisle": "produce",
+        "grams_per_cup": 136,
+        "grams_per_each": 50,
+        "sold_by": "package",
+        "package_quantity": 1,
+        "package_unit": "each",
+        "units": {"clove": 3, "head": 50},
+    }
+    SCALLIONS = {
+        "name": "scallions",
+        "aisle": "produce",
+        "grams_per_each": 15,
+        "sold_by": "package",
+        "package_quantity": 1,
+        "package_unit": "bunch",
+        "units": {"bunch": 100},
+    }
+
+    def cost(self, *lines: dict[str, Any]) -> PlanCost:
+        return plan_cost(
+            {
+                "entries": [entry(list(lines))],
+                "ingredients": {"garlic": self.GARLIC, "scallions": self.SCALLIONS},
+                "prices": [seed("garlic", 60, 1, "each"), seed("scallions", 300, 1, "lb")],
+            },
+            on=MONDAY,
+        )
+
+    def test_cloves_add_up_to_a_head(self) -> None:
+        garlic = item(self.cost(line("garlic", 3, "clove"), line("garlic", 1, "tbsp")), "garlic")
+        # 3 cloves (9 g) + 1 tbsp minced (136/16 = 8.5 g) = 17.5 g of a 50 g head.
+        assert garlic.quantity == pytest.approx(17.5 / 50, abs=1e-4)
+        assert (garlic.packages, garlic.cents) == (1, 60)
+
+    def test_counted_scallions_buy_bunches_not_one_bunch_each(self) -> None:
+        scallions = item(self.cost(line("scallions", 6, None)), "scallions")
+        # 6 scallions x 15 g = 90 g: one 100 g bunch, priced by weight.
+        assert scallions.packages == 1
+        assert scallions.cents == round(300 * 100 / 453.592)
+        more = item(self.cost(line("scallions", 2, "bunch")), "scallions")
+        assert more.packages == 2
+
+
 class TestCostInputs:
     def test_calls_plan_cost_inputs_for_the_user(self, supabase: Install) -> None:
         seen = supabase(lambda r: httpx.Response(200, json={"entries": []}))

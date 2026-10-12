@@ -83,8 +83,21 @@ def _float(value: Any) -> float | None:
     return float(value) if value not in (None, "") else None
 
 
-def _convert(qty: float, unit: str, to: str, conv: Ingredient) -> float | None:
+def _convert(
+    qty: float, unit: str, to: str, conv: Ingredient, units: dict[str, float] | None = None
+) -> float | None:
+    """Convert between units for one ingredient. Its own units (a clove of
+    garlic, a bunch of cilantro: ingredient_units) go through grams; standard
+    ones use app/pricing/units.py."""
+    own = units or {}
     try:
+        if unit in own:
+            qty, unit = qty * own[unit], "g"
+        if to in own:
+            grams = convert(
+                qty, unit, "g", grams_per_cup=conv.grams_per_cup, grams_per_each=conv.grams_per_each
+            )
+            return grams / own[to] if grams is not None else None
         return convert(
             qty, unit, to, grams_per_cup=conv.grams_per_cup, grams_per_each=conv.grams_per_each
         )
@@ -104,6 +117,9 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
             grams_per_each=_float(i.get("grams_per_each")),
         )
         for id_, i in info.items()
+    }
+    own_units: dict[str, dict[str, float]] = {
+        id_: {u: float(g) for u, g in (i.get("units") or {}).items()} for id_, i in info.items()
     }
 
     items: dict[str, Item] = {}
@@ -135,12 +151,13 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
                 item.amount_unknown = True
                 continue
             unit = line.get("unit") or "each"
+            conv, units = conversions[ingredient_id], own_units[ingredient_id]
             if item.unit is None:
-                if _convert(1, unit, unit, conversions[ingredient_id]) is None:
-                    item.amount_unknown = True  # a unit we can't count, like "clove"
+                if _convert(1, unit, unit, conv, units) is None:
+                    item.amount_unknown = True  # a unit we can't count, like "pinch" of a herb
                     continue
                 item.unit = unit
-            added = _convert(quantity * scale, unit, item.unit, conversions[ingredient_id])
+            added = _convert(quantity * scale, unit, item.unit, conv, units)
             if added is None:
                 item.amount_unknown = True
                 continue
@@ -162,6 +179,9 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
             continue  # loose, with no amount to price
         if not item.buy or item.ingredient_id is None:
             continue
+        units = own_units[item.ingredient_id]
+        if unit in units:  # "1 bunch": price it by weight
+            amount, unit = amount * units[unit], "g"
         found = estimate_cost(
             amount,
             unit,

@@ -1,0 +1,37 @@
+ingredient,unit,grams,note
+garlic,head,50,about 10 cloves
+garlic,each,50,"""1 garlic"" and the package mean a head"
+butter,stick,113,
+basil,bunch,30,
+cilantro,bunch,60,
+parsley,bunch,60,
+dill,bunch,30,
+mint,bunch,30,
+chives,bunch,25,
+rosemary,bunch,15,
+rosemary,sprig,1,
+sage,bunch,15,
+tarragon,bunch,15,
+thyme,bunch,15,
+thyme,sprig,0.8,
+fresh oregano,bunch,15,
+fresh oregano,sprig,0.5,
+scallions,bunch,100,6 to 8 scallions
+kale,bunch,200,
+collard greens,bunch,250,
+swiss chard,bunch,300,
+mustard greens,bunch,250,
+broccolini,bunch,200,
+broccoli rabe,bunch,450,
+curry leaves,bunch,10,
+curry leaves,sprig,1,
+celery,bunch,450,
+celery,rib,40,a medium stalk
+asparagus,bunch,450,about 1 lb
+watercress,bunch,120,
+lemongrass,stalk,40,
+baguette,slice,25,USDA's "slice" is a much larger piece
+sourdough bread,slice,50,USDA's "slice" is a much larger piece
+ciabatta,slice,30,
+kaffir lime leaves,leaf,0.3,
+bay leaves,leaf,0.2,

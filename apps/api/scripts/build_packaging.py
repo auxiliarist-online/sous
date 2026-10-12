@@ -7,7 +7,9 @@ The CSV is the readable source, one row per canonical ingredient:
                     lemon) or "loose" (bought by the amount needed: produce by
                     the pound, meat from the counter, bulk bins)
   package_quantity  typical package size, for "package" only
-  package_unit      its unit (app/pricing/units.py), for "package" only
+  package_unit      its unit: a standard one (app/pricing/units.py), or one
+                    defined for that ingredient in data/ingredient_units.csv
+                    ("bunch" for cilantro), for "package" only
   staple            "yes" for pantry staples (salt, oil, spices) that most
                     kitchens keep; they're assumed on hand until the user's
                     pantry says otherwise
@@ -27,6 +29,7 @@ sys.path.insert(0, str(API))
 from app.pricing.units import KNOWN_UNITS  # noqa: E402
 
 CSV = API / "data" / "packaging.csv"
+UNITS = API / "data" / "ingredient_units.csv"
 MIGRATIONS = API.parent.parent / "supabase" / "migrations"
 
 
@@ -35,6 +38,7 @@ def sql_text(s: str) -> str:
 
 
 def load() -> list[dict[str, Any]]:
+    own_units = {(u["ingredient"], u["unit"]) for u in csv.DictReader(UNITS.open(encoding="utf-8"))}
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     errors: list[str] = []
@@ -53,7 +57,7 @@ def load() -> list[dict[str, Any]]:
                 ok = False
             if not ok:
                 errors.append(f"line {n}: {name} needs a package_quantity above 0")
-            if unit not in KNOWN_UNITS:
+            if unit not in KNOWN_UNITS and (name, unit) not in own_units:
                 errors.append(f"line {n}: {name} has unknown package_unit {unit!r}")
         elif sold == "loose":
             if qty or unit:
