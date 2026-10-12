@@ -1,19 +1,23 @@
 """Import the Wikibooks Cookbook into the shared catalog (TYL-45).
 
-    .venv/bin/python scripts/import_wikibooks.py --dry-run --out wikibooks.json
-    .venv/bin/python scripts/import_wikibooks.py              # import and publish
-    .venv/bin/python scripts/import_wikibooks.py --limit 50   # a few first
+    .venv/bin/python scripts/import_wikibooks.py            # download changes, then load
+    .venv/bin/python scripts/import_wikibooks.py download   # update the local copy only
+    .venv/bin/python scripts/import_wikibooks.py load       # load from the local copy
+    .venv/bin/python scripts/import_wikibooks.py load --dry-run --out wikibooks.json
 
 The Cookbook is CC BY-SA 4.0, so recipes are stored with their steps and
-shown with attribution (docs/policies/recipe-sources.md). Pages come from the
-MediaWiki API, not by crawling, following Wikimedia's API etiquette: one
-request at a time, a SousBot user agent with a contact link, and maxlag so we
-back off when their servers are busy.
+shown with attribution (docs/policies/recipe-sources.md).
 
-Each page goes through app/recipes/wikibooks.py; pages that aren't usable
-recipes (articles, stubs, no steps) are skipped. Recipes are saved through
-import_recipe() and then published with publish_licensed_recipes(). Running it
-again updates recipes whose pages changed. Uses the service role from .env.
+Download: pages come from the MediaWiki API, not by crawling, following
+Wikimedia's API etiquette (one request at a time, a SousBot user agent with a
+contact link, maxlag). The raw pages are kept in .cache/wikibooks/pages.jsonl
+(not in git). Later downloads list the pages' latest revisions and fetch only
+pages that are new or changed, so re-running costs Wikimedia a few requests.
+
+Load: each cached page goes through app/recipes/wikibooks.py (pages that
+aren't usable recipes are skipped), then batches go to import_recipes() in the
+database, a few at a time, and publish_licensed_recipes() makes them public.
+Loading again updates recipes in place. Uses the service role from .env.
 """
 
 import argparse
@@ -36,57 +40,143 @@ from app.recipes.wikibooks import DOMAIN, parse  # noqa: E402
 API = f"https://{DOMAIN}/w/api.php"
 CATEGORY = "Category:Recipes"
 COOKBOOK_NAMESPACE = 102
-BATCH = 50  # pages per request (the API's limit for page content)
+LIST_BATCH = 500  # pages per listing request
+CONTENT_BATCH = 50  # pages per content request (the API's limit for content)
 PAUSE = 1.0  # seconds between requests
+CACHE = Path(__file__).resolve().parents[1] / ".cache" / "wikibooks" / "pages.jsonl"
+
+Page = dict[str, Any]  # {pageid, title, revid, wikitext}
 
 
-def pages(client: httpx.Client, limit: int | None) -> list[tuple[str, str]]:
-    """(title, wikitext) for every page in the recipes category."""
-    params: dict[str, Any] = {
-        "action": "query",
-        "format": "json",
-        "formatversion": "2",
-        "maxlag": "5",
-        "generator": "categorymembers",
-        "gcmtitle": CATEGORY,
-        "gcmnamespace": str(COOKBOOK_NAMESPACE),
-        "gcmlimit": str(BATCH),
-        "prop": "revisions",
-        "rvprop": "content",
-        "rvslots": "main",
-    }
-    found: list[tuple[str, str]] = []
+# ---------- download ----------
+
+
+def _get(client: httpx.Client, params: dict[str, Any]) -> dict[str, Any]:
+    """One API request, waiting while Wikimedia's servers are busy (maxlag)."""
+    base = {"action": "query", "format": "json", "formatversion": "2", "maxlag": "5"}
     while True:
-        resp = client.get(API, params=params)
-        body = resp.json()
+        resp = client.get(API, params={**base, **params})
+        body: dict[str, Any] = resp.json()
         if body.get("error", {}).get("code") == "maxlag":
             wait = int(resp.headers.get("Retry-After", "5"))
             print(f"servers busy, waiting {wait}s", file=sys.stderr)
             time.sleep(wait)
             continue
         resp.raise_for_status()
-        for page in body.get("query", {}).get("pages", []):
-            revisions = page.get("revisions") or []
-            if revisions:
-                found.append((page["title"], revisions[0]["slots"]["main"]["content"]))
-        print(f"{len(found)} pages read", file=sys.stderr)
-        if (limit and len(found) >= limit) or "continue" not in body:
-            return found[:limit] if limit else found
-        params.update(body["continue"])
         time.sleep(PAUSE)
+        return body
 
 
-async def save(drafts: list[RecipeDraft]) -> int:
+def latest_revisions(client: httpx.Client) -> dict[int, tuple[str, int]]:
+    """{pageid: (title, latest revision)} for every recipe page: no content."""
+    params: dict[str, Any] = {
+        "generator": "categorymembers",
+        "gcmtitle": CATEGORY,
+        "gcmnamespace": str(COOKBOOK_NAMESPACE),
+        "gcmlimit": str(LIST_BATCH),
+        "prop": "info",
+    }
+    found: dict[int, tuple[str, int]] = {}
+    while True:
+        body = _get(client, params)
+        for page in body.get("query", {}).get("pages", []):
+            found[page["pageid"]] = (page["title"], page["lastrevid"])
+        if "continue" not in body:
+            return found
+        params.update(body["continue"])
+
+
+def contents(client: httpx.Client, pageids: list[int]) -> list[Page]:
+    pages: list[Page] = []
+    for start in range(0, len(pageids), CONTENT_BATCH):
+        batch = pageids[start : start + CONTENT_BATCH]
+        body = _get(
+            client,
+            {
+                "pageids": "|".join(map(str, batch)),
+                "prop": "revisions",
+                "rvprop": "content|ids",
+                "rvslots": "main",
+            },
+        )
+        for page in body.get("query", {}).get("pages", []):
+            revs = page.get("revisions") or []
+            if revs:
+                pages.append(
+                    {
+                        "pageid": page["pageid"],
+                        "title": page["title"],
+                        "revid": revs[0]["revid"],
+                        "wikitext": revs[0]["slots"]["main"]["content"],
+                    }
+                )
+        print(f"{start + len(batch)} of {len(pageids)} changed pages read", file=sys.stderr)
+    return pages
+
+
+def read_cache() -> dict[int, Page]:
+    if not CACHE.exists():
+        return {}
+    with CACHE.open(encoding="utf-8") as f:
+        return {p["pageid"]: p for p in map(json.loads, f)}
+
+
+def download() -> dict[int, Page]:
+    """Bring the local copy up to date; returns it."""
+    if not settings.sousbot_contact_url:
+        sys.exit("Set SOUSBOT_CONTACT_URL: Wikimedia asks for contact details in the user agent")
+    cached = read_cache()
+    with httpx.Client(timeout=60.0, headers={"User-Agent": user_agent()}) as client:
+        latest = latest_revisions(client)
+        changed = [
+            pid for pid, (_, rev) in latest.items() if cached.get(pid, {}).get("revid") != rev
+        ]
+        print(f"{len(latest)} pages, {len(changed)} new or changed", file=sys.stderr)
+        for page in contents(client, changed):
+            cached[page["pageid"]] = page
+    current = {pid: p for pid, p in cached.items() if pid in latest}  # drop removed pages
+    CACHE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CACHE.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        for page in current.values():
+            f.write(json.dumps(page, ensure_ascii=False) + "\n")
+    tmp.replace(CACHE)
+    return current
+
+
+# ---------- load ----------
+
+
+async def load(drafts: list[RecipeDraft], batch: int, concurrency: int) -> int:
+    """Save drafts in batches through import_recipes(), a few batches at a
+    time, then publish them."""
     key = settings.supabase_service_role_key
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
     base = f"{settings.supabase_url}/rest/v1"
-    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
-        for n, draft in enumerate(drafts, 1):
-            resp = await client.post(f"{base}/rpc/import_recipe", json={"p": draft.payload(None)})
+    gate = asyncio.Semaphore(concurrency)
+    saved = 0
+    failed: list[dict[str, str]] = []
+    async with httpx.AsyncClient(timeout=120.0, headers=headers) as client:
+
+        async def one(chunk: list[RecipeDraft]) -> None:
+            nonlocal saved
+            async with gate:
+                resp = await client.post(
+                    f"{base}/rpc/import_recipes",
+                    json={"p_recipes": [d.payload(None) for d in chunk]},
+                )
             if resp.status_code != 200:
-                print(f"failed: {draft.title}: {resp.text[:200]}", file=sys.stderr)
-            if n % 100 == 0:
-                print(f"{n} saved", file=sys.stderr)
+                failed.extend({"source_url": d.source_url, "error": resp.text[:200]} for d in chunk)
+                return
+            result = resp.json()
+            saved += result["saved"]
+            failed.extend(result["failed"])
+            print(f"{saved} saved", file=sys.stderr)
+
+        chunks = [drafts[i : i + batch] for i in range(0, len(drafts), batch)]
+        await asyncio.gather(*(one(c) for c in chunks))
+        for f in failed:
+            print(f"failed: {f['source_url']}: {f['error']}", file=sys.stderr)
         source = await client.get(
             f"{base}/recipe_sources", params={"select": "id", "domain": f"eq.{DOMAIN}"}
         )
@@ -100,18 +190,20 @@ async def save(drafts: list[RecipeDraft]) -> int:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--limit", type=int, help="read at most this many pages")
-    ap.add_argument("--dry-run", action="store_true", help="parse and report; save nothing")
-    ap.add_argument("--out", type=Path, help="write the parsed recipes here as JSON")
+    ap.add_argument("step", nargs="?", choices=("all", "download", "load"), default="all")
+    ap.add_argument("--dry-run", action="store_true", help="load: parse and report; save nothing")
+    ap.add_argument("--out", type=Path, help="load: write the parsed recipes here as JSON")
+    ap.add_argument("--batch", type=int, default=50, help="load: recipes per database call")
+    ap.add_argument("--concurrency", type=int, default=4, help="load: database calls at once")
     args = ap.parse_args()
-    if not settings.sousbot_contact_url:
-        sys.exit("Set SOUSBOT_CONTACT_URL: Wikimedia asks for contact details in the user agent")
 
-    with httpx.Client(timeout=60.0, headers={"User-Agent": user_agent()}) as client:
-        raw = pages(client, args.limit)
-    drafts = [d for title, text in raw if (d := parse(title, text))]
-    print(f"{len(raw)} pages, {len(drafts)} usable recipes", file=sys.stderr)
-
+    pages = download() if args.step in ("all", "download") else read_cache()
+    if args.step == "download":
+        return
+    if not pages:
+        sys.exit(f"No local copy at {CACHE}; run the download step first")
+    drafts = [d for p in pages.values() if (d := parse(p["title"], p["wikitext"]))]
+    print(f"{len(pages)} pages, {len(drafts)} usable recipes", file=sys.stderr)
     if args.out:
         args.out.write_text(
             json.dumps([d.payload(None) for d in drafts], indent=1, ensure_ascii=False)
@@ -120,7 +212,8 @@ def main() -> None:
         return
     if not settings.supabase_url or not settings.supabase_service_role_key:
         sys.exit("Supabase isn't configured (.env)")
-    print(f"{asyncio.run(save(drafts))} recipes published", file=sys.stderr)
+    published = asyncio.run(load(drafts, args.batch, args.concurrency))
+    print(f"{published} recipes published", file=sys.stderr)
 
 
 if __name__ == "__main__":

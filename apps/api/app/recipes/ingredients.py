@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from app.pricing.units import ALIASES as UNIT_ALIASES
-from app.pricing.units import KNOWN_UNITS
+from app.pricing.units import KNOWN_UNITS, UnknownUnitError, convert
 
 # The parser's NLTK data ships with the app (scripts/fetch_nltk_data.py), so it
 # never tries to download it at runtime.
@@ -139,6 +139,10 @@ def _unit(value: Any) -> str | None:
         return text
     if text in UNIT_ALIASES:
         return UNIT_ALIASES[text]
+    if re.search(r"(ch|sh|x)es$", text):  # "bunches" -> "bunch"
+        return text[:-2]
+    if text in ("leaves", "loaves", "halves"):  # but "cloves" -> "clove"
+        return text[:-3] + "f"
     return re.sub(r"(?<=[^s])s$", "", text)  # "cloves" -> "clove", "cans" -> "can"
 
 
@@ -187,16 +191,41 @@ def candidates(name: str, canned: bool = False) -> list[str]:
     return list(dict.fromkeys(c for c in out if c))
 
 
+def _combine(parts: list[Any]) -> tuple[float | None, str | None, str | None]:
+    """Add up a compound amount in its first part's unit, using the unit table
+    (app/pricing/units.py): "1 cup + 2 tbsp" -> 1.125 cup, "1 lb 4 oz" ->
+    1.25 lb. Parts that can't be added (a different kind of unit, or one we
+    don't know) are left out and returned as text for the note."""
+    total: float | None = None
+    unit: str | None = None
+    left: list[str] = []
+    for part in parts:
+        qty, part_unit = _number(part.quantity), _unit(part.unit)
+        if qty is None:
+            continue
+        if total is None:
+            total, unit = qty, part_unit or "each"
+            continue
+        try:
+            added = convert(qty, part_unit or "each", unit or "each")
+        except UnknownUnitError:
+            added = None
+        if added is None:
+            left.append(str(part.text))
+        else:
+            total += added
+    return (round(total, 4) if total is not None else None), unit, "; ".join(left) or None
+
+
 def _amounts(parsed: Any) -> tuple[float | None, float | None, str | None, str | None, float, bool]:
     """(quantity, quantity_max, unit, note, confidence, canned) for the line."""
     if not parsed.amount:
         return None, None, None, None, 1.0, False
     first = parsed.amount[0]
-    if hasattr(first, "amounts"):  # "1 lb 2 oz": add them up in the first unit
-        combined = first.combined()
-        unit = _unit(str(combined.units))
-        qty = _number(combined.magnitude)
-        return qty, None, unit, first.text, float(first.confidence), False
+    if hasattr(first, "amounts"):  # "1 lb 4 oz", "1 cup + 2 tbsp"
+        qty, unit, leftover = _combine(first.amounts)
+        note = f"{first.text}; also {leftover}" if leftover else first.text
+        return qty, None, unit, note, float(first.confidence), False
     qty, qty_max, unit = _number(first.quantity), _number(first.quantity_max), _unit(first.unit)
     canned = unit in ("can", "tin")
     note = None

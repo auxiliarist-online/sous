@@ -3,6 +3,7 @@ recipe style; no real blog content (docs/policies/recipe-sources.md)."""
 
 import pytest
 
+from app.recipes import ingredients
 from app.recipes.ingredients import CONFIDENT, candidates, parse_line
 
 # line -> (name, quantity, quantity_max, unit)
@@ -124,10 +125,46 @@ class TestLines:
     def test_blank_lines_are_dropped(self) -> None:
         assert parse_line(0, "   ") == []
 
-    def test_a_line_the_parser_cant_read_is_kept_for_review(self) -> None:
-        (row,) = parse_line(3, "1 cup + 2 Tablespoons (200 g + 25 g) granulated sugar")
+    @pytest.mark.parametrize(
+        ("line", "qty", "unit"),
+        [
+            ("1 cup + 2 Tablespoons (200 g + 25 g) granulated sugar", 1.125, "cup"),
+            ("1 cup plus 2 tablespoons flour", 1.125, "cup"),
+            ("2 cups and 3 tablespoons milk", 2.1875, "cup"),
+            ("1 lb 4 oz ground beef", 1.25, "lb"),
+        ],
+    )
+    def test_compound_amounts_add_up_with_the_unit_table(
+        self, line: str, qty: float, unit: str
+    ) -> None:
+        (row,) = parse_line(0, line)
+        assert (row.quantity, row.unit) == (qty, unit)
+        assert row.note  # the amount as written
+
+    @pytest.mark.parametrize(
+        ("line", "unit"),
+        [
+            ("a pinch of salt", "pinch"),
+            ("2 dashes hot sauce", "dash"),
+            ("1 stick butter", "stick"),
+            ("1/2 bunch cilantro", "bunch"),
+            ("2 sprigs thyme", "sprig"),
+            ("3 cloves garlic", "clove"),
+        ],
+    )
+    def test_kitchen_units(self, line: str, unit: str) -> None:
+        assert parse_line(0, line)[0].unit == unit
+
+    def test_a_line_the_parser_cant_read_is_kept_for_review(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def broken(text: str) -> None:
+            raise TypeError("Incompatible quantity <Fraction> and unit <str>")
+
+        monkeypatch.setattr(ingredients, "_parser", lambda: broken)
+        (row,) = parse_line(3, "1 cup sugar")
         assert (row.raw_text, row.name, row.quantity, row.needs_review) == (
-            "1 cup + 2 Tablespoons (200 g + 25 g) granulated sugar",
+            "1 cup sugar",
             None,
             None,
             True,

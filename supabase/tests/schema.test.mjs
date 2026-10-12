@@ -1827,6 +1827,7 @@ describe('buying: packages, recipe sizes and the pantry', () => {
       package_unit: 'oz',
       pantry_staple: true,
       pantry: 'out',
+      units: {},
     })
   })
 })
@@ -2039,5 +2040,125 @@ describe('saving recipes from the browser', () => {
       return rows[0].n
     })
     assert.equal(seen, 1, 'readable through the user’s own saved row')
+  })
+})
+
+describe('measurement equivalencies (TYL-79)', () => {
+  const unitsOf = async (name) =>
+    Object.fromEntries(
+      (
+        await db.query(
+          `select u.unit, u.grams::float as grams from ingredient_units u
+           join ingredients i on i.id = u.ingredient_id where i.name = $1`,
+          [name],
+        )
+      ).rows.map((r) => [r.unit, r.grams]),
+    )
+
+  it('knows units that belong to one ingredient', async () => {
+    const garlic = await unitsOf('garlic')
+    assert.equal(garlic.clove, 3)
+    assert.equal(garlic.head, 50)
+    assert.equal((await unitsOf('butter')).stick, 113)
+    assert.equal((await unitsOf('white bread')).slice, 29)
+    const { rows } = await db.query(
+      "select grams_per_each::float as each from ingredients where name = 'garlic'",
+    )
+    assert.equal(rows[0].each, 50, 'one garlic is a head')
+  })
+
+  it('sells herbs and scallions by the bunch', async () => {
+    const { rows } = await db.query(
+      `select name, package_quantity::float as qty, package_unit from ingredients
+       where name in ('cilantro', 'scallions', 'celery') order by name`,
+    )
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.qty, r.package_unit]),
+      [
+        ['celery', 1, 'bunch'],
+        ['cilantro', 1, 'bunch'],
+        ['scallions', 1, 'bunch'],
+      ],
+    )
+  })
+
+  it('gives the API each ingredient’s units for pricing', async () => {
+    const USER = '00000000-0000-0000-0000-0000000000f1'
+    await db.query('insert into auth.users (id) values ($1)', [USER])
+    const garlic = (
+      await db.query("select id from ingredients where name = 'garlic'")
+    ).rows[0].id
+    const r = await recipe('Garlic test', [[garlic]])
+    await as('authenticated', USER, () =>
+      db.query("select add_to_meal_plan('2026-10-12', $1, 1)", [r]),
+    )
+    const inputs = await as(
+      'service_role',
+      null,
+      async () =>
+        (
+          await db.query("select plan_cost_inputs($1, '2026-10-12') as r", [
+            USER,
+          ])
+        ).rows[0].r,
+    )
+    assert.equal(inputs.ingredients[garlic].units.clove, 3)
+  })
+
+  it('is readable by anyone, like other catalog data', async () => {
+    const n = await as(
+      'anon',
+      null,
+      async () =>
+        (await db.query('select count(*)::int as n from ingredient_units'))
+          .rows[0].n,
+    )
+    assert.ok(n > 100)
+  })
+})
+
+describe('bulk import', () => {
+  const page = (slug, title) => ({
+    source: { domain: 'bulk-test.example' },
+    recipe: { source_url: `https://bulk-test.example/${slug}/`, title },
+  })
+
+  it('saves a batch and reports the ones that fail', async () => {
+    const result = await as('service_role', null, async () => {
+      const { rows } = await db.query('select import_recipes($1) as r', [
+        JSON.stringify([
+          page('a', 'Bulk A'),
+          page('b', null),
+          page('c', 'Bulk C'),
+        ]),
+      ])
+      return rows[0].r
+    })
+    assert.equal(result.saved, 2)
+    assert.equal(result.failed.length, 1)
+    assert.equal(result.failed[0].source_url, 'https://bulk-test.example/b/')
+    const { rows } = await db.query(
+      "select count(*)::int as n from recipes where source_url like 'https://bulk-test.example/%'",
+    )
+    assert.equal(rows[0].n, 2)
+  })
+
+  it('is only for the API, and only for reasonable batches', async () => {
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query('select import_recipes($1)', [JSON.stringify([])]),
+      ),
+      /only callable by the API/,
+    )
+    await assert.rejects(
+      as('service_role', null, () =>
+        db.query('select import_recipes($1)', [
+          JSON.stringify(
+            Array.from({ length: 201 }, (_, i) => page(`x${i}`, 'X')),
+          ),
+        ]),
+      ),
+      /at most 200/,
+    )
   })
 })
