@@ -1,6 +1,7 @@
 """Weekly meal plans (TYL-15).
 
-GET /plans/{week_start}/cost   estimated cost of the user's plan for that week.
+GET /plans/{week_start}/cost   cost of the user's plan for that week, at today's
+                               store prices where there are some (TYL-80).
 
 Adding, editing and copying plans happens in the web app, straight against
 Supabase under row-level security; pricing needs the API's unit conversions.
@@ -14,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth import current_user_id
 from app.plans.cost import plan_cost
+from app.plans.live_prices import add_live_prices
 from app.plans.store import cost_inputs
 from app.recipes.store import StoreError
 
@@ -32,4 +34,5 @@ async def week_cost(
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, "We couldn't load your plan. Try again."
         ) from exc
-    return asdict(plan_cost(inputs, on=week_start))
+    store_id = await add_live_prices(user_id, inputs)
+    return asdict(plan_cost(inputs, on=week_start, store_id=store_id))

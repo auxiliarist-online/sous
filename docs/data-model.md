@@ -32,6 +32,8 @@ erDiagram
     users ||--o{ user_stores : "shops at"
     stores ||--o{ user_stores : ""
     users ||--o{ user_product_choices : ""
+    ingredients ||--o{ kroger_product_matches : "bought as"
+    stores ||--o{ kroger_product_matches : ""
 
     ingredients ||--o{ prices : ""
     store_products ||--o{ prices : ""
@@ -145,7 +147,7 @@ Users get three kinds of control (TYL-32):
 
 ### One price table for every source
 
-- `prices` holds user entries, Kroger store prices, deals, and BLS/USDA baselines, each tagged with `source`.
+- `prices` holds user entries, deals, and BLS/USDA baselines, each tagged with `source`. Kroger store prices are never stored (see below); they join the same lookup as `store_api` quotes for one request.
 - A row means "`price_cents` buys `quantity` `unit`" (249 for 14 oz), so package prices and unit prices fit the same shape.
 - Lookup order per ingredient and store: **user → store_api → deal → baseline** (TYL-13, TYL-28). That logic lives in the API.
 - User-entered prices are private to the user (RLS).
@@ -214,6 +216,15 @@ Users get three kinds of control (TYL-32):
 - Each ingredient says how it's bought (`apps/api/data/packaging.csv`, turned into a migration by `scripts/build_packaging.py`): `sold_by = 'package'` with a typical `package_quantity` and `package_unit` (a 15 oz can, a 2 lb bag, a bunch, one lemon), or `'loose'`, bought by the amount needed (produce by the pound, meat from the counter). `pantry_staple` marks things most kitchens keep (salt, oil, spices).
 - `user_pantry` is the start of the pantry tracker: per user and ingredient, `have` (on hand, don't buy) or `out` (buy it). With no row, staples count as on hand and everything else is bought.
 - `GET /api/plans/{week}/cost` prices the week like a shopping trip. `plan_cost_inputs()` (service role only) returns the entries, their ingredient lines, how each ingredient is bought, the user's pantry and the prices that apply to them. `app/plans/cost.py` adds each ingredient up across the week (each recipe at its size), rounds packaged ones up to whole packages (an unknown amount, like "salt to taste", buys one), prices loose ones by the amount, and skips what's on hand. It returns the list of items with what to buy, the leftover from the last package, and the price.
+
+- Some ingredients aren't bought on their own (TYL-61): `buy_as` and `buy_ratio` (grams of what's bought per gram of the ingredient, from `apps/api/data/bought_as.csv`) turn 5 egg yolks into 250 g of eggs, added to the eggs item.
+
+### Live store prices (TYL-80)
+
+- Kroger's API terms (§5e.1) don't allow keeping their content: no copies of names, sizes or prices, and product responses have no cache header. So Sous stores only its own decision, `kroger_product_matches`: which Kroger product id it buys for each ingredient at each store. `store_products` is not used for Kroger.
+- `apps/api/scripts/match_kroger.py` makes the matches (one search per ingredient; rules in `app/pricing/kroger_match.py`, fixes in `apps/api/data/kroger_overrides.csv`). Ingredients bought as another are skipped.
+- When a plan is priced, `app/plans/live_prices.py` looks up the matched products for the user's store (their primary store, else the Asheville Harris Teeter during the beta), in batches of 50, and adds `store_api` quotes and the real package sizes to that request only. A sale price is valid until it ends. If Kroger fails, the plan is priced from estimates.
+- Kroger credentials are server-side API env only. Limits: Products 10,000 calls a day.
 
 ### Crawling (TYL-26)
 

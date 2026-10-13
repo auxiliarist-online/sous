@@ -453,6 +453,11 @@ label.check input {
   color: var(--color-secondary);
 }
 
+.budget .sale {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
 .budget meter {
   width: 100%;
   height: 12px;

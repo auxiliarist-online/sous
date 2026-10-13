@@ -58,6 +58,7 @@ const library = (): SousApi => ({
     estimated: false,
     unpriced: 0,
     items: [],
+    storeName: null,
   })),
   recipeFits: vi.fn(async () => ({})),
   setPantry: vi.fn(async () => {}),

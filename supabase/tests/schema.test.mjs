@@ -2418,3 +2418,51 @@ describe('bought as (TYL-61)', () => {
     )
   })
 })
+
+describe('Kroger product matches (TYL-80)', () => {
+  it('seeds the Asheville Harris Teeter', async () => {
+    const { rows } = await db.query(
+      "select chain_slug from stores where external_location_id = '09700348'",
+    )
+    assert.deepEqual(rows, [{ chain_slug: 'harris_teeter' }])
+  })
+
+  it('keeps one product id per ingredient and store, for the API only', async () => {
+    const store = (
+      await db.query(
+        "select id from stores where external_location_id = '09700348'",
+      )
+    ).rows[0].id
+    const eggs = (
+      await db.query("select id from ingredients where name = 'eggs'")
+    ).rows[0].id
+    await as('service_role', null, () =>
+      db.query(
+        `insert into kroger_product_matches (ingredient_id, store_id, product_id)
+         values ($1, $2, '0007203663220')`,
+        [eggs, store],
+      ),
+    )
+    await assert.rejects(
+      db.query(
+        `insert into kroger_product_matches (ingredient_id, store_id, product_id)
+         values ($1, $2, '0007203663218')`,
+        [eggs, store],
+      ),
+      /duplicate key/,
+    )
+    await assert.rejects(
+      db.query(
+        `update kroger_product_matches set product_id = 'Large Eggs' where ingredient_id = $1`,
+        [eggs],
+      ),
+      /product_id_check/,
+    )
+    const seen = await as(
+      'authenticated',
+      '00000000-0000-0000-0000-0000000000b2',
+      () => db.query('select * from kroger_product_matches'),
+    )
+    assert.equal(seen.rows.length, 0)
+  })
+})

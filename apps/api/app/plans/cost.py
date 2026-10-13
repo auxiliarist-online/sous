@@ -48,6 +48,7 @@ class Item:
     buy: bool = True
     cents: int | None = None
     estimated: bool = False
+    on_sale: bool = False
 
 
 @dataclass
@@ -59,6 +60,8 @@ class PlanCost:
     # Items to buy that have no price yet.
     unpriced: int
     items: list[Item] = field(default_factory=list)
+    # The store whose live prices were used ("Prices from Harris Teeter").
+    store_name: str | None = None
 
 
 def _date(value: str | None) -> date | None:
@@ -76,6 +79,7 @@ def _quote(row: dict[str, Any]) -> PriceQuote:
         valid_from=_date(row.get("valid_from")),
         valid_to=_date(row.get("valid_to")),
         observed_at=datetime.fromisoformat(observed) if observed else None,
+        on_sale=bool(row.get("on_sale")),
     )
 
 
@@ -227,6 +231,7 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
         if found is not None:
             item.cents = found.cents
             item.estimated = found.is_estimate
+            item.on_sale = found.quote.on_sale
             total += found.cents
             estimated = estimated or found.is_estimate
 
@@ -237,4 +242,5 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
         estimated=estimated,
         unpriced=sum(1 for i in listed if i.buy and i.cents is None),
         items=listed,
+        store_name=inputs.get("store_name") if store_id else None,
     )
