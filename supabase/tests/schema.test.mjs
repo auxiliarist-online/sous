@@ -1828,6 +1828,8 @@ describe('buying: packages, recipe sizes and the pantry', () => {
       pantry_staple: true,
       pantry: 'out',
       units: {},
+      buy_as: null,
+      buy_ratio: null,
     })
   })
 })
@@ -2356,5 +2358,63 @@ describe('find: search by intent, ranked for the user (Find)', () => {
       "select course_slugs from read_search_query('easy desserts')",
     )
     assert.deepEqual(d[0].course_slugs, ['dessert'])
+  })
+})
+
+describe('bought as (TYL-61)', () => {
+  it('buys egg yolks as eggs, and lemon juice as lemons', async () => {
+    const { rows } = await db.query(
+      `select i.name, s.name as buy_as, i.buy_ratio::float as ratio from ingredients i
+       join ingredients s on s.id = i.buy_as order by i.name`,
+    )
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.buy_as]),
+      [
+        ['egg whites', 'eggs'],
+        ['egg yolks', 'eggs'],
+        ['lemon juice', 'lemons'],
+        ['lime juice', 'lime'],
+      ],
+    )
+  })
+
+  it('gives the API what yolks are bought as, with its prices', async () => {
+    const USER = '00000000-0000-0000-0000-0000000000b1'
+    await db.query('insert into auth.users (id) values ($1)', [USER])
+    const yolks = (
+      await db.query("select id from ingredients where name = 'egg yolks'")
+    ).rows[0].id
+    const eggs = (
+      await db.query("select id from ingredients where name = 'eggs'")
+    ).rows[0].id
+    const r = await recipe('Yolk test custard', [[yolks]])
+    await as('authenticated', USER, () =>
+      db.query("select add_to_meal_plan('2026-10-12', $1, 1)", [r]),
+    )
+    const inputs = await as(
+      'service_role',
+      null,
+      async () =>
+        (
+          await db.query("select plan_cost_inputs($1, '2026-10-12') as r", [
+            USER,
+          ])
+        ).rows[0].r,
+    )
+    assert.equal(inputs.ingredients[yolks].buy_as, eggs)
+    assert.ok(inputs.ingredients[eggs], 'eggs come along')
+    assert.ok(
+      inputs.prices.some((p) => p.ingredient_id === eggs),
+      'with their prices',
+    )
+  })
+
+  it("can't be bought as itself", async () => {
+    await assert.rejects(
+      db.query(
+        "update ingredients set buy_as = id, buy_ratio = 1 where name = 'eggs'",
+      ),
+      /ingredients_buy_as/,
+    )
   })
 })
