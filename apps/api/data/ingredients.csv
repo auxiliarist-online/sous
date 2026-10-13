@@ -133,7 +133,7 @@ cocoa powder,pantry,,,unsweetened cocoa powder|cocoa
 chocolate chips,pantry,,dairy,semisweet chocolate chips|semi-sweet chocolate chips|dark chocolate chips
 dark chocolate,pantry,,dairy,bittersweet chocolate|semisweet chocolate
 bread flour,pantry,gluten,,
-whole wheat flour,pantry,gluten,,
+whole wheat flour,pantry,gluten,,whole wheat pastry flour
 almond flour,pantry,tree_nut,,almond meal
 cornmeal,pantry,,,yellow cornmeal
 breadcrumbs,pantry,gluten,dairy|egg,bread crumbs|plain breadcrumbs
@@ -554,3 +554,5 @@ wine,beverages,alcohol,,cooking wine
 tequila,beverages,alcohol,,
 gin,beverages,alcohol,,
 coffee liqueur,beverages,alcohol,,kahlua
+ponzu sauce,international,soy|gluten,fish,ponzu
+powdered milk,pantry,dairy,,dry milk|nonfat dry milk|milk powder|dried milk

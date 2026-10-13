@@ -990,7 +990,7 @@ describe('ingredient parsing', () => {
       'select count(*)::int as n from ingredient_aliases',
     )
     // Seed migration + more_ingredients + everyday_ingredients (TYL-60).
-    assert.equal(rows[0].n, 159 + 283 + 235 + 322) // + ingredients_from_recipes
+    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6) // + ingredients_from_recipes + ponzu_powdered_milk
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
@@ -2464,5 +2464,25 @@ describe('Kroger product matches (TYL-80)', () => {
       () => db.query('select * from kroger_product_matches'),
     )
     assert.equal(seen.rows.length, 0)
+  })
+})
+
+describe('ponzu and powdered milk (TYL-83)', () => {
+  it('knows ponzu may contain fish, and dry milk is powdered milk', async () => {
+    const { rows } = await db.query(
+      `select i.name, i.contains, i.may_contain from ingredients i
+       where i.id = match_ingredient(array['ponzu'])
+          or i.id = match_ingredient(array['nonfat dry milk'])
+          or i.id = match_ingredient(array['whole wheat pastry flour'])
+       order by i.name`,
+    )
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.contains, r.may_contain]),
+      [
+        ['ponzu sauce', ['soy', 'gluten'], ['fish']],
+        ['powdered milk', ['dairy'], []],
+        ['whole wheat flour', ['gluten'], []],
+      ],
+    )
   })
 })
