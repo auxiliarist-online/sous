@@ -2486,3 +2486,18 @@ describe('ponzu and powdered milk (TYL-83)', () => {
     )
   })
 })
+
+describe('bunch prices (TYL-84)', () => {
+  it('prices scallions and cilantro per bunch, by weight', async () => {
+    const { rows } = await db.query(
+      `select i.name, p.price_cents, p.quantity::float as quantity, p.unit
+       from prices p join ingredients i on i.id = p.ingredient_id
+       where p.source = 'seed' and i.name in ('scallions', 'cilantro')
+       order by i.name`,
+    )
+    assert.deepEqual(rows, [
+      { name: 'cilantro', price_cents: 100, quantity: 60, unit: 'g' },
+      { name: 'scallions', price_cents: 100, quantity: 100, unit: 'g' },
+    ])
+  })
+})
