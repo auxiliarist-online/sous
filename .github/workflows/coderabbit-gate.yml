@@ -5,8 +5,10 @@
 # latest commit is reviewed. "CodeRabbit approved" passes only on that approval
 # of the PR's current head, so every push needs a fresh one.
 #
-# Sous has under 10 stars, so CodeRabbit doesn't review on its own: each push
-# asks it to. Its free plan allows about one review an hour.
+# Sous has under 10 stars, so CodeRabbit doesn't review on its own: comment
+# "@coderabbitai review" (or tick "Trigger review" in its comment) after each
+# push. It ignores that command from bots, so this workflow can't ask for you.
+# Its free plan allows about one review an hour.
 name: CodeRabbit gate
 
 on:
@@ -17,24 +19,13 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
 
 concurrency:
   group: coderabbit-gate-${{ github.event.pull_request.number }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
-  request:
-    name: Ask CodeRabbit to review
-    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-    runs-on: ubuntu-latest
-    steps:
-      - env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-        run: gh pr comment "$PR" --repo "$REPO" --body "@coderabbitai review"
-
   approved:
     name: CodeRabbit approved
     runs-on: ubuntu-latest
