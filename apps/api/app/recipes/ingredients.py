@@ -405,6 +405,10 @@ def parse_line(line_no: int, raw: str, section: str | None = None) -> list[Parse
     optional = bool(re.search(r"\boptional\b", text, re.I))
     out = []
     for i, (name, conf) in enumerate(options, 1):
+        # "1/3 cup raw, unsweetened grated coconut" parses as name "raw" with
+        # the rest as a comment: a name that only describes takes the comment.
+        if comment and not DESCRIPTOR.sub("", _plain(name)).strip(" ,"):
+            name = f"{name}, {comment}"
         confidence = round(min(conf, amount_conf), 3)
         out.append(
             ParsedLine(
