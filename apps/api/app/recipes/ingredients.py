@@ -53,6 +53,9 @@ DESCRIPTORS = (
     "freshly ground",
     "freshly-grated",
     "freshly grated",
+    "well-chopped",
+    "fine-grain",
+    "day-old",
     "finely-chopped",
     "finely chopped",
     "finely-grated",
@@ -116,8 +119,45 @@ DESCRIPTORS = (
     "room temperature",
     "dried",
     "cooked",
+    "uncooked",
+    "unbleached",
+    "bleached",
+    "unsweetened",
+    "crusty",
+    "toasted",
+    "roasted",
+    "melting",
 )
-QUALIFIER = re.compile(r"\s*(\(|\b(preferably|ideally|such as|e\.?\s?g\.?|like)\b).*$")
+QUALIFIER = re.compile(
+    r"\s*(\(|\b(preferably|ideally|such as|such a|e\.?\s?g\.?|like|cut into)\b).*$"
+)
+# Common misspellings in recipes: "chicken bullion powder".
+SPELLING = {"bullion": "bouillon", "mozarella": "mozzarella", "monterrey": "monterey"}
+# The last resort drops leading words ("orange-fleshed sweet potatoes" ->
+# "sweet potatoes") and some trailing ones ("chicken bouillon powder" ->
+# "chicken bouillon"), but never a word that decides what the food is for a
+# diet or allergy: "coconut milk" must not become "milk", nor "chicken
+# bouillon" "bouillon", nor "gluten-free flour" "flour".
+KEEP = frozenset(
+    {
+        *("chicken", "beef", "pork", "lamb", "turkey", "duck", "veal", "goat", "venison"),
+        *("bacon", "ham", "sausage", "fish", "anchovy", "anchovies", "salmon", "tuna"),
+        *("shrimp", "crab", "lobster", "clam", "clams", "oyster", "oysters", "squid"),
+        *("egg", "eggs", "milk", "butter", "cheese", "cream", "yogurt", "honey", "gelatin"),
+        *("peanut", "peanuts", "almond", "almonds", "cashew", "cashews", "walnut", "walnuts"),
+        *("pecan", "pecans", "hazelnut", "hazelnuts", "pistachio", "pistachios", "nut", "nuts"),
+        *("coconut", "oat", "soy", "rice", "sesame", "wheat", "vegan", "vegetable", "veggie"),
+        *("mushroom", "plant-based", "dairy-free", "gluten-free", "sugar-free", "non-dairy"),
+    }
+)
+TRAILING = frozenset({"blend", "powder", "granules", "cube", "cubes", "base"})
+# Too general to be what a longer name meant: "red peppers" isn't black pepper.
+GENERIC = frozenset(
+    {"pepper", "peppers", "sauce", "oil", "vinegar", "seasoning", "spice", "spices"}
+    | {"blend", "powder", "paste", "mix", "leaves", "seeds", "juice", "stock", "broth"}
+    # "millet flour" isn't all-purpose flour, nor "vanilla bean" dried beans.
+    | {"flour", "bean", "beans", "chops", "noodles", "pasta", "rice", "sugar", "chocolate"}
+)
 DESCRIPTOR = re.compile(r"\b(" + "|".join(re.escape(d) for d in DESCRIPTORS) + r")\b\s*", re.I)
 
 
@@ -191,13 +231,33 @@ def _forms(name: str) -> list[str]:
     return out
 
 
+def _fallbacks(name: str) -> list[str]:
+    """Shorter names to try last: without a trailing "blend" or "powder", then
+    with leading words dropped one at a time. Never drops a word in KEEP, and
+    never ends on a lone GENERIC word."""
+    words = name.split()
+    out = []
+    if len(words) > 1 and words[-1] in TRAILING and words[-1] not in KEEP:
+        out.append(" ".join(words[:-1]))
+    while len(words) > 1 and words[0] not in KEEP:
+        words = words[1:]
+        if len(words) == 1 and words[0] in GENERIC:
+            break
+        out.append(" ".join(words))
+    return out
+
+
 def candidates(name: str, canned: bool = False) -> list[str]:
     """Names to look up, most specific first: as written, then without
     descriptors one at a time, each also singular/plural; with "canned "
     tried first when the amount comes in cans."""
-    base = _plain(name)
-    # "coconut milk, full fat" -> "coconut milk"
-    base = base.split(",")[0].strip()
+    base = " ".join(SPELLING.get(w, w) for w in _plain(name).split())
+    # "Dijon-style mustard" -> "dijon mustard"
+    base = re.sub(r"(?<=\w)-style\b", "", base)
+    # "coconut milk, full fat" -> "coconut milk"; but "raw, unsweetened grated
+    # coconut" -> "unsweetened grated coconut", skipping parts that only describe.
+    parts = [p.strip() for p in base.split(",") if p.strip()]
+    base = next((p for p in parts if DESCRIPTOR.sub("", p).strip()), parts[0] if parts else base)
     # "butter preferably ghee", "rice (e.g. basmati)", "oil such as canola" -> the first
     base = QUALIFIER.sub("", base).strip() or base
     stripped = [base]
@@ -208,6 +268,7 @@ def candidates(name: str, canned: bool = False) -> list[str]:
             break
         stripped.append(nxt)
         current = nxt
+    stripped += _fallbacks(current)
     out: list[str] = []
     for n in stripped:
         for f in _forms(n):

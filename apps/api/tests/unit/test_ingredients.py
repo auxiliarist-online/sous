@@ -196,6 +196,47 @@ class TestCandidates:
     def test_tries_canned_first_for_cans(self) -> None:
         assert candidates("chickpeas", canned=True)[:2] == ["canned chickpeas", "chickpeas"]
 
+    @pytest.mark.parametrize(
+        ("name", "found"),
+        [
+            # Tyler's recipes that lost their vegetarian label (TYL-81, TYL-83).
+            ("unbleached all-purpose flour", "all-purpose flour"),
+            ("well-chopped kale", "kale"),
+            ("Dijon-style mustard", "dijon mustard"),
+            ("orange-fleshed sweet potatoes", "sweet potatoes"),
+            ("fine-grain sea salt", "sea salt"),
+            ("raw, unsweetened grated coconut", "coconut"),
+            ("Roasted Poblano Peppers cut into strips", "poblano peppers"),
+            ("day-old artisan-style sourdough", "sourdough"),
+            ("chicken bullion powder", "chicken bouillon"),
+            ("pumpkin spice blend", "pumpkin spice"),
+            ("dry instant mashed potatoes", "mashed potatoes"),
+        ],
+    )
+    def test_falls_back_to_what_youd_buy(self, name: str, found: str) -> None:
+        assert found in candidates(name)
+
+    @pytest.mark.parametrize(
+        ("name", "never"),
+        [
+            # Dropping these words would change a diet label.
+            ("coconut milk", "milk"),
+            ("chicken bouillon powder", "bouillon powder"),
+            ("gluten-free flour", "flour"),
+            ("vegan butter", "butter"),
+            ("almond flour", "flour"),
+            # Too general: "red peppers" aren't black pepper.
+            ("red peppers", "peppers"),
+            ("ponzu sauce", "sauce"),
+        ],
+    )
+    def test_never_falls_back_past_what_matters(self, name: str, never: str) -> None:
+        assert never not in candidates(name)
+
+    def test_fallbacks_come_after_the_specific_names(self) -> None:
+        found = candidates("roasted cherry tomatoes")
+        assert found.index("cherry tomatoes") < found.index("tomatoes")
+
     def test_plain_ascii_and_no_trailing_detail(self) -> None:
         assert candidates("Jalapeños")[:2] == ["jalapenos", "jalapeno"]
         assert candidates("coconut milk, full fat")[0] == "coconut milk"
