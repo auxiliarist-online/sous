@@ -20,6 +20,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  actions: write # to re-run the check after a review
 
 concurrency:
   group: coderabbit-gate-${{ github.event.pull_request.number }}-${{ github.event_name }}
@@ -28,6 +29,10 @@ concurrency:
 jobs:
   approved:
     name: CodeRabbit approved
+    # Only the push-time run is the check. A review re-runs it (below) rather
+    # than adding a second "CodeRabbit approved" run: GitHub counts every run of
+    # a required check on the commit, so an old failing one would still block.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - env:
@@ -55,3 +60,22 @@ jobs:
             echo "::error::Waiting for CodeRabbit to approve $head."
           fi
           exit 1
+
+  recheck:
+    name: Re-check after a review
+    if: github.event_name == 'pull_request_review'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run=$(gh run list -R "$REPO" --workflow coderabbit-gate.yml --event pull_request \
+            --commit "$HEAD" --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$run" ]; then
+            echo "No push-time gate run for $HEAD yet."
+            exit 0
+          fi
+          echo "Re-running gate run $run for $HEAD."
+          gh run rerun "$run" -R "$REPO"
