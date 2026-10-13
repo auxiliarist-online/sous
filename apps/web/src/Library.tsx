@@ -21,6 +21,7 @@ import {
 } from './library.ts'
 import { ingredientsFromText, titleFromUrl } from './paste.ts'
 import { Link } from './router.tsx'
+import { ExternalLink } from './ExternalLink.tsx'
 import type { Shared } from './share.ts'
 
 /** What the screen needs from the API and database; tests pass fakes. */
@@ -273,14 +274,9 @@ function Saved({ result }: { result: ImportResult }) {
       <p className="muted small">Saved to your recipes</p>
       <h3>{result.title}</h3>
       {/* The source's page is the main action: instructions live there (policy). */}
-      <a
-        className="button"
-        href={result.source_url}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
+      <ExternalLink className="button" href={result.source_url}>
         View full recipe on {source}
-      </a>
+      </ExternalLink>
       {result.visibility === 'private' && (
         <p className="muted small">Only you can see this recipe.</p>
       )}
@@ -351,14 +347,9 @@ function PasteRecipe({
           them here. Pasting the whole page works too.
         </p>
       )}
-      <a
-        className="small"
-        href={paste.url}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
+      <ExternalLink className="small" href={paste.url}>
         Open the recipe on {site}
-      </a>
+      </ExternalLink>
       <label htmlFor="paste-title">Name</label>
       <input
         id="paste-title"

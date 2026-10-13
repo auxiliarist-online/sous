@@ -4,6 +4,7 @@ import { dietLabels, sourceLabel } from './library.ts'
 import { navigate } from './navigation.ts'
 import { weekOf, type Fit, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
+import { ExternalLink } from './ExternalLink.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
 export interface RecipePageApi {
@@ -119,14 +120,9 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       <DietChips diets={recipe.diets} />
       {recipe.sourceUrl && !recipe.license && (
         // The author's page is the main action: their instructions live there (policy).
-        <a
-          className="button"
-          href={recipe.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <ExternalLink className="button" href={recipe.sourceUrl}>
           View full recipe on {sourceLabel(recipe.sourceName, recipe.sourceUrl)}
-        </a>
+        </ExternalLink>
       )}
 
       <h3>Ingredients</h3>
@@ -177,19 +173,15 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         // Openly licensed: credit the source and license, as the license asks.
         <p className="muted small attribution">
           From the{' '}
-          <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer">
+          <ExternalLink href={recipe.sourceUrl}>
             {recipe.sourceName ?? sourceLabel(null, recipe.sourceUrl)}
-          </a>
+          </ExternalLink>
           {recipe.license.attribution && `, by ${recipe.license.attribution}`},
           under{' '}
           {recipe.license.url ? (
-            <a
-              href={recipe.license.url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <ExternalLink href={recipe.license.url}>
               {recipe.license.name}
-            </a>
+            </ExternalLink>
           ) : (
             recipe.license.name
           )}
