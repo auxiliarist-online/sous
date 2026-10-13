@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit: a second reviewer next to the Claude review (claude-review.yml).
+# Sous is public, so this is CodeRabbit's free open-source plan. Under 10 stars
+# it doesn't review on its own: comment "@coderabbitai review" on the PR.
+language: en-US
+tone_instructions: 'Plain, specific and brief. Report real problems with a concrete failure case; skip praise and style.'
+
+reviews:
+  profile: chill
+  # Request changes on findings; approve once they're resolved and the latest
+  # commit is reviewed. The "CodeRabbit approved" check (coderabbit-gate.yml)
+  # passes only on that approval.
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - '!**/package-lock.json'
+    - '!apps/api/nltk_data/**'
+  # Ruff, mypy, oxlint and prettier already run in CI (ci.yml).
+  tools:
+    ruff:
+      enabled: false
+    eslint:
+      enabled: false
+    biome:
+      enabled: false
+    markdownlint:
+      enabled: false
+  path_instructions:
+    - path: '**'
+      instructions: |
+        Focus on correctness, security (row-level security, SSRF, secrets) and the
+        rules in CLAUDE.md. Skip style nits that ruff, prettier or oxlint enforce.
+    - path: 'supabase/migrations/**'
+      instructions: |
+        Migrations are append-only: an applied file must never be edited. Money is
+        integer cents, IDs are UUIDs, recipes are never deleted (status = 'removed').
+        Catalog tables are written only by the service role; user tables need RLS
+        policies. Every new migration needs a test in supabase/tests.
+    - path: 'apps/api/app/recipes/**'
+      instructions: |
+        Fetching user-supplied URLs must keep the SSRF checks in fetch.py (public
+        addresses only, every redirect hop checked). For link_only sources, never
+        store or show the author's instructions or description, and never copy
+        images (docs/policies/recipe-sources.md). Crawling uses the honest SousBot
+        user agent and obeys robots.txt.
+    - path: 'apps/api/app/recipes/ingredients.py'
+      instructions: |
+        Diet and allergy labels are derived from matched ingredients. Any change to
+        name matching must never map a line with meat, fish, dairy, eggs, nuts,
+        gluten etc. to an ingredient without that category (for example
+        "anchovy-stuffed olives" must not become "olives").
+    - path: 'apps/api/app/{pricing,plans}/**'
+      instructions: |
+        Kroger API terms (section 5e.1): never store Kroger content (product names,
+        sizes, prices) in the database, files or caches; only our own matching
+        decision (kroger_product_matches: product ids). Live prices are used for one
+        request only. Kroger credentials stay server-side.
+    - path: 'apps/web/**'
+      instructions: |
+        The browser must never see the Supabase service-role key or the Kroger
+        credentials. Mobile-first: check small screens and touch targets.

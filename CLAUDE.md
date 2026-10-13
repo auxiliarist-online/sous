@@ -21,4 +21,6 @@ Meal planner: discover recipes, plan the week under a dollar budget, and get a s
 
 ## Reviewing
 
+Two reviewers: the Claude review (`.github/workflows/claude-review.yml`, on each new PR) and CodeRabbit (`.coderabbit.yaml`, free open-source plan, about one review an hour). **A PR is finished only when the "CodeRabbit approved" check passes**: CodeRabbit's approval of the PR's latest commit (`.github/workflows/coderabbit-gate.yml`). Under 10 stars it doesn't review on its own, and it ignores bots: after each push, comment `@coderabbitai review` from a person's account.
+
 Focus on correctness, security (RLS, SSRF, secrets), and the rules above. Skip style nits that ruff, prettier, or oxlint already enforce.
