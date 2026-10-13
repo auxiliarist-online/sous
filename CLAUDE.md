@@ -17,6 +17,7 @@ Meal planner: discover recipes, plan the week under a dollar budget, and get a s
 - **Diet labels are derived from ingredients**, never trusted from the source (`recipe_meets_diet()`).
 - **Server-side fetching of user URLs** must keep the SSRF checks in `app/recipes/fetch.py` (public addresses only, every redirect hop checked).
 - **Database:** money is integer cents; IDs are UUIDs; recipes are never deleted (`status = 'removed'`). Catalog tables are written only by the API (service role); user tables are protected by RLS. New migrations need tests in `supabase/tests`.
+- **Docstrings:** functions and classes in app code (`apps/api/app`, `apps/api/scripts`, `apps/web/src`) have a docstring or leading comment saying what they do or why. Tests don't need them; their names say what they check.
 - **Secrets** live in gitignored env files. Never commit keys, and never send the service-role key to the browser.
 
 ## Reviewing
