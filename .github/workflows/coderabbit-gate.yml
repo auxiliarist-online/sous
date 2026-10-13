@@ -20,7 +20,6 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  actions: write # to re-run the check after a review
 
 concurrency:
   group: coderabbit-gate-${{ github.event.pull_request.number }}-${{ github.event_name }}
@@ -61,21 +60,14 @@ jobs:
           fi
           exit 1
 
-  recheck:
-    name: Re-check after a review
+  review-received:
+    name: Review received
+    # Starts coderabbit-recheck.yml (workflow_run), which re-runs the push-time
+    # check with a write token. This job can't: for a fork's pull request a
+    # review event only gets a read-only token.
     if: github.event_name == 'pull_request_review'
     runs-on: ubuntu-latest
     steps:
       - env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          run=$(gh run list -R "$REPO" --workflow coderabbit-gate.yml --event pull_request \
-            --commit "$HEAD" --limit 1 --json databaseId --jq '.[0].databaseId')
-          if [ -z "$run" ]; then
-            echo "No push-time gate run for $HEAD yet."
-            exit 0
-          fi
-          echo "Re-running gate run $run for $HEAD."
-          gh run rerun "$run" -R "$REPO"
+        run: echo "Review on $HEAD; coderabbit-recheck.yml re-runs the gate."

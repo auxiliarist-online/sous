@@ -1,0 +1,51 @@
+# Re-runs the push-time "CodeRabbit approved" check after a review, so it
+# re-reads CodeRabbit's verdict (see coderabbit-gate.yml).
+#
+# workflow_run runs in this repository with a write token even when the pull
+# request comes from a fork, and it only makes API calls: no code from the pull
+# request is checked out or run. It always uses the default branch's version of
+# this file.
+name: CodeRabbit re-check
+
+on:
+  workflow_run:
+    workflows: ['CodeRabbit gate']
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  rerun:
+    name: Re-run the gate after a review
+    if: github.event.workflow_run.event == 'pull_request_review'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if ! [[ "$HEAD" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Unexpected head SHA: $HEAD"
+            exit 1
+          fi
+          run=$(gh run list -R "$REPO" --workflow coderabbit-gate.yml --event pull_request \
+            --commit "$HEAD" --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$run" ]; then
+            echo "::error::No push-time gate run for $HEAD to re-run."
+            exit 1
+          fi
+          # A run that's still going can't be re-run: wait for it (up to 10 minutes).
+          for _ in $(seq 1 60); do
+            status=$(gh run view "$run" -R "$REPO" --json status --jq .status)
+            [ "$status" = "completed" ] && break
+            sleep 10
+          done
+          if [ "$status" != "completed" ]; then
+            echo "::error::Gate run $run is still $status after 10 minutes; re-run it by hand."
+            exit 1
+          fi
+          echo "Re-running gate run $run for $HEAD."
+          gh run rerun "$run" -R "$REPO"
