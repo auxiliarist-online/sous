@@ -229,6 +229,47 @@ class TestIngredientUnits:
         assert more.packages == 2
 
 
+class TestBoughtAs:
+    """Egg yolks aren't sold on their own: they're bought as eggs."""
+
+    YOLKS = {
+        "name": "egg yolks",
+        "aisle": "dairy_eggs",
+        "grams_per_each": 17,
+        "sold_by": "package",
+        "package_quantity": 12,
+        "package_unit": "each",
+        "buy_as": EGGS,
+        "buy_ratio": 2.94,
+    }
+
+    def cost(self, *entries: dict[str, Any]) -> PlanCost:
+        return plan_cost(
+            {
+                "entries": list(entries),
+                "ingredients": {EGGS: INGREDIENTS[EGGS], "yolks": self.YOLKS},
+                "prices": PRICES,
+            },
+            on=MONDAY,
+        )
+
+    def test_yolks_are_bought_as_eggs_and_merge_with_other_eggs(self) -> None:
+        cost = self.cost(entry([line("yolks", 5, None)]), entry([line(EGGS, 8, None)]))
+        assert [i.name for i in cost.items] == ["eggs"]
+        eggs = cost.items[0]
+        # 5 yolks x 17 g x 2.94 = 250 g = 5 eggs, plus 8 eggs: 13 eggs, 2 dozen.
+        assert eggs.quantity == pytest.approx(13, abs=0.01)
+        assert (eggs.packages, eggs.cents) == (2, 720)
+
+    def test_the_planned_size_applies_once(self) -> None:
+        cost = self.cost(entry([line("yolks", 5, None)], scale=2))
+        assert cost.items[0].quantity == pytest.approx(10, abs=0.01)
+
+    def test_unknown_amount_buys_a_package_of_the_source(self) -> None:
+        eggs = self.cost(entry([line("yolks", None, None)])).items[0]
+        assert (eggs.name, eggs.amount_unknown, eggs.packages) == ("eggs", True, 1)
+
+
 class TestCostInputs:
     def test_calls_plan_cost_inputs_for_the_user(self, supabase: Install) -> None:
         seen = supabase(lambda r: httpx.Response(200, json={"entries": []}))

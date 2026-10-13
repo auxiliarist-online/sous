@@ -105,6 +105,36 @@ def _convert(
         return None
 
 
+def _bought_as(
+    line: dict[str, Any],
+    ingredient_id: str,
+    info: dict[str, dict[str, Any]],
+    conversions: dict[str, Ingredient],
+    own_units: dict[str, dict[str, float]],
+    scale: float,
+) -> dict[str, Any]:
+    """A line for an ingredient that's bought as another (egg yolks are bought
+    as eggs) becomes a line for what's bought, in grams: 5 yolks -> 5 x 17 g
+    of yolk x 2.94 = 250 g of eggs, which the eggs item turns into 5 eggs."""
+    source = info[ingredient_id].get("buy_as")
+    ratio = _float(info[ingredient_id].get("buy_ratio"))
+    if not source or source not in info or not ratio:
+        return line
+    quantity = _float(line.get("quantity"))
+    if quantity is None:
+        return {**line, "ingredient_id": source}
+    grams = _convert(
+        quantity * scale,
+        line.get("unit") or "each",
+        "g",
+        conversions[ingredient_id],
+        own_units.get(ingredient_id),
+    )
+    if grams is None:
+        return {**line, "ingredient_id": source, "quantity": None}
+    return {**line, "ingredient_id": source, "quantity": grams * ratio, "unit": "g", "scaled": True}
+
+
 def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) -> PlanCost:
     """`inputs` is what plan_cost_inputs() returns."""
     quotes: dict[str, list[PriceQuote]] = {}
@@ -131,6 +161,8 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
             if not ingredient_id or ingredient_id not in info:
                 unmatched.append(Item(name=line.get("raw_text") or "?", amount_unknown=True))
                 continue
+            line = _bought_as(line, ingredient_id, info, conversions, own_units, scale)
+            ingredient_id = line["ingredient_id"]
             item = items.get(ingredient_id)
             if item is None:
                 i = info[ingredient_id]
@@ -157,7 +189,9 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
                     item.amount_unknown = True  # a unit we can't count, like "pinch" of a herb
                     continue
                 item.unit = unit
-            added = _convert(quantity * scale, unit, item.unit, conv, units)
+            # Lines converted to what's bought are already at the planned size.
+            factor = 1.0 if line.get("scaled") else scale
+            added = _convert(quantity * factor, unit, item.unit, conv, units)
             if added is None:
                 item.amount_unknown = True
                 continue

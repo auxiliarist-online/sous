@@ -29,6 +29,9 @@ sys.path.insert(0, str(API))
 from app.pricing.units import KNOWN_UNITS  # noqa: E402
 
 CSV = API / "data" / "packaging.csv"
+# Ingredients you don't buy on their own (TYL-61): egg yolks are bought as
+# eggs. ratio = grams of what you buy per gram of the ingredient.
+BOUGHT_AS = API / "data" / "bought_as.csv"
 UNITS = API / "data" / "ingredient_units.csv"
 MIGRATIONS = API.parent.parent / "supabase" / "migrations"
 
@@ -78,7 +81,24 @@ def load() -> list[dict[str, Any]]:
     return rows
 
 
-def migration(rows: list[dict[str, Any]]) -> str:
+def bought_as(names: set[str]) -> list[dict[str, Any]]:
+    rows, errors = [], []
+    for n, r in enumerate(csv.DictReader(BOUGHT_AS.open(encoding="utf-8")), 2):
+        name, source, ratio = r["ingredient"].strip(), r["buy_as"].strip(), r["ratio"].strip()
+        if name not in names or source not in names:
+            errors.append(f"bought_as.csv line {n}: unknown ingredient")
+        if name == source or float(ratio) <= 0:
+            errors.append(f"bought_as.csv line {n}: bought as itself, or a bad ratio")
+        rows.append({"name": name, "source": source, "ratio": ratio})
+    if errors:
+        sys.exit("\n".join(errors))
+    return rows
+
+
+def migration(rows: list[dict[str, Any]], bought: list[dict[str, Any]]) -> str:
+    derived = ",\n".join(
+        f"  ({sql_text(b['name'])}, {sql_text(b['source'])}, {b['ratio']})" for b in bought
+    )
     values = ",\n".join(
         f"  ({sql_text(r['name'])}, {sql_text(r['sold'])}, "
         f"{r['qty'] or 'null'}, {sql_text(r['unit']) if r['unit'] else 'null'}, "
@@ -98,6 +118,14 @@ from (values
 {values}
 ) as v(name, sold_by, package_quantity, package_unit, pantry_staple)
 where lower(i.name) = v.name;
+
+-- Bought as another ingredient: egg yolks are bought as eggs.
+update public.ingredients i set buy_as = src.id, buy_ratio = v.ratio
+from (values
+{derived}
+) as v(name, source, ratio)
+join public.ingredients src on lower(src.name) = v.source
+where lower(i.name) = v.name;
 """
 
 
@@ -105,10 +133,11 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     rows = load()
+    derived = bought_as({r["name"] for r in rows})
     out = MIGRATIONS / f"{sys.argv[1]}.sql"
     if out.exists():
         sys.exit(f"{out.name} exists; migrations are append-only, pick a new name")
-    out.write_text(migration(rows), encoding="utf-8")
+    out.write_text(migration(rows, derived), encoding="utf-8")
     loose = sum(r["sold"] == "loose" for r in rows)
     staples = sum(r["staple"] for r in rows)
     print(f"wrote {out.name}: {len(rows)} ingredients ({loose} loose, {staples} staples)")
