@@ -138,16 +138,30 @@ SPELLING = {"bullion": "bouillon", "mozarella": "mozzarella", "monterrey": "mont
 # "chicken bouillon"), but never a word that decides what the food is for a
 # diet or allergy: "coconut milk" must not become "milk", nor "chicken
 # bouillon" "bouillon", nor "gluten-free flour" "flour".
+# Checked against every part of a word, singular or plural, so
+# "anchovy-stuffed olives" and "beef-flavored ramen" keep their meat.
 KEEP = frozenset(
     {
-        *("chicken", "beef", "pork", "lamb", "turkey", "duck", "veal", "goat", "venison"),
-        *("bacon", "ham", "sausage", "fish", "anchovy", "anchovies", "salmon", "tuna"),
-        *("shrimp", "crab", "lobster", "clam", "clams", "oyster", "oysters", "squid"),
-        *("egg", "eggs", "milk", "butter", "cheese", "cream", "yogurt", "honey", "gelatin"),
-        *("peanut", "peanuts", "almond", "almonds", "cashew", "cashews", "walnut", "walnuts"),
-        *("pecan", "pecans", "hazelnut", "hazelnuts", "pistachio", "pistachios", "nut", "nuts"),
-        *("coconut", "oat", "soy", "rice", "sesame", "wheat", "vegan", "vegetable", "veggie"),
-        *("mushroom", "plant-based", "dairy-free", "gluten-free", "sugar-free", "non-dairy"),
+        # Meat and poultry
+        *("chicken", "beef", "pork", "lamb", "mutton", "turkey", "duck", "goose", "veal"),
+        *("goat", "venison", "rabbit", "bison", "meat", "bacon", "ham", "sausage", "lard"),
+        *("suet", "tallow", "drippings", "pancetta", "prosciutto", "chorizo", "pepperoni"),
+        *("salami", "guanciale", "speck", "bone", "marrow", "liver", "gelatin", "gelatine"),
+        # Fish and shellfish
+        *("fish", "anchovy", "anchovie", "sardine", "salmon", "tuna", "cod", "mackerel"),
+        *("trout", "bonito", "katsuobushi", "dashi", "worcestershire", "caviar", "roe"),
+        *("shrimp", "prawn", "crab", "lobster", "crawfish", "crayfish", "clam", "mussel"),
+        *("oyster", "scallop", "squid", "calamari", "octopus", "shellfish", "seafood"),
+        # Dairy, eggs, honey
+        *("egg", "milk", "butter", "buttermilk", "cheese", "cream", "yogurt", "yoghurt"),
+        *("ghee", "whey", "casein", "lactose", "dairy", "mayo", "mayonnaise", "honey"),
+        # Nuts, seeds, soy, gluten
+        *("nut", "peanut", "almond", "cashew", "walnut", "pecan", "hazelnut", "pistachio"),
+        *("macadamia", "brazil", "pine", "coconut", "sesame", "soy", "soya", "tofu"),
+        *("wheat", "gluten", "barley", "rye", "spelt", "oat", "rice", "alcohol", "wine"),
+        # Words that change the above: "gluten-free", "non-dairy", "plant-based"
+        *("free", "non", "less", "imitation", "vegan", "vegetarian", "plant", "vegetable"),
+        *("veggie", "mushroom"),
     }
 )
 TRAILING = frozenset({"blend", "powder", "granules", "cube", "cubes", "base"})
@@ -231,15 +245,27 @@ def _forms(name: str) -> list[str]:
     return out
 
 
+def _decides(word: str) -> bool:
+    """True when any part of a word ("anchovy-stuffed", "gluten-free",
+    "chicken-flavour") is in KEEP, singular or plural."""
+    for part in re.split(r"[-/'\u2019]", word):
+        forms = {part, part.removesuffix("s"), part.removesuffix("es")}
+        if part.endswith("ies"):
+            forms.add(part[:-3] + "y")
+        if forms & KEEP:
+            return True
+    return False
+
+
 def _fallbacks(name: str) -> list[str]:
     """Shorter names to try last: without a trailing "blend" or "powder", then
     with leading words dropped one at a time. Never drops a word in KEEP, and
     never ends on a lone GENERIC word."""
     words = name.split()
     out = []
-    if len(words) > 1 and words[-1] in TRAILING and words[-1] not in KEEP:
+    if len(words) > 1 and words[-1] in TRAILING:
         out.append(" ".join(words[:-1]))
-    while len(words) > 1 and words[0] not in KEEP:
+    while len(words) > 1 and not _decides(words[0]):
         words = words[1:]
         if len(words) == 1 and words[0] in GENERIC:
             break

@@ -228,6 +228,18 @@ class TestCandidates:
             # Too general: "red peppers" aren't black pepper.
             ("red peppers", "peppers"),
             ("ponzu sauce", "sauce"),
+            # Diet words inside hyphenated or plural words, and other meats.
+            ("anchovy-stuffed olives", "olives"),
+            ("beef-flavored ramen noodles", "ramen noodles"),
+            ("chicken-flavour bouillon cubes", "bouillon cubes"),
+            ("prawns crackers", "crackers"),
+            ("lard pastry", "pastry"),
+            ("pancetta lardons", "lardons"),
+            ("bonito flakes", "flakes"),
+            ("egg-free mayo", "mayo"),
+            ("non-dairy creamer", "creamer"),
+            ("dairy-free cheese", "cheese"),
+            ("worcestershire-style sauce", "sauce"),
         ],
     )
     def test_never_falls_back_past_what_matters(self, name: str, never: str) -> None:
