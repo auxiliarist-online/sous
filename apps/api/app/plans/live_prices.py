@@ -80,8 +80,14 @@ def _quotes(ingredient_id: str, p: Product, store_id: str, now: datetime) -> lis
     }
     rows = []
     if p.promo and p.promo_ends:
-        ends = p.promo_ends[:10]
-        rows.append({**row, "price_cents": round(p.promo * 100), "valid_to": ends, "on_sale": True})
+        rows.append(
+            {
+                **row,
+                "price_cents": round(p.promo * 100),
+                "valid_to": p.promo_ends.isoformat(),
+                "on_sale": True,
+            }
+        )
     if p.regular:
         rows.append({**row, "price_cents": round(p.regular * 100)})
     return rows

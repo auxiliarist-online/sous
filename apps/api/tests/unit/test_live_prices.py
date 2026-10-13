@@ -2,6 +2,7 @@
 
 import asyncio
 import copy
+from datetime import date
 from typing import Any
 
 import httpx2 as httpx
@@ -41,7 +42,7 @@ def kroger_product(pid: str, **kw: Any) -> Product:
     return Product(**{**base, **kw})
 
 
-EGGS_18 = kroger_product("0007203663218", promo=1.99, promo_ends="2026-10-14T03:59:59.999Z")
+EGGS_18 = kroger_product("0007203663218", promo=1.99, promo_ends=date(2026, 10, 13))
 CARROTS_LB = kroger_product("0001111091637", size="1 lb", sold_by="WEIGHT", regular=1.69)
 
 
@@ -93,6 +94,7 @@ def test_prices_the_week_at_todays_store_prices(
     # The store sells 18s, not our guessed dozen: 20 eggs is two packs, on sale.
     assert (eggs.package_quantity, eggs.packages, eggs.cents) == (18, 2, 398)
     assert eggs.on_sale and not eggs.estimated
+    assert (eggs.sale_ends, eggs.regular_cents) == (date(2026, 10, 13), 558)
     carrots = next(i for i in cost.items if i.name == "carrots")
     assert (carrots.sold_by, carrots.cents, carrots.on_sale) == ("loose", 338, False)
     assert cost.store_name == STORE["name"]
@@ -106,7 +108,7 @@ def test_after_the_sale_ends_the_regular_price(
     store_id = asyncio.run(add_live_prices("user-1", plan))
     later = plan_cost(plan, on=MONDAY.replace(day=19), store_id=store_id)
     eggs = next(i for i in later.items if i.name == "eggs")
-    assert (eggs.cents, eggs.on_sale) == (558, False)
+    assert (eggs.cents, eggs.on_sale, eggs.sale_ends) == (558, False, None)
 
 
 def test_unmatched_ingredients_keep_their_estimates(

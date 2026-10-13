@@ -115,6 +115,8 @@ const item = (name: string, extra: Partial<BuyItem> = {}): BuyItem => ({
   cents: null,
   estimated: false,
   onSale: false,
+  saleEnds: null,
+  regularCents: null,
   ...extra,
 })
 
@@ -160,6 +162,8 @@ describe('planCost', () => {
       cents: 400,
       estimated: false,
       onSale: false,
+      saleEnds: null,
+      regularCents: null,
     })
     expect(cost.storeName).toBeNull()
   })
@@ -364,7 +368,12 @@ describe('PlanPage', () => {
         ...COST,
         storeName: 'Harris Teeter',
         items: [
-          item('eggs', { cents: 199, onSale: true }),
+          item('eggs', {
+            cents: 199,
+            onSale: true,
+            saleEnds: '2026-10-13',
+            regularCents: 279,
+          }),
           item('saffron', { cents: 900, estimated: true }),
         ],
       },
@@ -377,7 +386,9 @@ describe('PlanPage', () => {
     ).toBeInTheDocument()
     await userEvent.click(screen.getByText(/What you'll buy/))
     const list = screen.getByRole('list', { name: 'To buy' })
-    expect(within(list).getByText('Sale')).toBeInTheDocument()
+    expect(
+      within(list).getByText(/Sale until Tue, Oct 13 · was \$2\.79/),
+    ).toBeInTheDocument()
     expect(within(list).getByText(/~\$9\.00/)).toBeInTheDocument()
   })
 

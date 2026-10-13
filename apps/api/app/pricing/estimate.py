@@ -58,10 +58,11 @@ class Estimate:
         return self.quote.source in ESTIMATE_SOURCES
 
 
-def _sort_key(quote: PriceQuote, store_id: str | None) -> tuple[int, int, float]:
+def _sort_key(quote: PriceQuote, store_id: str | None) -> tuple[int, int, bool, float]:
     same_store = 0 if store_id is not None and quote.store_id == store_id else 1
     newest_first = -quote.observed_at.timestamp() if quote.observed_at else 0.0
-    return (SOURCE_RANK.get(quote.source, 99), same_store, newest_first)
+    # A store's sale price beats its regular price while the sale is on.
+    return (SOURCE_RANK.get(quote.source, 99), same_store, not quote.on_sale, newest_first)
 
 
 def estimate_cost(

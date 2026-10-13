@@ -8,7 +8,9 @@ for each ingredient (kroger_product_matches). Credentials are server-side only.
 
 import time
 from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx2 as httpx
 
@@ -20,6 +22,9 @@ BASE = "https://api.kroger.com/v1"
 MAX_IDS = 50
 # Seconds to wait before retrying a 429 or 5xx; the last try's error stands.
 RETRY_WAITS = (1.0, 3.0, 0.0)
+# Every Harris Teeter is on Eastern time. Kroger gives sale ends in UTC:
+# "2026-10-14T03:59:59Z" is the end of Tuesday the 13th in the store.
+STORE_TZ = ZoneInfo("America/New_York")
 
 
 @dataclass
@@ -34,7 +39,8 @@ class Product:
     sold_by: str | None
     regular: float | None
     promo: float | None
-    promo_ends: str | None
+    # The last day of the sale, in the store's time zone.
+    promo_ends: date | None
     in_store: bool
     # Kroger's departments: "Produce", "Baking Goods", "Meat & Seafood".
     categories: tuple[str, ...] = ()
@@ -52,10 +58,16 @@ def parse_product(p: dict[str, Any]) -> Product:
         sold_by=item.get("soldBy"),
         regular=price.get("regular") or None,
         promo=promo,
-        promo_ends=(price.get("expirationDate") or {}).get("value") if promo else None,
+        promo_ends=_local_date((price.get("expirationDate") or {}).get("value")) if promo else None,
         in_store=(item.get("fulfillment") or {}).get("inStore", True) is not False,
         categories=tuple(dict.fromkeys(p.get("categories") or [])),
     )
+
+
+def _local_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(STORE_TZ).date()
 
 
 class Kroger:
