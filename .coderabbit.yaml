@@ -30,10 +30,11 @@ reviews:
           Pass if every function, method and class that this PR adds, or whose
           body or signature it changes, under apps/api/app/, apps/api/scripts/ or
           apps/web/src/ (except *.test.ts, *.test.tsx and test-setup.ts) has a
-          docstring (Python) or a JSDoc or leading comment (TypeScript) saying what
-          it does or why. Nested helpers of 3 lines or fewer are exempt. Ignore
-          everything under apps/api/tests/ and supabase/tests/. Fail and list each
-          function that's missing one.
+          docstring or a leading comment (Python), or a JSDoc or leading comment
+          (TypeScript), saying what it does or why, as CLAUDE.md states. Nested
+          helpers of 3 lines or fewer are exempt. Ignore everything under
+          apps/api/tests/ and supabase/tests/. Fail and list each function that's
+          missing one.
   path_filters:
     - '!**/package-lock.json'
     - '!apps/api/nltk_data/**'
