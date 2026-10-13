@@ -5,6 +5,7 @@ import {
   dayName,
   buyText,
   dollars,
+  saleText,
   formatQuantity,
   scaledLine,
   SCALES,
@@ -335,6 +336,9 @@ function BuyRow({
         {item.buy && item.amountUnknown && !item.packages && (
           <span className="muted"> · amount not given</span>
         )}
+        {item.buy && saleText(item) && (
+          <span className="sale small"> · {saleText(item)}</span>
+        )}
         {leftover !== null && leftover >= 0.25 && (
           <span className="muted small">
             {' '}
@@ -344,7 +348,6 @@ function BuyRow({
         )}
       </span>
       <span className="buy-price small">
-        {item.buy && item.onSale && <span className="sale">Sale </span>}
         {item.buy
           ? item.cents !== null
             ? `${item.estimated ? '~' : ''}${dollars(item.cents)}`

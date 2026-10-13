@@ -49,6 +49,9 @@ class Item:
     cents: int | None = None
     estimated: bool = False
     on_sale: bool = False
+    # For a sale price: its last day, and what it would cost after.
+    sale_ends: date | None = None
+    regular_cents: int | None = None
 
 
 @dataclass
@@ -232,6 +235,17 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
             item.cents = found.cents
             item.estimated = found.is_estimate
             item.on_sale = found.quote.on_sale
+            if found.quote.on_sale:
+                item.sale_ends = found.quote.valid_to
+                regular = estimate_cost(
+                    amount,
+                    unit,
+                    [q for q in quotes.get(item.ingredient_id, []) if not q.on_sale],
+                    ingredient=conversions[item.ingredient_id],
+                    store_id=store_id,
+                    on=on,
+                )
+                item.regular_cents = regular.cents if regular else None
             total += found.cents
             estimated = estimated or found.is_estimate
 

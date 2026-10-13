@@ -231,6 +231,9 @@ export interface BuyItem {
   estimated: boolean
   /** The store's sale price. */
   onSale: boolean
+  /** The sale's last day (YYYY-MM-DD), and the cost after it. */
+  saleEnds: string | null
+  regularCents: number | null
 }
 
 export interface PlanCost {
@@ -263,6 +266,8 @@ interface ItemBody {
   cents: number | null
   estimated?: boolean
   on_sale?: boolean
+  sale_ends?: string | null
+  regular_cents?: number | null
 }
 
 export async function planCost(
@@ -303,6 +308,8 @@ export async function planCost(
       cents: i.cents,
       estimated: i.estimated ?? false,
       onSale: i.on_sale ?? false,
+      saleEnds: i.sale_ends ?? null,
+      regularCents: i.regular_cents ?? null,
     })),
     storeName: body.store_name ?? null,
   }
@@ -322,6 +329,25 @@ export function buyText(i: BuyItem): string | null {
   }
   if (i.quantity !== null && i.unit) return amountText(i.quantity, i.unit)
   return null
+}
+
+/** "until Tue, Oct 13" for a sale's last day (a local date, not UTC). */
+export function saleText(i: BuyItem): string | null {
+  if (!i.onSale) return null
+  let text = 'Sale'
+  if (i.saleEnds) {
+    const [y, m, d] = i.saleEnds.split('-').map(Number)
+    const day = new Date(y, m - 1, d).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    })
+    text += ` until ${day}`
+  }
+  if (i.regularCents !== null && i.cents !== null && i.regularCents > i.cents) {
+    text += ` · was ${dollars(i.regularCents)}`
+  }
+  return text
 }
 
 export function dollars(cents: number): string {

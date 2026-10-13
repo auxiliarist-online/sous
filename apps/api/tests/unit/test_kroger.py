@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from datetime import date
 
 import httpx2 as httpx
 import pytest
@@ -236,7 +237,8 @@ class TestClient:
     def test_parses_price_promo_and_size(self) -> None:
         p = parse_product(KROGER_EGGS)
         assert (p.size, p.regular, p.promo, p.in_store) == ("12 ct", 2.19, 1.99, True)
-        assert p.promo_ends == "2026-10-14T03:59:59.999Z"
+        # 03:59 UTC on the 14th is still the 13th in Asheville.
+        assert p.promo_ends == date(2026, 10, 13)
 
     def test_gets_one_token_and_searches_the_store(self) -> None:
         k, seen = self.client(lambda r: httpx.Response(200, json={"data": [KROGER_EGGS]}))
