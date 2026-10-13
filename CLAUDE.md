@@ -21,4 +21,6 @@ Meal planner: discover recipes, plan the week under a dollar budget, and get a s
 
 ## Reviewing
 
+Two reviewers: the Claude review (`.github/workflows/claude-review.yml`, on each new PR) and CodeRabbit (`.coderabbit.yaml`, free open-source plan; under 10 stars, comment `@coderabbitai review` to run it).
+
 Focus on correctness, security (RLS, SSRF, secrets), and the rules above. Skip style nits that ruff, prettier, or oxlint already enforce.
