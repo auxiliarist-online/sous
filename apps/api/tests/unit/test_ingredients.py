@@ -179,6 +179,11 @@ class TestLines:
         }  # fmt: skip
 
 
+def test_a_name_that_only_describes_takes_the_comment() -> None:
+    (line,) = parse_line(5, "1/3 cup raw, unsweetened grated coconut")
+    assert "coconut" in line.candidates
+
+
 class TestCandidates:
     def test_drops_descriptors_one_at_a_time(self) -> None:
         assert candidates("Large Ripe Avocados") == [
