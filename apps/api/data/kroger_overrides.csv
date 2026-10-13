@@ -1,1 +1,25 @@
-ingredient,product_id
+ingredient,product_id,note
+beef brisket,,matcher picks corned beef brisket
+chili oil,,matcher picks tuna in olive oil
+coconut cream,,matcher picks sweetened cream of coconut
+crab meat,,matcher picks imitation crab
+figs,,only dried figs; we want fresh
+ginger,,matcher picks minced ginger in a jar; we want fresh root
+golden syrup,,matcher picks agave syrup
+gruyere,,matcher picks a gouda-gruyere blend
+jalapeno,,matcher picks hot honey jalapenos
+kimchi,,matcher picks kimchi noodle soup
+lobster,,matcher picks lobster mac and cheese
+macadamia nuts,,matcher picks a glazed nut mix
+meat,,too vague to match
+mixed spice,,matcher picks pickling spice
+mushroom broth,,matcher picks mushroom chicken bone broth
+orange blossom water,,matcher picks sparkling water
+pecans,,matcher picks praline pecans
+pistachios,,matcher picks a nut mix
+rose water,,matcher picks sparkling water
+semolina,,matcher picks lasagne made with semolina
+sourdough bread,,matcher picks a focaccia
+turkey breast,,matcher picks ground turkey breast
+vanilla sugar,,matcher picks a canned latte
+wild rice,,matcher picks a rice mix

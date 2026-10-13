@@ -6,7 +6,7 @@
 
 One product search per ingredient (Products allows 10,000 calls a day). The
 rules are in app/pricing/kroger_match.py; data/kroger_overrides.csv fixes the
-picks they get wrong (a blank product_id means "don't buy this from Kroger").
+picks they get wrong (a blank product_id means "no match: price from estimates").
 Ingredients bought as another (egg yolks -> eggs) are skipped.
 
 Only product ids are saved, never Kroger's names, sizes or prices (their terms,
