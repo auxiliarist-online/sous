@@ -113,6 +113,8 @@ const item = (name: string, extra: Partial<BuyItem> = {}): BuyItem => ({
   pantry: null,
   buy: true,
   cents: null,
+  estimated: false,
+  onSale: false,
   ...extra,
 })
 
@@ -156,7 +158,10 @@ describe('planCost', () => {
       packages: 1,
       packageUnit: 'lb',
       cents: 400,
+      estimated: false,
+      onSale: false,
     })
+    expect(cost.storeName).toBeNull()
   })
 
   it('throws when the API fails', async () => {
@@ -232,6 +237,7 @@ const COST: PlanCost = {
   totalCents: 1200,
   estimated: true,
   unpriced: 1,
+  storeName: null,
   items: [
     item('white rice', {
       quantity: 1,
@@ -349,6 +355,30 @@ describe('PlanPage', () => {
     )
     expect(api.setPantry).toHaveBeenCalledWith('i-white rice', 'have')
     await waitFor(() => expect(api.planCost).toHaveBeenCalledTimes(3))
+  })
+
+  it('shows live store prices, sales and estimates', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        storeName: 'Harris Teeter',
+        items: [
+          item('eggs', { cents: 199, onSale: true }),
+          item('saffron', { cents: 900, estimated: true }),
+        ],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByText(
+        /Prices from Harris Teeter, today\. Prices marked ~/,
+      ),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByText(/What you'll buy/))
+    const list = screen.getByRole('list', { name: 'To buy' })
+    expect(within(list).getByText('Sale')).toBeInTheDocument()
+    expect(within(list).getByText(/~\$9\.00/)).toBeInTheDocument()
   })
 
   it('says when the week is over budget, or offers to set one', async () => {

@@ -227,6 +227,10 @@ export interface BuyItem {
   /** False when it's on hand, so it isn't bought. */
   buy: boolean
   cents: number | null
+  /** A rough baseline price rather than the store's. */
+  estimated: boolean
+  /** The store's sale price. */
+  onSale: boolean
 }
 
 export interface PlanCost {
@@ -237,6 +241,8 @@ export interface PlanCost {
   /** Things to buy that have no price yet. */
   unpriced: number
   items: BuyItem[]
+  /** The store whose prices these are, when they're live from it. */
+  storeName: string | null
 }
 
 interface ItemBody {
@@ -255,6 +261,8 @@ interface ItemBody {
   pantry: PantryStatus | null
   buy: boolean
   cents: number | null
+  estimated?: boolean
+  on_sale?: boolean
 }
 
 export async function planCost(
@@ -270,6 +278,7 @@ export async function planCost(
     estimated: boolean
     unpriced: number
     items: ItemBody[]
+    store_name?: string | null
   }
   return {
     budgetCents: body.budget_cents,
@@ -292,7 +301,10 @@ export async function planCost(
       pantry: i.pantry,
       buy: i.buy,
       cents: i.cents,
+      estimated: i.estimated ?? false,
+      onSale: i.on_sale ?? false,
     })),
+    storeName: body.store_name ?? null,
   }
 }
 

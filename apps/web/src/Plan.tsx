@@ -263,9 +263,13 @@ function Budget({
           </Link>
         </p>
       )}
-      {(cost.estimated || cost.unpriced > 0) && (
+      {(cost.storeName || cost.estimated || cost.unpriced > 0) && (
         <p className="muted small">
-          {cost.estimated && 'Rough prices until store prices are in. '}
+          {cost.storeName && `Prices from ${cost.storeName}, today. `}
+          {cost.estimated &&
+            (cost.storeName
+              ? 'Prices marked ~ are rough estimates. '
+              : 'Rough prices until store prices are in. ')}
           {cost.unpriced > 0 &&
             `${cost.unpriced} item${cost.unpriced === 1 ? '' : 's'} not priced yet.`}
         </p>
@@ -340,7 +344,12 @@ function BuyRow({
         )}
       </span>
       <span className="buy-price small">
-        {item.buy ? (item.cents !== null ? dollars(item.cents) : '—') : ''}
+        {item.buy && item.onSale && <span className="sale">Sale </span>}
+        {item.buy
+          ? item.cents !== null
+            ? `${item.estimated ? '~' : ''}${dollars(item.cents)}`
+            : '—'
+          : ''}
       </span>
       {item.ingredientId && (
         <button

@@ -32,6 +32,8 @@ class PriceQuote:
     valid_from: date | None = None
     valid_to: date | None = None
     observed_at: datetime | None = None
+    # A store's sale price (live from the store, TYL-80).
+    on_sale: bool = False
 
     def is_valid_on(self, day: date) -> bool:
         if self.valid_from and day < self.valid_from:

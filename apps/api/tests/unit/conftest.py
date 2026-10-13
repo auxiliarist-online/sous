@@ -12,6 +12,9 @@ from app.recipes import fetch
 def fresh_fetch_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fetch, "robots", fetch.Robots())
     monkeypatch.setattr(fetch, "throttle", fetch.Throttle(0))
+    # Never reach the Kroger API from tests, whatever .env says.
+    monkeypatch.setattr(settings, "kroger_client_id", "")
+    monkeypatch.setattr(settings, "kroger_client_secret", "")
 
 
 @pytest.fixture
