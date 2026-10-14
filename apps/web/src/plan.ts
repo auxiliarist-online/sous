@@ -347,39 +347,53 @@ export interface AddedCosts {
   recipes: Record<string, AddedCost>
 }
 
-/** What adding each of these recipes would add to the week's cost. */
+/** What adding each of these recipes would add to the week's cost. The API
+ *  takes 100 at a time, so more are asked for in batches. */
 export async function addedCosts(
   session: Session,
   weekStart: string,
   recipeIds: string[],
   send: typeof apiFetch = apiFetch,
 ): Promise<AddedCosts> {
-  const resp = await send(session, `/plans/${weekStart}/added`, {
-    method: 'POST',
-    body: JSON.stringify({ recipe_ids: recipeIds.slice(0, 100) }),
-  })
-  if (!resp.ok) throw new Error(`added costs: ${resp.status}`)
-  const body = (await resp.json()) as {
-    budget_cents: number | null
-    total_cents: number
-    recipes: {
-      recipe_id: string
-      cents: number
-      unpriced: boolean
-      estimated: boolean
-    }[]
+  const batches: string[][] = []
+  for (let i = 0; i < recipeIds.length; i += ADDED_BATCH) {
+    batches.push(recipeIds.slice(i, i + ADDED_BATCH))
   }
+  const bodies = await Promise.all(
+    batches.map(async (ids) => {
+      const resp = await send(session, `/plans/${weekStart}/added`, {
+        method: 'POST',
+        body: JSON.stringify({ recipe_ids: ids }),
+      })
+      if (!resp.ok) throw new Error(`added costs: ${resp.status}`)
+      return (await resp.json()) as {
+        budget_cents: number | null
+        total_cents: number
+        recipes: {
+          recipe_id: string
+          cents: number
+          unpriced: boolean
+          estimated: boolean
+        }[]
+      }
+    }),
+  )
   return {
-    budgetCents: body.budget_cents,
-    totalCents: body.total_cents,
+    budgetCents: bodies[0]?.budget_cents ?? null,
+    totalCents: bodies[0]?.total_cents ?? 0,
     recipes: Object.fromEntries(
-      body.recipes.map((r) => [
-        r.recipe_id,
-        { cents: r.cents, unpriced: r.unpriced, estimated: r.estimated },
-      ]),
+      bodies.flatMap((b) =>
+        b.recipes.map((r) => [
+          r.recipe_id,
+          { cents: r.cents, unpriced: r.unpriced, estimated: r.estimated },
+        ]),
+      ),
     ),
   }
 }
+
+// The most recipe ids POST /plans/{week}/added takes at once.
+const ADDED_BATCH = 100
 
 /** How much the user's own price is for (TYL-34): one package as the list
  *  buys it ("14 oz", "1 bunch", "pack of 12"), or a pound of what's loose. */

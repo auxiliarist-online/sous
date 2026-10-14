@@ -233,6 +233,37 @@ describe('addedCosts', () => {
   })
 })
 
+describe('addedCosts in batches', () => {
+  it('asks 100 at a time and merges the answers', async () => {
+    const ids = Array.from({ length: 150 }, (_, n) => `r${n}`)
+    const send = vi.fn(
+      async (_s: Session, _path: string, init?: RequestInit) => {
+        const asked = JSON.parse(String(init!.body)).recipe_ids as string[]
+        return new Response(
+          JSON.stringify({
+            budget_cents: 5000,
+            total_cents: 4200,
+            recipes: asked.map((id) => ({
+              recipe_id: id,
+              cents: 100,
+              unpriced: false,
+              estimated: false,
+            })),
+          }),
+        )
+      },
+    )
+    const added = await addedCosts({} as Session, WEEK, ids, send)
+    expect(
+      send.mock.calls.map(
+        (c) => JSON.parse(String(c[2]!.body)).recipe_ids.length,
+      ),
+    ).toEqual([100, 50])
+    expect(Object.keys(added.recipes)).toHaveLength(150)
+    expect(added.totalCents).toBe(4200)
+  })
+})
+
 describe('own prices', () => {
   it.each([
     ['2.49', 249],
