@@ -11,6 +11,7 @@ edited.
 """
 
 import csv
+import math
 import sys
 from datetime import date
 from pathlib import Path
@@ -52,8 +53,9 @@ def load() -> list[tuple[str, int, float, str]]:
         except ValueError:
             errors.append(f"line {n}: price and quantity must be numbers")
             continue
-        if price <= 0 or qty <= 0:
-            errors.append(f"line {n}: price and quantity must be positive")
+        if not (math.isfinite(price) and math.isfinite(qty)) or price <= 0 or qty <= 0:
+            errors.append(f"line {n}: price and quantity must be positive numbers")
+            continue
         if (name, unit) not in own:
             try:
                 unit = normalize_unit(unit)

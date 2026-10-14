@@ -499,6 +499,7 @@ function Filters({
   // clears a "Weeknight" filter left from a recipe since removed.
   const hasTag = (tag: string) =>
     filter.tags.some((t) => t.toLowerCase() === tag.toLowerCase())
+  // Select a tag's filter, or clear it (whatever its case) when selected.
   const toggleTag = (tag: string) =>
     onChange({
       ...filter,
