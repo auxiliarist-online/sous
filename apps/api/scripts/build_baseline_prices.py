@@ -211,6 +211,7 @@ COLUMNS = [
 
 
 def fetch(url: str) -> str:
+    """A public data file, as text, fetched as SousBot."""
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=60) as response:
         return str(response.read().decode("utf-8-sig"))
@@ -229,6 +230,7 @@ def cpi(series_id: str) -> dict[str, float]:
 def row(
     item: Item, source: str, price: float, quantity: float, unit: str, **extra: str
 ) -> dict[str, str]:
+    """One row of data/baseline_prices.csv."""
     return {
         "ingredient": item.ingredient,
         "aisle": item.aisle,
@@ -245,6 +247,7 @@ def row(
 
 
 def bls_rows(south_cpi: dict[str, float], as_of: str) -> list[dict[str, str]]:
+    """Price rows from BLS South average prices, brought forward to `as_of`."""
     docs = json.loads(fetch(DBNOMICS_SOUTH))["series"]["docs"]
     rows = []
     for doc in docs:
@@ -271,6 +274,8 @@ def bls_rows(south_cpi: dict[str, float], as_of: str) -> list[dict[str, str]]:
 
 
 def ers_rows(us_cpi: dict[str, float], as_of: str) -> list[dict[str, str]]:
+    """Price rows from USDA ERS 2023 fruit and vegetable prices, per pound or
+    per pint of juice, brought forward to `as_of`."""
     base = sum(v for k, v in us_cpi.items() if k.startswith("2023")) / 12
     factor = us_cpi[as_of] / base
     rows = []
@@ -301,6 +306,7 @@ def ers_rows(us_cpi: dict[str, float], as_of: str) -> list[dict[str, str]]:
 
 
 def seed_rows() -> list[dict[str, str]]:
+    """Price rows from the hand estimates in data/seed_prices.csv."""
     rows = []
     with open(DATA_DIR / "seed_prices.csv", newline="") as f:
         for r in csv.DictReader(f):
@@ -329,6 +335,7 @@ def seed_rows() -> list[dict[str, str]]:
 
 
 def sql_literal(value: str) -> str:
+    """A SQL string literal, or null for an empty value."""
     return "null" if value == "" else "'" + value.replace("'", "''") + "'"
 
 
@@ -387,6 +394,7 @@ def write_migration(rows: list[dict[str, str]], out: Path) -> None:
 
 
 def main() -> None:
+    """Fetch the sources, write data/baseline_prices.csv and the migration."""
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     out = MIGRATIONS / f"{sys.argv[1]}.sql"

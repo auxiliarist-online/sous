@@ -13,6 +13,7 @@ Supabase under row-level security; pricing needs the API's unit conversions.
 from dataclasses import asdict
 from datetime import date
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -53,7 +54,7 @@ async def week_cost(
 class Candidates(BaseModel):
     """Recipes the user might add to the week: their saved ones, say."""
 
-    recipe_ids: list[str] = Field(min_length=1, max_length=100)
+    recipe_ids: list[UUID] = Field(min_length=1, max_length=100)
 
 
 @router.post("/{week_start}/added")
@@ -62,7 +63,8 @@ async def added(
 ) -> dict[str, Any]:
     """What adding each recipe at full size would add to the week's cost, with
     the week's total and budget to compare against (TYL-30)."""
-    inputs, store_id = await _inputs(user_id, week_start, list(dict.fromkeys(body.recipe_ids)))
+    ids = list(dict.fromkeys(str(r) for r in body.recipe_ids))
+    inputs, store_id = await _inputs(user_id, week_start, ids)
     week = plan_cost(inputs, on=week_start, store_id=store_id)
     return {
         "budget_cents": week.budget_cents,

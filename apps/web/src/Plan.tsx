@@ -717,10 +717,11 @@ function AddRecipe({
     if (!added || budget === null || !a) return 0
     return Math.max(0, added.totalCents + a.cents - budget)
   }
-  // Up to three other recipes that fit the budget and the user's rules: from
-  // their favorite cuisines first, then cheapest.
+  // 0 for a recipe from one of the user's favorite cuisines, to list first.
   const favorite = (r: SavedRecipe) =>
     r.cuisines.some((c) => favorites.includes(c)) ? 0 : 1
+  // Up to three other recipes that fit the budget and the user's rules: from
+  // their favorite cuisines first, then cheapest.
   const cheaper = (r: SavedRecipe) =>
     recipes
       .filter(

@@ -19,6 +19,7 @@ from tests.unit.conftest import Install
 
 MONDAY = date(2026, 10, 12)
 RICE, EGGS, CARROTS, SALT, BASIL = "rice", "eggs", "carrots", "salt", "basil"
+R1 = "11111111-1111-1111-1111-111111111111"
 
 INGREDIENTS: dict[str, dict[str, Any]] = {
     RICE: {
@@ -434,19 +435,21 @@ class TestRoute:
         assert client.calls == [("user-1", MONDAY)]  # type: ignore[attr-defined]
 
     def test_says_what_each_recipe_would_add(self, client: TestClient) -> None:
-        resp = client.post("/plans/2026-10-12/added", json={"recipe_ids": ["r-1", "r-1"]})
+        resp = client.post("/plans/2026-10-12/added", json={"recipe_ids": [R1, R1]})
         assert resp.status_code == 200
         assert resp.json() == {
             "budget_cents": 5000,
             "total_cents": 360,
-            "recipes": [{"recipe_id": "r-1", "cents": 100, "unpriced": False, "estimated": True}],
+            "recipes": [{"recipe_id": R1, "cents": 100, "unpriced": False, "estimated": True}],
         }
 
     def test_added_needs_some_recipes_and_not_too_many(self, client: TestClient) -> None:
         assert client.post("/plans/2026-10-12/added", json={"recipe_ids": []}).status_code == 422
-        many = {"recipe_ids": [str(n) for n in range(101)]}
+        many = {"recipe_ids": [R1] * 101}
         assert client.post("/plans/2026-10-12/added", json=many).status_code == 422
-        assert client.post("/plans/2026-10-13/added", json={"recipe_ids": ["r"]}).status_code == 422
+        not_ids = {"recipe_ids": ["r-1"]}
+        assert client.post("/plans/2026-10-12/added", json=not_ids).status_code == 422
+        assert client.post("/plans/2026-10-13/added", json={"recipe_ids": [R1]}).status_code == 422
 
     def test_weeks_start_on_monday(self, client: TestClient) -> None:
         assert client.get("/plans/2026-10-13/cost").status_code == 422
