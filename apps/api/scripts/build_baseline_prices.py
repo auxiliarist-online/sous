@@ -7,15 +7,18 @@ Sources:
 
 BLS and ERS prices are brought forward with the CPI "food at home" index from FRED.
 
-Writes data/baseline_prices.csv and a Supabase migration that inserts the
-ingredients and their prices. Run from apps/api:
+Writes data/baseline_prices.csv and a new Supabase migration that adds the
+prices the database doesn't have yet (an ingredient already priced by that
+source is left alone; the first run was 20261007030000_baseline_prices).
+Migrations already applied must not be edited. Run from apps/api:
 
-    python scripts/build_baseline_prices.py
+    python scripts/build_baseline_prices.py 20261014060000_more_baseline_prices
 """
 
 import csv
 import io
 import json
+import sys
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -24,7 +27,7 @@ from pathlib import Path
 
 API_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = API_DIR / "data"
-MIGRATION = API_DIR.parent.parent / "supabase" / "migrations" / "20261007030000_baseline_prices.sql"
+MIGRATIONS = API_DIR.parent.parent / "supabase" / "migrations"
 
 DBNOMICS_SOUTH = "https://api.db.nomics.world/v22/series/BLS/ap?" + urllib.parse.urlencode(
     {"dimensions": json.dumps({"area": ["0300"]}), "observations": 1, "limit": 1000}
@@ -79,6 +82,21 @@ BLS_ITEMS: dict[str, tuple[Item, float, str]] = {
     "714233": (Item("dried beans", "pantry", (), 180), 1, "lb"),
     "715211": (Item("sugar", "pantry", (), 200), 1, "lb"),
     "FL2101": (Item("romaine lettuce", "produce", (), 47), 1, "lb"),
+    # Added for TYL-61.
+    "703213": (Item("chuck roast", "meat_seafood", ("meat",)), 1, "lb"),
+    "703613": (Item("steak", "meat_seafood", ("meat",)), 1, "lb"),  # sirloin
+    "704312": (Item("ham", "meat_seafood", ("meat", "pork")), 1, "lb"),
+    "711411": (Item("grapefruit", "produce", (), None, 246), 1, "lb"),
+    "710211": (Item("american cheese", "dairy_eggs", ("dairy",), 113), 1, "lb"),
+    "710411": (Item("ice cream", "frozen", ("dairy",)), 0.5, "gallon"),
+    "717311": (Item("coffee", "beverages"), 1, "lb"),
+    "718311": (Item("potato chips", "pantry"), 16, "oz"),
+    "720111": (Item("beer", "beverages", ("gluten", "alcohol")), 16, "fl_oz"),
+    "720311": (Item("wine", "beverages", ("alcohol",)), 1, "l"),
+    "FC4101": (Item("beef", "meat_seafood", ("meat",)), 1, "lb"),  # other uncooked beef
+    "FD4101": (Item("pork", "meat_seafood", ("meat", "pork")), 1, "lb"),  # other pork
+    "FJ1101": (Item("skim milk", "dairy_eggs", ("dairy",), 245), 1, "gallon"),
+    "FN1101": (Item("cola", "beverages"), 2, "l"),
 }
 
 # (ERS name, form) -> ingredient. All ERS rows used here are priced per pound.
@@ -137,6 +155,41 @@ ERS_ITEMS: dict[tuple[str, str], Item] = {
     ("Pears", "Fresh"): Item("pears", "produce", (), 140, 178),
     ("Pineapple", "Fresh"): Item("pineapple", "produce", (), 165, 905),
     ("Strawberries", "Frozen"): Item("frozen strawberries", "frozen", (), 149),
+    # Added for TYL-61.
+    ("Artichoke", "Canned"): Item("artichoke hearts", "pantry"),
+    ("Carrots, baby", "Fresh"): Item("baby carrots", "produce", (), None, 10),
+    ("Cauliflower", "Frozen"): Item("frozen cauliflower", "frozen", (), 132),
+    ("Cabbage, sauerkraut", "Canned"): Item("sauerkraut", "pantry", (), 142),
+    ("Green beans", "Frozen"): Item("frozen green beans", "frozen", (), 121),
+    ("Lettuce, iceberg", "Fresh"): Item("iceberg lettuce", "produce", (), 72, 755),
+    (
+        "Mixed vegetables, carrots, peas, corn, and green beans",
+        "Frozen",
+    ): Item("frozen mixed vegetables", "frozen"),
+    ("Potatoes, french fries", "Frozen"): Item("frozen french fries", "frozen"),
+    ("Apricots", "Fresh"): Item("apricots", "produce", (), 165, 35),
+    ("Apricots", "Dried"): Item("dried apricots", "pantry", (), 130),
+    ("Blackberries", "Fresh"): Item("blackberries", "produce", (), 144),
+    ("Cherries", "Fresh"): Item("cherries", "produce", (), 138),
+    ("Clementines", "Fresh"): Item("clementines", "produce", (), None, 74),
+    ("Figs", "Dried"): Item("dried figs", "pantry", (), 149),
+    ("Kiwi", "Fresh"): Item("kiwi", "produce", (), 180, 69),
+    ("Nectarines", "Fresh"): Item("nectarines", "produce", (), 143, 142),
+    ("Papaya", "Fresh"): Item("papaya", "produce", (), 145, 157),
+    ("Peaches", "Frozen"): Item("frozen peaches", "frozen", (), 250),
+    ("Plum", "Fresh"): Item("plums", "produce", (), 165, 66),
+    ("Plum (prunes)", "Dried"): Item("prunes", "pantry", (), 174),
+    ("Raspberries", "Fresh"): Item("raspberries", "produce", (), 123),
+    ("Raspberries", "Frozen"): Item("frozen raspberries", "frozen", (), 140),
+    ("Pineapple, in juice", "Canned"): Item("canned pineapple", "pantry", (), 249),
+    ("Apples, ready to drink", "Juice"): Item("apple juice", "beverages"),
+    ("Oranges, ready to drink", "Juice"): Item("orange juice", "beverages", (), 248),
+}
+
+# ERS units, as the quantity and unit a price is for.
+ERS_UNITS = {
+    "per pound": (1.0, "lb"),
+    "per pint (16 fluid ounces ready to drink)": (16.0, "fl_oz"),
 }
 
 COLUMNS = [
@@ -226,16 +279,18 @@ def ers_rows(us_cpi: dict[str, float], as_of: str) -> list[dict[str, str]]:
             key = (r[name_col].strip(), r["Form"].strip())
             if key not in ERS_ITEMS:
                 continue
-            if r["AverageRetailPriceUnitOfMeasure"].strip() != "per pound":
-                raise ValueError(f"unexpected unit for {key}")
+            measure = r["AverageRetailPriceUnitOfMeasure"].strip()
+            if measure not in ERS_UNITS:
+                raise ValueError(f"unexpected unit for {key}: {measure}")
+            quantity, unit = ERS_UNITS[measure]
             price = float(r["AverageRetailPrice"])
             rows.append(
                 row(
                     ERS_ITEMS[key],
                     "baseline_usda",
                     price * factor,
-                    1,
-                    "lb",
+                    quantity,
+                    unit,
                     region="us",
                     as_of=as_of,
                     source_ref=f"USDA ERS {key[0]} ({key[1]})",
@@ -277,15 +332,19 @@ def sql_literal(value: str) -> str:
     return "null" if value == "" else "'" + value.replace("'", "''") + "'"
 
 
-def write_migration(rows: list[dict[str, str]]) -> None:
+def write_migration(rows: list[dict[str, str]], out: Path) -> None:
+    """A migration adding these ingredients (if missing) and the prices for
+    them that the database doesn't have from that source yet."""
     ingredients: dict[str, dict[str, str]] = {}
     for r in rows:
         ingredients.setdefault(r["ingredient"], r)
 
     lines = [
-        "-- Baseline ingredient prices (TYL-28). Generated by",
+        "-- Baseline ingredient prices (TYL-28, TYL-61). Generated by",
         "-- apps/api/scripts/build_baseline_prices.py; edit the script, not this file.",
         f"-- Generated {date.today().isoformat()} from BLS (South), USDA ERS and hand seeds.",
+        "-- Only prices the database doesn't have yet: an ingredient already priced",
+        "-- by a source keeps that price.",
         "",
         "insert into public.ingredients",
         "  (name, aisle, contains, may_contain, grams_per_cup, grams_per_each)",
@@ -318,13 +377,21 @@ def write_migration(rows: list[dict[str, str]]) -> None:
     lines.append(",\n".join(values))
     lines += [
         ") as v (source, ingredient, region, price_cents, quantity, unit, valid_from)",
-        "join public.ingredients i on lower(i.name) = lower(v.ingredient);",
+        "join public.ingredients i on lower(i.name) = lower(v.ingredient)",
+        "where not exists (",
+        "  select 1 from public.prices p where p.ingredient_id = i.id and p.source = v.source",
+        ");",
         "",
     ]
-    MIGRATION.write_text("\n".join(lines))
+    out.write_text("\n".join(lines))
 
 
 def main() -> None:
+    if len(sys.argv) != 2:
+        sys.exit(__doc__)
+    out = MIGRATIONS / f"{sys.argv[1]}.sql"
+    if out.exists():
+        sys.exit(f"{out.name} exists; migrations are append-only, pick a new name")
     south_cpi = cpi("CUUR0300SAF11")
     us_cpi = cpi("CUUR0000SAF11")
     as_of = max(set(south_cpi) & set(us_cpi))
@@ -341,7 +408,7 @@ def main() -> None:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
-    write_migration(rows)
+    write_migration(rows, out)
     print(f"{len(rows)} ingredients priced; CPI as of {as_of}")
 
 

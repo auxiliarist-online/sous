@@ -101,11 +101,12 @@ describe('reference data', () => {
     assert.equal(rows[0].ht, 'kroger_api')
   })
 
-  it('seeds one baseline price per priced staple', async () => {
-    // Ingredients added later (apps/api/data/ingredients.csv) have no baseline price yet.
+  it('seeds one shared price per ingredient from each source', async () => {
+    // A public baseline and a hand estimate can both price an ingredient
+    // (TYL-61); the baseline wins, and neither repeats.
     const { rows } = await db.query(`
       select (select count(*) from prices where source in ('baseline_bls', 'baseline_usda', 'seed'))::int as prices,
-             (select count(distinct ingredient_id) from prices
+             (select count(distinct (ingredient_id, source)) from prices
                 where source in ('baseline_bls', 'baseline_usda', 'seed'))::int as priced
     `)
     assert.ok(rows[0].prices >= 100)
@@ -2710,6 +2711,22 @@ describe('package estimates (TYL-61)', () => {
     assert.deepEqual(rows, [
       { name: 'chicken', price_cents: 350, quantity: 1, unit: 'lb' },
       { name: 'margarine', price_cents: 300, quantity: 16, unit: 'oz' },
+    ])
+  })
+})
+
+describe('more public baselines (TYL-61)', () => {
+  it('prices more ingredients from BLS and USDA, ahead of hand estimates', async () => {
+    const { rows } = await db.query(
+      `select i.name, array_agg(p.source order by p.source) as sources
+       from prices p join ingredients i on i.id = p.ingredient_id
+       where i.name in ('coffee', 'clementines', 'orange juice')
+       group by i.name order by i.name`,
+    )
+    assert.deepEqual(rows, [
+      { name: 'clementines', sources: ['baseline_usda', 'seed'] },
+      { name: 'coffee', sources: ['baseline_bls', 'seed'] },
+      { name: 'orange juice', sources: ['baseline_usda', 'seed'] },
     ])
   })
 })
