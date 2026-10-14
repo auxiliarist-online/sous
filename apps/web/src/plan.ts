@@ -278,6 +278,8 @@ interface ItemBody {
   regular_cents?: number | null
 }
 
+/** The week's buy list and cost from the API: each item's price and where
+ *  it's from, the store, and each planned recipe's share. */
 export async function planCost(
   session: Session,
   weekStart: string,
@@ -418,7 +420,8 @@ export async function setMyPrice(
   if (error) throw error
 }
 
-/** Forget the user's own price for an ingredient at a store. */
+/** Back to the usual price for an ingredient at a store: forgets the user's
+ *  price there and their price for anywhere, which applies there too. */
 export async function clearMyPrice(
   db: SupabaseClient,
   ingredientId: string,

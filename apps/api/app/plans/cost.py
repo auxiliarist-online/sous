@@ -72,6 +72,9 @@ class EntryCost:
 
 @dataclass
 class PlanCost:
+    """A week's buy list and cost against the budget, with each planned
+    recipe's share and the store whose prices were used."""
+
     budget_cents: int | None
     total_cents: int
     # True when any price is a baseline guess rather than a real store price.

@@ -56,6 +56,7 @@ export interface PlanApi {
     cents: number,
     basis: { quantity: number; unit: string },
   ): Promise<void>
+  /** Back to the usual price at a store (or anywhere, with null). */
   clearMyPrice(ingredientId: string, storeId: string | null): Promise<void>
 }
 

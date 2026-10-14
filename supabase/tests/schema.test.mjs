@@ -1756,12 +1756,23 @@ describe('meal planner', () => {
     await as('authenticated', ALICE, () =>
       db.query('select clear_my_price($1, $2)', [tofu, coop]),
     )
+    // Back to the usual price at the co-op: the price for anywhere applied
+    // there too, so it goes as well.
     await asDave('select clear_my_price($1, $2)', [tofu, coop])
     const left = await asDave(
       `select price_cents from prices where source = 'user' and ingredient_id = $1`,
       [tofu],
     )
-    assert.deepEqual(left, [{ price_cents: 279 }])
+    assert.deepEqual(left, [])
+    // Clearing the price for anywhere leaves a store's own.
+    await asDave('select set_my_price($1, $2, 249, 14, $3)', [tofu, coop, 'oz'])
+    await asDave('select set_my_price($1, null, 279, 14, $2)', [tofu, 'oz'])
+    await asDave('select clear_my_price($1, null)', [tofu])
+    const kept = await asDave(
+      `select price_cents from prices where source = 'user' and ingredient_id = $1`,
+      [tofu],
+    )
+    assert.deepEqual(kept, [{ price_cents: 249 }])
     await assert.rejects(
       asDave('select set_my_price($1, null, 100, 1, $2)', [tofu, 'handful']),
       /unknown unit/,

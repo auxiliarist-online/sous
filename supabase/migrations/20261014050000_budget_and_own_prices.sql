@@ -115,6 +115,10 @@ begin
 end
 $$;
 
+-- Only the API may call it, as before (20261012000000).
+revoke execute on function public.plan_cost_inputs(uuid, date, uuid[]) from public, anon, authenticated;
+grant execute on function public.plan_cost_inputs(uuid, date, uuid[]) to service_role;
+
 -- The user's own price for an ingredient (TYL-34): "tofu is $2.49 at my
 -- co-op". One per ingredient and store (or one for anywhere, with no store),
 -- private to them under the prices table's row-level security. Pricing
@@ -147,10 +151,12 @@ begin
 end
 $$;
 
--- Forget the signed-in user's price for an ingredient at a store.
+-- Go back to the usual price for an ingredient at a store: forget the
+-- signed-in user's price there, and their price for anywhere, which applies
+-- at every store too.
 create function public.clear_my_price(p_ingredient uuid, p_store uuid) returns void
 language sql as $$
   delete from public.prices
   where source = 'user' and user_id = auth.uid() and ingredient_id = p_ingredient
-    and store_id is not distinct from p_store;
+    and (store_id is null or store_id = p_store);
 $$;
