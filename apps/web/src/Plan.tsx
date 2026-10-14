@@ -490,6 +490,8 @@ function AddRecipe({
   const [fits, setFits] = useState<Record<string, Fit>>({})
   const [query, setQuery] = useState('')
   const [failed, setFailed] = useState(false)
+  // A recipe that breaks the user's rules, waiting for "Add anyway" (TYL-85).
+  const [confirming, setConfirming] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
@@ -514,9 +516,7 @@ function AddRecipe({
   }
   if (!recipes) return null
 
-  const allowed = recipes.filter((r) => fits[r.id] !== 'excluded')
-  const hidden = recipes.length - allowed.length
-  const shown = filterRecipes(allowed, { ...NO_FILTER, query })
+  const shown = filterRecipes(recipes, { ...NO_FILTER, query })
 
   return (
     <section className="add-to-plan">
@@ -555,27 +555,54 @@ function AddRecipe({
                     </span>
                   )}
                 </span>
-                <button
-                  type="button"
-                  className="chip"
-                  disabled={busy}
-                  aria-label={`Add ${r.title}`}
-                  onClick={() => onAdd(r)}
-                >
-                  + Add
-                </button>
+                {confirming === r.id ? (
+                  <button
+                    type="button"
+                    className="link"
+                    aria-label={`Don't add ${r.title}`}
+                    onClick={() => setConfirming(null)}
+                  >
+                    Cancel
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="chip"
+                    disabled={busy}
+                    aria-label={`Add ${r.title}`}
+                    onClick={() =>
+                      fits[r.id] === 'excluded' ? setConfirming(r.id) : onAdd(r)
+                    }
+                  >
+                    + Add
+                  </button>
+                )}
+                {fits[r.id] === 'excluded' && confirming !== r.id && (
+                  <span className="small warning">
+                    Doesn't fit your diets or allergies
+                  </span>
+                )}
+                {confirming === r.id && (
+                  <p className="small warning confirm" role="alert">
+                    {r.title} doesn't fit your diets or allergies.{' '}
+                    <button
+                      type="button"
+                      className="link"
+                      disabled={busy}
+                      onClick={() => {
+                        setConfirming(null)
+                        onAdd(r)
+                      }}
+                    >
+                      Add anyway
+                    </button>
+                  </p>
+                )}
               </li>
             ))}
           </ul>
           {shown.length === 0 && (
             <p className="muted small">No recipes match “{query}”.</p>
-          )}
-          {hidden > 0 && (
-            <p className="muted small">
-              {hidden} recipe{hidden === 1 ? '' : 's'} left out because{' '}
-              {hidden === 1 ? "it doesn't" : "they don't"} fit your diets or
-              allergies.
-            </p>
           )}
         </>
       )}

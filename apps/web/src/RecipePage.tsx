@@ -191,12 +191,12 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       )}
 
       <div className="actions">
-        {fit === 'excluded' ? (
-          <p className="muted small">
-            This recipe doesn't fit your diets or allergies, so it can't go in
-            your plan.
+        {fit === 'excluded' && planned !== 'added' && (
+          <p className="small warning" role="note">
+            This recipe doesn't fit your diets or allergies.
           </p>
-        ) : planned === 'added' ? (
+        )}
+        {planned === 'added' ? (
           <p role="status">
             Added to this week's plan. <Link to="/plan">See the plan</Link>
           </p>
@@ -206,7 +206,11 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
             disabled={planned === 'adding'}
             onClick={() => void plan()}
           >
-            {planned === 'adding' ? 'Adding…' : "Add to this week's plan"}
+            {planned === 'adding'
+              ? 'Adding…'
+              : fit === 'excluded'
+                ? "Add to this week's plan anyway"
+                : "Add to this week's plan"}
           </button>
         )}
         {planned === 'error' && (

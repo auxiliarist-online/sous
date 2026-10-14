@@ -158,14 +158,16 @@ describe('RecipePage', () => {
     ).toHaveAttribute('href', '/plan')
   })
 
-  it('won’t plan a recipe that breaks the user’s rules', async () => {
-    render(<RecipePage id={BURRITOS.id} api={api(BURRITOS, 'excluded')} />)
+  it('warns before planning a recipe that breaks the user’s rules', async () => {
+    const fake = api(BURRITOS, 'excluded')
+    render(<RecipePage id={BURRITOS.id} api={fake} />)
     expect(
       await screen.findByText(/doesn't fit your diets or allergies/),
     ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: "Add to this week's plan" }),
-    ).toBeNull()
+    await userEvent.click(
+      screen.getByRole('button', { name: "Add to this week's plan anyway" }),
+    )
+    expect(fake.addToPlan).toHaveBeenCalledWith(weekOf(), BURRITOS.id, 1)
   })
 
   it('credits an openly licensed recipe and shows its steps', async () => {
