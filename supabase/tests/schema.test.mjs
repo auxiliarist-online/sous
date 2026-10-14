@@ -101,11 +101,12 @@ describe('reference data', () => {
     assert.equal(rows[0].ht, 'kroger_api')
   })
 
-  it('seeds one baseline price per priced staple', async () => {
-    // Ingredients added later (apps/api/data/ingredients.csv) have no baseline price yet.
+  it('seeds one shared price per ingredient from each source', async () => {
+    // A public baseline and a hand estimate can both price an ingredient
+    // (TYL-61); the baseline wins, and neither repeats.
     const { rows } = await db.query(`
       select (select count(*) from prices where source in ('baseline_bls', 'baseline_usda', 'seed'))::int as prices,
-             (select count(distinct ingredient_id) from prices
+             (select count(distinct (ingredient_id, source)) from prices
                 where source in ('baseline_bls', 'baseline_usda', 'seed'))::int as priced
     `)
     assert.ok(rows[0].prices >= 100)
@@ -1708,6 +1709,79 @@ describe('meal planner', () => {
       /only callable by the API/,
     )
   })
+
+  it('brings recipes the user might add, but not ones they cannot see', async () => {
+    const r = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        'select plan_cost_inputs($1, $2, $3) as r',
+        [DAVE, MONDAY, [peanutNoodles, alicesSecret]],
+      )
+      return rows[0].r
+    })
+    const candidates = r.entries.filter((e) => e.candidate)
+    assert.deepEqual(
+      candidates.map((e) => [e.id, e.recipe_id, e.scale]),
+      [[`candidate-${peanutNoodles}`, peanutNoodles, 1]],
+    )
+    assert.equal(r.entries.filter((e) => !e.candidate).length, 2)
+  })
+
+  it('keeps one own price per ingredient and store, private to the user (TYL-34)', async () => {
+    const tofu = await ingredient('tofu')
+    const { rows: stores } = await db.query(
+      `insert into stores (chain_slug, name) values ('aldi', 'Co-op') returning id`,
+    )
+    const coop = stores[0].id
+    await asDave('select set_my_price($1, $2, 299, 14, $3)', [tofu, coop, 'oz'])
+    await asDave('select set_my_price($1, $2, 249, 14, $3)', [tofu, coop, 'oz'])
+    await asDave('select set_my_price($1, null, 279, 14, $2)', [tofu, 'oz'])
+    const mine = await asDave(
+      `select price_cents, store_id from prices
+       where source = 'user' and ingredient_id = $1 order by price_cents`,
+      [tofu],
+    )
+    assert.deepEqual(mine, [
+      { price_cents: 249, store_id: coop },
+      { price_cents: 279, store_id: null },
+    ])
+    const seenByAlice = await as('authenticated', ALICE, async () => {
+      const { rows } = await db.query(
+        `select 1 from prices
+         where source = 'user' and ingredient_id = $1 and user_id = $2`,
+        [tofu, DAVE],
+      )
+      return rows
+    })
+    assert.equal(seenByAlice.length, 0)
+    await as('authenticated', ALICE, () =>
+      db.query('select clear_my_price($1, $2)', [tofu, coop]),
+    )
+    // Back to the usual price at the co-op: the price for anywhere applied
+    // there too, so it goes as well.
+    await asDave('select clear_my_price($1, $2)', [tofu, coop])
+    const left = await asDave(
+      `select price_cents from prices where source = 'user' and ingredient_id = $1`,
+      [tofu],
+    )
+    assert.deepEqual(left, [])
+    // Clearing the price for anywhere leaves a store's own.
+    await asDave('select set_my_price($1, $2, 249, 14, $3)', [tofu, coop, 'oz'])
+    await asDave('select set_my_price($1, null, 279, 14, $2)', [tofu, 'oz'])
+    await asDave('select clear_my_price($1, null)', [tofu])
+    const kept = await asDave(
+      `select price_cents from prices where source = 'user' and ingredient_id = $1`,
+      [tofu],
+    )
+    assert.deepEqual(kept, [{ price_cents: 249 }])
+    await assert.rejects(
+      asDave('select set_my_price($1, null, 100, 1, $2)', [tofu, 'handful']),
+      /unknown unit/,
+    )
+    await assert.rejects(
+      asDave('select set_my_price($1, null, -1, 1, $2)', [tofu, 'oz']),
+      /check/,
+    )
+  })
 })
 
 describe('buying: packages, recipe sizes and the pantry', () => {
@@ -2648,6 +2722,22 @@ describe('package estimates (TYL-61)', () => {
     assert.deepEqual(rows, [
       { name: 'chicken', price_cents: 350, quantity: 1, unit: 'lb' },
       { name: 'margarine', price_cents: 300, quantity: 16, unit: 'oz' },
+    ])
+  })
+})
+
+describe('more public baselines (TYL-61)', () => {
+  it('prices more ingredients from BLS and USDA, ahead of hand estimates', async () => {
+    const { rows } = await db.query(
+      `select i.name, array_agg(p.source order by p.source) as sources
+       from prices p join ingredients i on i.id = p.ingredient_id
+       where i.name in ('coffee', 'clementines', 'orange juice')
+       group by i.name order by i.name`,
+    )
+    assert.deepEqual(rows, [
+      { name: 'clementines', sources: ['baseline_usda', 'seed'] },
+      { name: 'coffee', sources: ['baseline_bls', 'seed'] },
+      { name: 'orange juice', sources: ['baseline_usda', 'seed'] },
     ])
   })
 })

@@ -6,6 +6,9 @@ import type { SavedRecipe } from './library.ts'
 import { PlanPage, type PlanApi } from './Plan.tsx'
 import {
   addDays,
+  addedCosts,
+  parseDollars,
+  priceBasis,
   buyText,
   formatQuantity,
   isMonday,
@@ -14,6 +17,7 @@ import {
   weekDays,
   weekLabel,
   weekOf,
+  type AddedCosts,
   type BuyItem,
   type Fit,
   type PlanCost,
@@ -114,6 +118,7 @@ const item = (name: string, extra: Partial<BuyItem> = {}): BuyItem => ({
   buy: true,
   cents: null,
   estimated: false,
+  priceSource: null,
   onSale: false,
   saleEnds: null,
   regularCents: null,
@@ -166,11 +171,130 @@ describe('planCost', () => {
       regularCents: null,
     })
     expect(cost.storeName).toBeNull()
+    expect(cost.storeId).toBeNull()
+    expect(cost.entryCents).toEqual({})
+    expect(cost.items[0].priceSource).toBeNull()
+  })
+
+  it('reads where prices came from, the store, and each recipe’s share', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            budget_cents: null,
+            total_cents: 0,
+            estimated: false,
+            unpriced: 0,
+            items: [],
+            store_name: 'Harris Teeter',
+            store_id: 'ht',
+            entries: [
+              { entry_id: 'e-1', cents: 640 },
+              { entry_id: 'e-2', cents: 0 },
+            ],
+          }),
+        ),
+    )
+    const cost = await planCost({} as Session, '2026-10-12', send)
+    expect(cost.storeId).toBe('ht')
+    expect(cost.entryCents).toEqual({ 'e-1': 640, 'e-2': 0 })
   })
 
   it('throws when the API fails', async () => {
     const send = vi.fn(async () => new Response('', { status: 502 }))
     await expect(planCost({} as Session, '2026-10-12', send)).rejects.toThrow()
+  })
+})
+
+describe('addedCosts', () => {
+  it('asks what each recipe would add, by recipe', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            budget_cents: 5000,
+            total_cents: 4200,
+            recipes: [
+              { recipe_id: 'a', cents: 650, unpriced: false, estimated: true },
+            ],
+          }),
+        ),
+    )
+    const added = await addedCosts({} as Session, WEEK, ['a', 'b'], send)
+    expect(send).toHaveBeenCalledWith({}, `/plans/${WEEK}/added`, {
+      method: 'POST',
+      body: JSON.stringify({ recipe_ids: ['a', 'b'] }),
+    })
+    expect(added).toEqual({
+      budgetCents: 5000,
+      totalCents: 4200,
+      recipes: { a: { cents: 650, unpriced: false, estimated: true } },
+    })
+  })
+})
+
+describe('addedCosts in batches', () => {
+  it('asks 100 at a time and merges the answers', async () => {
+    const ids = Array.from({ length: 150 }, (_, n) => `r${n}`)
+    const send = vi.fn(
+      async (_s: Session, _path: string, init?: RequestInit) => {
+        const asked = JSON.parse(String(init!.body)).recipe_ids as string[]
+        return new Response(
+          JSON.stringify({
+            budget_cents: 5000,
+            total_cents: 4200,
+            recipes: asked.map((id) => ({
+              recipe_id: id,
+              cents: 100,
+              unpriced: false,
+              estimated: false,
+            })),
+          }),
+        )
+      },
+    )
+    const added = await addedCosts({} as Session, WEEK, ids, send)
+    expect(
+      send.mock.calls.map(
+        (c) => JSON.parse(String(c[2]!.body)).recipe_ids.length,
+      ),
+    ).toEqual([100, 50])
+    expect(Object.keys(added.recipes)).toHaveLength(150)
+    expect(added.totalCents).toBe(4200)
+  })
+})
+
+describe('own prices', () => {
+  it.each([
+    ['2.49', 249],
+    ['$2', 200],
+    ['2,5', 250],
+    ['.99', 99],
+    ['0', 0],
+    ['', null],
+    ['abc', null],
+    ['2.499', null],
+    ['-1', null],
+    ['5000', null],
+  ])('reads %j as %s cents', (text, cents) => {
+    expect(parseDollars(text)).toBe(cents)
+  })
+
+  it('prices a package as the list buys it, or a pound of what is loose', () => {
+    expect(
+      priceBasis(item('tofu', { packageQuantity: 14, packageUnit: 'oz' })),
+    ).toEqual({ quantity: 14, unit: 'oz', label: '14 oz' })
+    expect(
+      priceBasis(
+        item('cilantro', { packageQuantity: 1, packageUnit: 'bunch' }),
+      ),
+    ).toEqual({ quantity: 1, unit: 'bunch', label: '1 bunch' })
+    expect(
+      priceBasis(item('eggs', { packageQuantity: 12, packageUnit: 'each' })),
+    ).toEqual({ quantity: 12, unit: 'each', label: 'a pack of 12' })
+    expect(
+      priceBasis(item('carrots', { soldBy: 'loose', unit: 'lb' })),
+    ).toEqual({ quantity: 1, unit: 'lb', label: '1 lb' })
   })
 })
 
@@ -192,7 +316,11 @@ describe('buyText', () => {
 
 const WEEK = '2026-10-12'
 
-const saved = (id: string, title: string): SavedRecipe => ({
+const saved = (
+  id: string,
+  title: string,
+  cuisines: string[] = [],
+): SavedRecipe => ({
   id,
   title,
   sourceUrl: null,
@@ -203,6 +331,7 @@ const saved = (id: string, title: string): SavedRecipe => ({
   diets: [],
   ingredients: [],
   tags: [],
+  cuisines,
 })
 
 const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
@@ -244,6 +373,8 @@ const COST: PlanCost = {
   estimated: true,
   unpriced: 1,
   storeName: null,
+  storeId: null,
+  entryCents: {},
   items: [
     item('white rice', {
       quantity: 1,
@@ -278,6 +409,8 @@ function fakeApi({
   cost = COST,
   recipes = [] as SavedRecipe[],
   fits = {} as Record<string, Fit>,
+  favorites = [] as string[],
+  added = { budgetCents: null, totalCents: 0, recipes: {} } as AddedCosts,
   copied = 0,
 } = {}) {
   let current = entries
@@ -297,9 +430,20 @@ function fakeApi({
     copyPlan: vi.fn(async (_from: string, _to: string) => copied),
     planCost: vi.fn(async () => cost),
     recipeFits: vi.fn(async () => fits),
+    addedCosts: vi.fn(async (_w: string, _ids: string[]) => added),
+    favoriteCuisines: vi.fn(async () => favorites),
     setPantry: vi.fn(
       async (_id: string, _status: 'have' | 'out' | null) => void 0,
     ),
+    setMyPrice: vi.fn(
+      async (
+        _id: string,
+        _store: string | null,
+        _cents: number,
+        _basis: { quantity: number; unit: string },
+      ) => void 0,
+    ),
+    clearMyPrice: vi.fn(async (_id: string, _store: string | null) => void 0),
   } satisfies PlanApi
   return api
 }
@@ -394,6 +538,76 @@ describe('PlanPage', () => {
     expect(within(list).getByText(/~\$9\.00/)).toBeInTheDocument()
   })
 
+  it('shows each recipe’s share of the week', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: { ...COST, entryCents: { '1': 640 } },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByLabelText("This recipe's share"),
+    ).toHaveTextContent('~$6.40')
+  })
+
+  it('says where each price is from, and saves the user’s own', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        storeName: 'Harris Teeter',
+        storeId: 'ht',
+        items: [
+          item('tofu', {
+            cents: 299,
+            priceSource: 'store',
+            packages: 1,
+            packageQuantity: 14,
+            packageUnit: 'oz',
+          }),
+          item('eggs', { cents: 300, priceSource: 'user' }),
+          item('saffron', {
+            cents: 900,
+            estimated: true,
+            priceSource: 'estimate',
+          }),
+        ],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(await screen.findByText(/What you'll buy/))
+    const list = screen.getByRole('list', { name: 'To buy' })
+    expect(within(list).getByText('Harris Teeter')).toBeInTheDocument()
+    expect(within(list).getByText('your price')).toBeInTheDocument()
+    expect(within(list).getByText('estimate')).toBeInTheDocument()
+
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Set your price for tofu' }),
+    )
+    const field = within(list).getByLabelText(
+      'Your price at Harris Teeter for 14 oz tofu',
+    )
+    const save = within(list).getByRole('button', { name: 'Save' })
+    await userEvent.type(field, 'two')
+    expect(save).toBeDisabled()
+    await userEvent.clear(field)
+    await userEvent.type(field, '2.49')
+    await userEvent.click(save)
+    expect(api.setMyPrice).toHaveBeenCalledWith('i-tofu', 'ht', 249, {
+      quantity: 14,
+      unit: 'oz',
+      label: '14 oz',
+    })
+    await waitFor(() => expect(api.planCost).toHaveBeenCalledTimes(2))
+
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Set your price for eggs' }),
+    )
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Use the usual price' }),
+    )
+    expect(api.clearMyPrice).toHaveBeenCalledWith('i-eggs', 'ht')
+  })
+
   it('says when the week is over budget, or offers to set one', async () => {
     const over = fakeApi({
       entries: [entry('1')],
@@ -458,6 +672,136 @@ describe('PlanPage', () => {
     )
     expect(api.addToPlan).toHaveBeenCalledWith(WEEK, 'a', 1)
     await waitFor(() => expect(api.plan).toHaveBeenCalledTimes(2))
+  })
+
+  it('shows what each recipe would add, and adds one that fits straight away', async () => {
+    const api = fakeApi({
+      recipes: [saved('a', 'Lentil soup')],
+      added: {
+        budgetCents: 5000,
+        totalCents: 1200,
+        recipes: { a: { cents: 650, unpriced: true, estimated: true } },
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const list = await screen.findByRole('list', {
+      name: 'Recipes you can add',
+    })
+    expect(
+      await within(list).findByLabelText('Adds to this week'),
+    ).toHaveTextContent('+~$6.50 or more')
+    expect(api.addedCosts).toHaveBeenCalledWith(WEEK, ['a'])
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Add Lentil soup' }),
+    )
+    expect(api.addToPlan).toHaveBeenCalledWith(WEEK, 'a', 1)
+    // The plan changed, so what each would add is worked out again.
+    await waitFor(() => expect(api.addedCosts).toHaveBeenCalledTimes(2))
+  })
+
+  it('asks before going over budget, and suggests cheaper picks that fit', async () => {
+    const api = fakeApi({
+      recipes: [
+        saved('steak', 'Steak frites'),
+        saved('beans', 'Rice and beans'),
+        saved('dal', 'Red lentil dal'),
+        saved('noodles', 'Peanut noodles'),
+      ],
+      fits: { noodles: 'excluded' },
+      added: {
+        budgetCents: 5000,
+        totalCents: 4500,
+        recipes: {
+          steak: { cents: 2400, unpriced: false, estimated: false },
+          beans: { cents: 300, unpriced: false, estimated: false },
+          dal: { cents: 450, unpriced: false, estimated: false },
+          noodles: { cents: 100, unpriced: false, estimated: false },
+        },
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const list = await screen.findByRole('list', {
+      name: 'Recipes you can add',
+    })
+    await within(list).findByText('+$24.00')
+    expect(within(list).getByText(/over budget/)).toBeInTheDocument()
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Add Steak frites' }),
+    )
+    expect(api.addToPlan).not.toHaveBeenCalled()
+    expect(within(list).getByRole('alert')).toHaveTextContent(
+      'Adding it (+$24.00) puts the week at $69.00, $19.00 over your $50.00 budget.',
+    )
+    // Cheapest first, and never one that breaks the user's rules.
+    const picks = within(list).getByRole('list', { name: 'Cheaper picks' })
+    expect(
+      within(picks)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Rice and beans +$3.00', 'Red lentil dal +$4.50'])
+    await userEvent.click(within(picks).getByText(/Rice and beans/))
+    expect(api.addToPlan).toHaveBeenCalledWith(WEEK, 'beans', 1)
+  })
+
+  it('suggests favorite cuisines first', async () => {
+    const api = fakeApi({
+      recipes: [
+        saved('steak', 'Steak frites'),
+        saved('beans', 'Rice and beans'),
+        saved('dal', 'Red lentil dal', ['indian']),
+      ],
+      favorites: ['indian'],
+      added: {
+        budgetCents: 5000,
+        totalCents: 4500,
+        recipes: {
+          steak: { cents: 2400, unpriced: false, estimated: false },
+          beans: { cents: 300, unpriced: false, estimated: false },
+          dal: { cents: 450, unpriced: false, estimated: false },
+        },
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const list = await screen.findByRole('list', {
+      name: 'Recipes you can add',
+    })
+    await within(list).findByText('+$24.00')
+    await waitFor(() => expect(api.favoriteCuisines).toHaveBeenCalled())
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Add Steak frites' }),
+    )
+    const picks = within(list).getByRole('list', { name: 'Cheaper picks' })
+    expect(
+      within(picks)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Red lentil dal +$4.50', 'Rice and beans +$3.00'])
+  })
+
+  it('adds anyway when the user says so, over budget', async () => {
+    const api = fakeApi({
+      recipes: [saved('steak', 'Steak frites')],
+      added: {
+        budgetCents: 5000,
+        totalCents: 4500,
+        recipes: { steak: { cents: 2400, unpriced: false, estimated: false } },
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const list = await screen.findByRole('list', {
+      name: 'Recipes you can add',
+    })
+    await within(list).findByText('+$24.00')
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Add Steak frites' }),
+    )
+    expect(
+      within(list).queryByRole('list', { name: 'Cheaper picks' }),
+    ).toBeNull()
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Add anyway' }),
+    )
+    expect(api.addToPlan).toHaveBeenCalledWith(WEEK, 'steak', 1)
   })
 
   it('warns before adding a recipe that breaks the user’s rules', async () => {

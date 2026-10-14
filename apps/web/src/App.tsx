@@ -25,7 +25,10 @@ import {
   copyPlan,
   isMonday,
   loadPlan,
+  addedCosts,
+  clearMyPrice,
   planCost,
+  setMyPrice,
   recipeFits,
   removeEntry,
   setPantry,
@@ -81,6 +84,12 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     removeEntry: (id) => removeEntry(db, id),
     copyPlan: (from, to) => copyPlan(db, from, to),
     planCost: (week) => planCost(session, week),
+    addedCosts: (week, ids) => addedCosts(session, week, ids),
+    setMyPrice: (id, store, cents, basis) =>
+      setMyPrice(db, id, store, cents, basis),
+    clearMyPrice: (id, store) => clearMyPrice(db, id, store),
+    favoriteCuisines: () =>
+      loadPreferences(db, userId).then((p) => p.favoriteCuisines),
     recipeFits: (ids) => recipeFits(db, ids),
     searchCatalog: (q, offset) => searchCatalog(db, q, offset),
     saveToLibrary: (id) => saveToLibrary(db, userId, id),
