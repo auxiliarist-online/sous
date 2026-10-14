@@ -28,6 +28,10 @@ concurrency:
 jobs:
   approved:
     name: CodeRabbit approved
+    # Only the push-time run is the check. A review re-runs it (below) rather
+    # than adding a second "CodeRabbit approved" run: GitHub counts every run of
+    # a required check on the commit, so an old failing one would still block.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - env:
@@ -55,3 +59,15 @@ jobs:
             echo "::error::Waiting for CodeRabbit to approve $head."
           fi
           exit 1
+
+  review-received:
+    name: Review received
+    # Starts coderabbit-recheck.yml (workflow_run), which re-runs the push-time
+    # check with a write token. This job can't: for a fork's pull request a
+    # review event only gets a read-only token.
+    if: github.event_name == 'pull_request_review'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: echo "Review on $HEAD; coderabbit-recheck.yml re-runs the gate."

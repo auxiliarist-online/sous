@@ -157,3 +157,41 @@ def test_without_credentials_nothing_is_called(supabase: Install) -> None:
     seen = supabase(lambda r: httpx.Response(500))
     assert asyncio.run(add_live_prices("user-1", inputs())) is None
     assert seen == []
+
+
+def test_a_bunch_sold_as_one_each_is_one_bunch(
+    supabase: Install, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TYL-84: Kroger sells green onions as "1 each"; in Sous an "each" of
+    # scallion is one stalk, and they're bought by the bunch.
+    monkeypatch.setattr(settings, "kroger_client_id", "id")
+
+    def handle(r: httpx.Request) -> httpx.Response:
+        if r.url.path.endswith("/user_stores"):
+            return httpx.Response(200, json=[])
+        if r.url.path.endswith("/stores"):
+            return httpx.Response(200, json=[STORE])
+        return httpx.Response(200, json=[{"ingredient_id": "scallions", "product_id": "4068"}])
+
+    supabase(handle)
+    fetched(monkeypatch, kroger_product("4068", size="1 each", regular=1.89))
+    plan = {
+        "entries": [entry([line("scallions", 1.5, "cup")])],
+        "ingredients": {
+            "scallions": {
+                "name": "scallions",
+                "aisle": "produce",
+                "grams_per_cup": 100,
+                "grams_per_each": 15,
+                "sold_by": "package",
+                "package_quantity": 1,
+                "package_unit": "bunch",
+                "units": {"bunch": 100},
+            }
+        },
+        "prices": [],
+    }
+    cost = plan_cost(plan, on=MONDAY, store_id=asyncio.run(add_live_prices("user-1", plan)))
+    scallions = cost.items[0]
+    # 1 1/2 cups is 150 g: two 100 g bunches at $1.89.
+    assert (scallions.package_unit, scallions.packages, scallions.cents) == ("bunch", 2, 378)

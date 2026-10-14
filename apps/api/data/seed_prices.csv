@@ -2,8 +2,8 @@ ingredient,aisle,contains,may_contain,price,quantity,unit,grams_per_cup,grams_pe
 garlic,produce,,,0.60,1,each,,50,rough hand estimate (Oct 2026); one head
 ginger,produce,,,4.00,1,lb,,,rough hand estimate (Oct 2026)
 lime,produce,,,0.40,1,each,,67,rough hand estimate (Oct 2026)
-cilantro,produce,,,1.00,1,each,,,rough hand estimate (Oct 2026); one bunch
-scallions,produce,,,1.00,1,each,,,rough hand estimate (Oct 2026); one bunch
+cilantro,produce,,,1.00,60,g,,,rough hand estimate (Oct 2026); one bunch (60 g)
+scallions,produce,,,1.00,100,g,,,rough hand estimate (Oct 2026); one bunch (100 g)
 jalapeno,produce,,,2.00,1,lb,,14,rough hand estimate (Oct 2026)
 firm tofu,international,soy,,2.50,14,oz,248,,rough hand estimate (Oct 2026)
 tempeh,international,soy,,3.50,8,oz,166,,rough hand estimate (Oct 2026)

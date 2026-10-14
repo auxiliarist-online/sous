@@ -60,16 +60,34 @@ async def _store(client: httpx.AsyncClient, user_id: str) -> dict[str, Any] | No
     return rows[0] if rows else None
 
 
-def _quotes(ingredient_id: str, p: Product, store_id: str, now: datetime) -> list[dict[str, Any]]:
+def _size(p: Product, info: dict[str, Any]) -> tuple[float, str, bool] | None:
+    """What one of the product holds, and whether it's our own package.
+
+    Kroger sells a bunch of scallions or cilantro, or a head of garlic, as
+    "1 each". In Sous an "each" of scallion is one stalk, so a product of one
+    "each" for an ingredient bought by its own unit (a bunch, a head) is one of
+    those, priced by its weight: 1 bunch of scallions = 100 g."""
+    if p.sold_by == "WEIGHT":
+        return 1.0, "lb", False  # Kroger prices weighed items per pound
+    size = parse_size(p.size)
+    if size is None:
+        return None
+    own = info.get("units") or {}
+    unit = info.get("package_unit")
+    if size == (1.0, "each") and unit in own and info.get("package_quantity"):
+        return float(info["package_quantity"]) * float(own[unit]), "g", True
+    return size[0], size[1], False
+
+
+def _quotes(
+    ingredient_id: str, p: Product, info: dict[str, Any], store_id: str, now: datetime
+) -> list[dict[str, Any]]:
     """Price rows like the prices table's, for this request only. A promo is
     its own row, valid until the sale ends; the regular price applies after."""
-    if p.sold_by == "WEIGHT":
-        quantity, unit = 1.0, "lb"  # Kroger prices weighed items per pound
-    else:
-        size = parse_size(p.size)
-        if size is None:
-            return []
-        quantity, unit = size
+    size = _size(p, info)
+    if size is None:
+        return []
+    quantity, unit, _ = size
     row = {
         "ingredient_id": ingredient_id,
         "source": "store_api",
@@ -93,13 +111,13 @@ def _quotes(ingredient_id: str, p: Product, store_id: str, now: datetime) -> lis
     return rows
 
 
-def _package(p: Product) -> dict[str, Any]:
+def _package(p: Product, info: dict[str, Any]) -> dict[str, Any]:
     """How the product is really sold, in place of our packaging.csv guess."""
     if p.sold_by == "WEIGHT":
         return {"sold_by": "loose", "package_quantity": None, "package_unit": None}
-    size = parse_size(p.size)
-    if size is None:
-        return {}
+    size = _size(p, info)
+    if size is None or size[2]:
+        return {}  # unknown, or already our own package (a bunch)
     return {"sold_by": "package", "package_quantity": size[0], "package_unit": size[1]}
 
 
@@ -137,11 +155,12 @@ async def add_live_prices(user_id: str, inputs: dict[str, Any]) -> str | None:
         ingredient_id = matches.get(p.product_id)
         if ingredient_id is None or not p.regular:
             continue
-        rows = _quotes(ingredient_id, p, store["id"], now)
+        info = inputs["ingredients"][ingredient_id]
+        rows = _quotes(ingredient_id, p, info, store["id"], now)
         if not rows:
             continue
         inputs.setdefault("prices", []).extend(rows)
-        inputs["ingredients"][ingredient_id].update(_package(p))
+        info.update(_package(p, info))
     inputs["store_name"] = store["name"]
     return str(store["id"])
 
