@@ -2774,12 +2774,21 @@ describe('your store and your account (TYL-19, TYL-74)', () => {
         )
         return rows[0].id
       })
+    // Nobody can claim a store's location id ahead of time.
+    await assert.rejects(
+      asErin(
+        `insert into stores (chain_slug, name, external_location_id, created_by)
+         values ('kroger', 'Mine now', '02900540', $1)`,
+        [ERIN],
+      ),
+      /row-level security/,
+    )
     const holland = await choose(
       '02900540',
       'Kroger Marketplace - Holland Road',
     )
-    const again = await choose('02900540', 'Kroger Marketplace - Holland Rd')
-    assert.equal(again, holland, 'the same store is reused')
+    const again = await choose('02900540', 'Renamed by someone')
+    assert.equal(again, holland, 'the same store is reused, unchanged')
     const republic = await choose('02900533', 'Kroger - Republic Road')
     const { rows } = await db.query(
       `select s.name, us.is_primary from user_stores us join stores s on s.id = us.store_id
@@ -2788,7 +2797,7 @@ describe('your store and your account (TYL-19, TYL-74)', () => {
     )
     assert.deepEqual(rows, [
       { name: 'Kroger - Republic Road', is_primary: true },
-      { name: 'Kroger Marketplace - Holland Rd', is_primary: false },
+      { name: 'Kroger Marketplace - Holland Road', is_primary: false },
     ])
     assert.ok(republic)
     await assert.rejects(

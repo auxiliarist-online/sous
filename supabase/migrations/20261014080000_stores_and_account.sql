@@ -6,6 +6,15 @@ insert into public.store_chains (slug, name, price_source)
 values ('kroger', 'Kroger', 'kroger_api')
 on conflict (slug) do nothing;
 
+-- A user's own stores (a farm stand, say) can't claim a price source's
+-- location id: those are shared stores, set up by the API. Otherwise a user
+-- could create "Kroger, location 02900540" first, and everyone choosing that
+-- store would be attached to (and renamed by) their row.
+drop policy "Manage own stores" on public.stores;
+create policy "Manage own stores" on public.stores for all to authenticated
+  using (created_by = (select auth.uid()))
+  with check (created_by = (select auth.uid()) and external_location_id is null);
+
 -- Make a Kroger-family store the user's store. The API calls it after checking
 -- the store with Kroger; only the user's choice is kept (name, address, zip,
 -- location id). Returns the store's id.
@@ -19,11 +28,14 @@ begin
   if current_user not in ('service_role', 'postgres') then
     raise exception 'set_my_store is only callable by the API' using errcode = '42501';
   end if;
-  insert into public.stores (chain_slug, name, address, zip, external_location_id)
-  values (p_chain, p_name, p_address, p_zip, p_location_id)
-  on conflict (chain_slug, external_location_id) do update
-    set name = excluded.name, address = excluded.address, zip = excluded.zip
-  returning id into v_store;
+  -- A shared store already there is used as it is (its name may be our own).
+  select id into v_store from public.stores
+  where chain_slug = p_chain and external_location_id = p_location_id and created_by is null;
+  if v_store is null then
+    insert into public.stores (chain_slug, name, address, zip, external_location_id)
+    values (p_chain, p_name, p_address, p_zip, p_location_id)
+    returning id into v_store;
+  end if;
   update public.user_stores set is_primary = false
   where user_id = p_user and is_primary and store_id <> v_store;
   insert into public.user_stores (user_id, store_id, is_primary)
