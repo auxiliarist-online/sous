@@ -127,6 +127,7 @@ DESCRIPTORS = (
     "toasted",
     "roasted",
     "melting",
+    "thawed",
 )
 QUALIFIER = re.compile(
     r"\s*(\(|\b(preferably|ideally|such as|such a|e\.?\s?g\.?|like|cut into)\b).*$"
@@ -376,7 +377,29 @@ def _options(parsed: Any, raw: str) -> list[tuple[str, float]]:
     names = [(n.text, float(n.confidence)) for n in parsed.name]
     if len(names) > 1 and not re.search(r"\bor\b", raw, re.I):
         return [(" and ".join(n for n, _ in names), min(c for _, c in names))]
+    if len(names) > 1:
+        names = [(_as_written(n, raw), c) for n, c in names]
+        # "corn kernels fresh or frozen (thawed)" -> "corn kernels", not also "thawed".
+        foods = [(n, c) for n, c in names if DESCRIPTOR.sub("", _plain(n)).strip(" ,")]
+        names = foods or names
     return names
+
+
+def _as_written(name: str, raw: str) -> str:
+    """Undo the parser sharing a head noun across "or" when the first option
+    already has one: "all-purpose flour or whole wheat pastry flour" gives
+    "all-purpose flour pastry flour", which is "all-purpose flour". Shared
+    nouns the line leaves out ("red or green bell pepper") are kept."""
+    plain, words = _plain(raw), name.split()
+    if _plain(name) in plain:
+        return name
+    for end in range(len(words) - 1, 0, -1):
+        head, tail = words[:end], words[end:]
+        if head[-1].lower() == tail[-1].lower() and re.search(
+            rf"\b{re.escape(_plain(' '.join(head)))}\s+or\b", plain
+        ):
+            return " ".join(head)
+    return name
 
 
 # Checkboxes and bullets some recipe plugins put before each line ("▢ 1 cup rice").

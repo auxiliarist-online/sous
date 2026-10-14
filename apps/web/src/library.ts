@@ -25,6 +25,8 @@ export interface SavedRecipe {
   diets: DietLabel[]
   /** Parsed ingredient names, for search. */
   ingredients: string[]
+  /** The user's own tags ("weeknight"), private to them (TYL-81). */
+  tags: string[]
 }
 
 /** A diet a recipe fits. `checks` lists ingredients whose brand decides it:
@@ -104,6 +106,7 @@ async function importVia(
 
 interface SavedRow {
   created_at: string
+  tags: string[] | null
   recipe: {
     id: string
     title: string
@@ -128,7 +131,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
   const { data, error } = await db
     .from('user_saved_recipes')
     .select(
-      'created_at, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name))',
+      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -149,7 +152,40 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
       ingredients: (row.recipe!.ingredients ?? []).flatMap((i) =>
         i.name ? [i.name] : [],
       ),
+      tags: row.tags ?? [],
     }))
+}
+
+/** A tag as the user typed it, tidied: spaces collapsed, at most 30
+ *  characters (the database's limit). Empty when there's nothing left. */
+export function cleanTag(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, 30).trim()
+}
+
+/** Replace the user's tags on a saved recipe (TYL-81). */
+export async function setTags(
+  db: SupabaseClient,
+  recipeId: string,
+  tags: string[],
+): Promise<void> {
+  const { error } = await db
+    .from('user_saved_recipes')
+    .update({ tags })
+    .eq('recipe_id', recipeId)
+  if (error) throw error
+}
+
+/** Every tag on these recipes, once each (ignoring case), alphabetically. */
+export function allTags(recipes: SavedRecipe[]): string[] {
+  const byKey = new Map<string, string>()
+  for (const r of recipes) {
+    for (const t of r.tags) {
+      if (!byKey.has(t.toLowerCase())) byKey.set(t.toLowerCase(), t)
+    }
+  }
+  return [...byKey.values()].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' }),
+  )
 }
 
 export async function removeSaved(
@@ -279,12 +315,15 @@ export interface RecipeFilter {
   /** Every one of these diets (a starred, check-the-label fit counts). */
   diets: string[]
   maxMinutes: number | null
+  /** Every one of these of the user's own tags, ignoring case. */
+  tags: string[]
 }
 
 export const NO_FILTER: RecipeFilter = {
   query: '',
   diets: [],
   maxMinutes: null,
+  tags: [],
 }
 
 function words(text: string): string[] {
@@ -295,7 +334,7 @@ function words(text: string): string[] {
 }
 
 /** Recipes matching every filter. The query matches the start of words in the
- *  title, source or ingredient names ("lent" finds "Red lentil dal"). */
+ *  title, source, ingredient names or tags ("lent" finds "Red lentil dal"). */
 export function filterRecipes(
   recipes: SavedRecipe[],
   f: RecipeFilter,
@@ -309,11 +348,17 @@ export function filterRecipes(
       return false
     const has = new Set(r.diets.map((d) => d.slug))
     if (!f.diets.every((d) => has.has(d))) return false
+    const tagged = new Set(r.tags.map((t) => t.toLowerCase()))
+    if (!f.tags.every((t) => tagged.has(t.toLowerCase()))) return false
     if (!terms.length) return true
     const haystack = words(
-      [r.title, r.sourceName ?? '', r.sourceNote ?? '', ...r.ingredients].join(
-        ' ',
-      ),
+      [
+        r.title,
+        r.sourceName ?? '',
+        r.sourceNote ?? '',
+        ...r.ingredients,
+        ...r.tags,
+      ].join(' '),
     )
     return terms.every((t) => haystack.some((w) => w.startsWith(t)))
   })

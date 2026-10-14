@@ -202,6 +202,7 @@ const saved = (id: string, title: string): SavedRecipe => ({
   savedAt: '2026-10-01',
   diets: [],
   ingredients: [],
+  tags: [],
 })
 
 const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
@@ -223,6 +224,7 @@ const DETAIL: RecipeDetail = {
   sourceNote: null,
   license: null,
   saved: true,
+  tags: [],
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,
@@ -442,7 +444,7 @@ describe('PlanPage', () => {
     expect(await screen.findByText('1 cup rice')).toBeInTheDocument()
   })
 
-  it('adds only recipes that fit the user’s rules, at full size', async () => {
+  it('adds a recipe at full size', async () => {
     const api = fakeApi({
       recipes: [saved('a', 'Lentil soup'), saved('b', 'Peanut noodles')],
       fits: { a: 'fits', b: 'excluded' },
@@ -451,13 +453,43 @@ describe('PlanPage', () => {
     const list = await screen.findByRole('list', {
       name: 'Recipes you can add',
     })
-    expect(within(list).queryByText('Peanut noodles')).toBeNull()
-    expect(screen.getByText(/1 recipe left out/)).toBeInTheDocument()
     await userEvent.click(
       within(list).getByRole('button', { name: 'Add Lentil soup' }),
     )
     expect(api.addToPlan).toHaveBeenCalledWith(WEEK, 'a', 1)
     await waitFor(() => expect(api.plan).toHaveBeenCalledTimes(2))
+  })
+
+  it('warns before adding a recipe that breaks the user’s rules', async () => {
+    const api = fakeApi({
+      recipes: [saved('b', 'Peanut noodles')],
+      fits: { b: 'excluded' },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const list = await screen.findByRole('list', {
+      name: 'Recipes you can add',
+    })
+    expect(
+      within(list).getByText("Doesn't fit your diets or allergies"),
+    ).toBeInTheDocument()
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Add Peanut noodles' }),
+    )
+    expect(api.addToPlan).not.toHaveBeenCalled()
+    expect(within(list).getByRole('alert')).toHaveTextContent(
+      "Peanut noodles doesn't fit your diets or allergies.",
+    )
+    await userEvent.click(
+      within(list).getByRole('button', { name: "Don't add Peanut noodles" }),
+    )
+    expect(within(list).queryByRole('alert')).toBeNull()
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Add Peanut noodles' }),
+    )
+    await userEvent.click(
+      within(list).getByRole('button', { name: 'Add anyway' }),
+    )
+    expect(api.addToPlan).toHaveBeenCalledWith(WEEK, 'b', 1)
   })
 
   it('copies last week into an empty week', async () => {

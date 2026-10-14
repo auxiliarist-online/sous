@@ -184,6 +184,30 @@ def test_a_name_that_only_describes_takes_the_comment() -> None:
     assert "coconut" in line.candidates
 
 
+def test_fresh_or_frozen_is_not_a_second_ingredient() -> None:
+    # TYL-83: the parser read "(thawed)" as the alternative to corn kernels.
+    lines = parse_line(1, "1 cup corn kernels fresh or frozen (thawed)")
+    assert [line.name for line in lines] == ["corn kernels"]
+
+
+@pytest.mark.parametrize(
+    ("line", "names"),
+    [
+        # TYL-83: the parser gave "all-purpose flour pastry flour".
+        (
+            "½ cup (62 grams) all-purpose flour or whole wheat pastry flour**",
+            ["all-purpose flour", "whole wheat pastry flour"],
+        ),
+        # A shared noun the line leaves out stays shared.
+        ("1 red or green bell pepper", ["red bell pepper", "green bell pepper"]),
+        ("2 cups chicken or vegetable broth", ["chicken broth", "vegetable broth"]),
+        ("1 cup bread flour or all-purpose flour", ["bread flour", "all-purpose flour"]),
+    ],
+)
+def test_alternatives_are_named_as_written(line: str, names: list[str]) -> None:
+    assert [p.name for p in parse_line(1, line)] == names
+
+
 class TestCandidates:
     def test_drops_descriptors_one_at_a_time(self) -> None:
         assert candidates("Large Ripe Avocados") == [

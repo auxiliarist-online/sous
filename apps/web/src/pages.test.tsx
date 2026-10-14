@@ -42,6 +42,7 @@ const BURRITOS: RecipeDetail = {
   sourceNote: null,
   license: null,
   saved: true,
+  tags: [],
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,
@@ -108,6 +109,7 @@ describe('RecipePage', () => {
     recipeFits: vi.fn(async (ids: string[]) =>
       Object.fromEntries(ids.map((id) => [id, fit])),
     ),
+    setTags: vi.fn(async (_id: string, _tags: string[]) => {}),
   })
 
   it('shows where it is from, its labels, and stars the ingredient to check', async () => {
@@ -158,14 +160,43 @@ describe('RecipePage', () => {
     ).toHaveAttribute('href', '/plan')
   })
 
-  it('won’t plan a recipe that breaks the user’s rules', async () => {
-    render(<RecipePage id={BURRITOS.id} api={api(BURRITOS, 'excluded')} />)
+  it('adds and removes the user’s own tags on a saved recipe', async () => {
+    const fake = api({ ...BURRITOS, tags: ['weeknight'] })
+    render(<RecipePage id={BURRITOS.id} api={fake} />)
+    const tags = await screen.findByRole('list', { name: 'Your tags' })
+    expect(within(tags).getByText('weeknight')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Add a tag'), '  For   guests ')
+    await userEvent.click(screen.getByRole('button', { name: 'Add tag' }))
+    expect(fake.setTags).toHaveBeenCalledWith(BURRITOS.id, [
+      'weeknight',
+      'For guests',
+    ])
+    expect(await within(tags).findByText('For guests')).toBeInTheDocument()
+    expect(screen.getByLabelText('Add a tag')).toHaveValue('')
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove tag weeknight' }),
+    )
+    expect(fake.setTags).toHaveBeenLastCalledWith(BURRITOS.id, ['For guests'])
+  })
+
+  it('has no tags for a recipe the user hasn’t saved', async () => {
+    render(
+      <RecipePage id={BURRITOS.id} api={api({ ...BURRITOS, saved: false })} />,
+    )
+    await screen.findByRole('heading', { name: 'Bean burritos' })
+    expect(screen.queryByLabelText('Add a tag')).toBeNull()
+  })
+
+  it('warns before planning a recipe that breaks the user’s rules', async () => {
+    const fake = api(BURRITOS, 'excluded')
+    render(<RecipePage id={BURRITOS.id} api={fake} />)
     expect(
       await screen.findByText(/doesn't fit your diets or allergies/),
     ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: "Add to this week's plan" }),
-    ).toBeNull()
+    await userEvent.click(
+      screen.getByRole('button', { name: "Add to this week's plan anyway" }),
+    )
+    expect(fake.addToPlan).toHaveBeenCalledWith(weekOf(), BURRITOS.id, 1)
   })
 
   it('credits an openly licensed recipe and shows its steps', async () => {
@@ -440,6 +471,7 @@ describe('helpers', () => {
     savedAt: '',
     diets: [],
     ingredients: [],
+    tags: [],
     ...over,
   })
 

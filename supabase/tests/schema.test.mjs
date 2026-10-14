@@ -990,7 +990,7 @@ describe('ingredient parsing', () => {
       'select count(*)::int as n from ingredient_aliases',
     )
     // Seed migration + more_ingredients + everyday_ingredients (TYL-60).
-    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6) // + ingredients_from_recipes + ponzu_powdered_milk
+    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6 + 9) // + ingredients_from_recipes + ponzu_powdered_milk + croutons_crostini_nondairy_milk
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
@@ -2487,6 +2487,60 @@ describe('ponzu and powdered milk (TYL-83)', () => {
   })
 })
 
+describe('croutons, crostini and non-dairy milk (TYL-83)', () => {
+  it('matches serving breads and non-dairy milk, keeping what they may contain', async () => {
+    const { rows } = await db.query(
+      `select i.name, i.contains, i.may_contain from ingredients i
+       where i.id = match_ingredient(array['croutons'])
+          or i.id = match_ingredient(array['crostini'])
+          or i.id = match_ingredient(array['plant-based milk'])
+          or i.id = match_ingredient(array['pita wedges'])
+       order by i.name`,
+    )
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.contains, r.may_contain]),
+      [
+        ['crostini', ['gluten'], []],
+        ['croutons', ['gluten'], ['dairy', 'egg']],
+        ['non-dairy milk', [], ['tree_nut', 'soy', 'gluten']],
+        ['pita bread', ['gluten'], []],
+      ],
+    )
+  })
+
+  it('says how croutons, crostini and non-dairy milk are bought', async () => {
+    const { rows } = await db.query(
+      `select name, sold_by, package_quantity::float as qty, package_unit, pantry_staple
+       from ingredients
+       where name in ('crostini', 'croutons', 'non-dairy milk')
+       order by name`,
+    )
+    assert.deepEqual(rows, [
+      {
+        name: 'crostini',
+        sold_by: 'package',
+        qty: 6,
+        package_unit: 'oz',
+        pantry_staple: false,
+      },
+      {
+        name: 'croutons',
+        sold_by: 'package',
+        qty: 5,
+        package_unit: 'oz',
+        pantry_staple: false,
+      },
+      {
+        name: 'non-dairy milk',
+        sold_by: 'package',
+        qty: 64,
+        package_unit: 'fl_oz',
+        pantry_staple: false,
+      },
+    ])
+  })
+})
+
 describe('bunch prices (TYL-84)', () => {
   it('prices scallions and cilantro per bunch, by weight', async () => {
     const { rows } = await db.query(
@@ -2498,6 +2552,102 @@ describe('bunch prices (TYL-84)', () => {
     assert.deepEqual(rows, [
       { name: 'cilantro', price_cents: 100, quantity: 60, unit: 'g' },
       { name: 'scallions', price_cents: 100, quantity: 100, unit: 'g' },
+    ])
+  })
+})
+
+describe('recipe tags (TYL-81)', () => {
+  it('lets users tag their own saved recipes, privately', async () => {
+    const r = await recipe('Tagged soup', [])
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2), ($3, $2)',
+      [ALICE, r, BOB],
+    )
+    await as('authenticated', ALICE, () =>
+      db.query(
+        `update user_saved_recipes set tags = '{weeknight,For guests}' where recipe_id = $1`,
+        [r],
+      ),
+    )
+    // Bob's update can't reach Alice's row, and he sees only his own tags.
+    const bobSees = await as('authenticated', BOB, async () => {
+      await db.query(
+        `update user_saved_recipes set tags = '{mine}' where user_id = $1`,
+        [ALICE],
+      )
+      const { rows } = await db.query(
+        'select user_id, tags from user_saved_recipes where recipe_id = $1',
+        [r],
+      )
+      return rows
+    })
+    assert.deepEqual(bobSees, [{ user_id: BOB, tags: [] }])
+    const { rows } = await db.query(
+      'select tags from user_saved_recipes where user_id = $1 and recipe_id = $2',
+      [ALICE, r],
+    )
+    assert.deepEqual(rows[0].tags, ['weeknight', 'For guests'])
+  })
+
+  it('rejects blank, padded, overlong and repeated tags', async () => {
+    const r = await recipe('Badly tagged soup', [])
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+      [ALICE, r],
+    )
+    for (const tags of [
+      [''],
+      [' weeknight'],
+      ['x'.repeat(31)],
+      ['Weeknight', 'weeknight'],
+      Array.from({ length: 21 }, (_, i) => `tag ${i}`),
+    ]) {
+      await assert.rejects(
+        db.query(
+          'update user_saved_recipes set tags = $1 where user_id = $2 and recipe_id = $3',
+          [tags, ALICE, r],
+        ),
+        /user_saved_recipes_tags_valid/,
+      )
+    }
+  })
+})
+
+describe('package estimates (TYL-61)', () => {
+  it('prices every ingredient in the estimates file', async () => {
+    // With baselines that's every ingredient; production is checked after
+    // applying, since other tests here change prices.
+    const csv = await readFile(
+      new URL('../../apps/api/data/package_estimates.csv', import.meta.url),
+      'utf8',
+    )
+    const names = csv
+      .trim()
+      .split('\n')
+      .slice(1)
+      .map((line) => line.split(',')[0])
+    const { rows } = await db.query(
+      `select v.name from unnest($1::text[]) as v(name)
+       where not exists (
+         select 1 from prices p join ingredients i on i.id = p.ingredient_id
+         where lower(i.name) = v.name and p.source = 'seed'
+       )`,
+      [names],
+    )
+    assert.equal(names.length, 556)
+    assert.deepEqual(rows, [])
+  })
+
+  it('prices a package, or a pound of what is sold loose', async () => {
+    const { rows } = await db.query(
+      `select i.name, p.price_cents, p.quantity::float as quantity, p.unit
+       from prices p join ingredients i on i.id = p.ingredient_id
+       where p.source = 'seed' and i.name in ('margarine', 'chicken')
+       order by i.name`,
+    )
+    assert.deepEqual(rows, [
+      { name: 'chicken', price_cents: 350, quantity: 1, unit: 'lb' },
+      { name: 'margarine', price_cents: 300, quantity: 16, unit: 'oz' },
     ])
   })
 })

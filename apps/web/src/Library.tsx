@@ -9,6 +9,7 @@ import {
 import { bookmarklet } from './bookmarklet.ts'
 import {
   dietLabels,
+  allTags,
   filterRecipes,
   ImportError,
   NO_FILTER,
@@ -43,6 +44,8 @@ type Status =
   | { state: 'saved'; result: ImportResult }
   | { state: 'error'; message: string; code: string }
 
+/** The user's recipes: save one by link, page or pasted text, then search
+ *  and filter what they've saved. */
 export function Library({
   api,
   shared,
@@ -248,7 +251,12 @@ export function Library({
           </p>
         )}
         {!!recipes?.length && (
-          <Filters filter={filter} onChange={setFilter} myDiets={myDiets} />
+          <Filters
+            filter={filter}
+            onChange={setFilter}
+            myDiets={myDiets}
+            tags={allTags(recipes)}
+          />
         )}
         {!!recipes?.length && (
           <RecipeList
@@ -473,15 +481,32 @@ const FILTER_DIETS: [slug: string, label: string][] = [
   ['dairy_free', 'Dairy-free'],
 ]
 
+/** Search and filter chips for the user's recipes: their diets, common
+ *  diets, quick recipes, and each of their own tags. */
 function Filters({
   filter,
   onChange,
   myDiets,
+  tags,
 }: {
   filter: RecipeFilter
   onChange: (f: RecipeFilter) => void
   myDiets: string[]
+  /** The user's own tags across their recipes, offered as filters. */
+  tags: string[]
 }) {
+  // Tags compare without case, as filterRecipes does: a "weeknight" chip
+  // clears a "Weeknight" filter left from a recipe since removed.
+  const hasTag = (tag: string) =>
+    filter.tags.some((t) => t.toLowerCase() === tag.toLowerCase())
+  // Select a tag's filter, or clear it (whatever its case) when selected.
+  const toggleTag = (tag: string) =>
+    onChange({
+      ...filter,
+      tags: hasTag(tag)
+        ? filter.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase())
+        : [...filter.tags, tag],
+    })
   const toggleDiet = (slug: string) =>
     onChange({
       ...filter,
@@ -545,11 +570,24 @@ function Filters({
         >
           Under 30 min
         </button>
+        {tags.map((t) => (
+          <button
+            key={`tag-${t}`}
+            type="button"
+            className="chip"
+            aria-pressed={hasTag(t)}
+            onClick={() => toggleTag(t)}
+          >
+            #{t}
+          </button>
+        ))}
       </div>
     </div>
   )
 }
 
+/** The filtered recipes, each with its source, time, labels and tags, and a
+ *  button to remove it. */
 function RecipeList({
   recipes,
   onRemove,
@@ -570,6 +608,15 @@ function RecipeList({
             {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
           </span>
           <DietChips diets={r.diets} />
+          {r.tags.length > 0 && (
+            <span className="diets" aria-label="Your tags">
+              {r.tags.map((t) => (
+                <span key={t} className="tag">
+                  {t}
+                </span>
+              ))}
+            </span>
+          )}
           <button
             type="button"
             className="remove"

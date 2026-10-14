@@ -12,6 +12,7 @@ import {
   importRecipe,
   importText,
   removeSaved,
+  setTags,
   savedRecipes,
 } from './library.ts'
 import { route, usePath } from './navigation.ts'
@@ -58,6 +59,8 @@ export type SousApi = LibraryApi &
   PlanApi &
   BrowseApi
 
+/** The real API for a signed-in session: Supabase under the user's
+ *  row-level security, and the Sous API for what needs the server. */
 function liveApi(db: SupabaseClient, session: Session): SousApi {
   const userId = session.user.id
   return {
@@ -81,6 +84,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     recipeFits: (ids) => recipeFits(db, ids),
     searchCatalog: (q, offset) => searchCatalog(db, q, offset),
     saveToLibrary: (id) => saveToLibrary(db, userId, id),
+    setTags: (id, tags) => setTags(db, id, tags),
     setPantry: (ingredientId, status) =>
       setPantry(db, userId, ingredientId, status),
   }
