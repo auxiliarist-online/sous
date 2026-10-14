@@ -40,6 +40,8 @@ export interface RecipeDetail {
   handTyped: boolean
   /** In the user's own recipes. */
   saved: boolean
+  /** The user's own tags, when saved (TYL-81). */
+  tags: string[]
   ingredients: IngredientLine[]
   diets: DietLabel[]
   cuisines: string[]
@@ -89,7 +91,7 @@ export async function recipeDetail(
 ): Promise<RecipeDetail | null> {
   const savedQuery = db
     .from('user_saved_recipes')
-    .select('recipe_id')
+    .select('recipe_id, tags')
     .eq('user_id', userId)
     .eq('recipe_id', id)
     .maybeSingle()
@@ -127,6 +129,7 @@ export async function recipeDetail(
     instructions: r.instructions,
     handTyped: !r.source_url && r.added_by === userId,
     saved: !!saved.data,
+    tags: (saved.data as { tags: string[] | null } | null)?.tags ?? [],
     ingredients: [...r.ingredients]
       .sort((a, b) => a.line_no - b.line_no || a.option_no - b.option_no)
       .map((i) => ({

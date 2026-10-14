@@ -84,6 +84,7 @@ describe('savedRecipes', () => {
     const rows = [
       {
         created_at: '2026-10-09T10:00:00Z',
+        tags: ['weeknight'],
         recipe: {
           id: 'r1',
           title: 'Dal',
@@ -114,6 +115,7 @@ describe('savedRecipes', () => {
         savedAt: '2026-10-09T10:00:00Z',
         diets: [{ slug: 'vegan', checks: [] }],
         ingredients: ['red lentils'],
+        tags: ['weeknight'],
       },
     ])
     expect(order).toHaveBeenCalledWith('created_at', { ascending: false })

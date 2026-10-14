@@ -9,6 +9,7 @@ import {
 import { bookmarklet } from './bookmarklet.ts'
 import {
   dietLabels,
+  allTags,
   filterRecipes,
   ImportError,
   NO_FILTER,
@@ -248,7 +249,12 @@ export function Library({
           </p>
         )}
         {!!recipes?.length && (
-          <Filters filter={filter} onChange={setFilter} myDiets={myDiets} />
+          <Filters
+            filter={filter}
+            onChange={setFilter}
+            myDiets={myDiets}
+            tags={allTags(recipes)}
+          />
         )}
         {!!recipes?.length && (
           <RecipeList
@@ -477,11 +483,21 @@ function Filters({
   filter,
   onChange,
   myDiets,
+  tags,
 }: {
   filter: RecipeFilter
   onChange: (f: RecipeFilter) => void
   myDiets: string[]
+  /** The user's own tags across their recipes, offered as filters. */
+  tags: string[]
 }) {
+  const toggleTag = (tag: string) =>
+    onChange({
+      ...filter,
+      tags: filter.tags.includes(tag)
+        ? filter.tags.filter((t) => t !== tag)
+        : [...filter.tags, tag],
+    })
   const toggleDiet = (slug: string) =>
     onChange({
       ...filter,
@@ -545,6 +561,17 @@ function Filters({
         >
           Under 30 min
         </button>
+        {tags.map((t) => (
+          <button
+            key={`tag-${t}`}
+            type="button"
+            className="chip"
+            aria-pressed={filter.tags.includes(t)}
+            onClick={() => toggleTag(t)}
+          >
+            #{t}
+          </button>
+        ))}
       </div>
     </div>
   )
@@ -570,6 +597,15 @@ function RecipeList({
             {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
           </span>
           <DietChips diets={r.diets} />
+          {r.tags.length > 0 && (
+            <span className="diets" aria-label="Your tags">
+              {r.tags.map((t) => (
+                <span key={t} className="tag">
+                  {t}
+                </span>
+              ))}
+            </span>
+          )}
           <button
             type="button"
             className="remove"

@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { DietChips } from './Library.tsx'
-import { dietLabels, sourceLabel } from './library.ts'
+import { cleanTag, dietLabels, sourceLabel } from './library.ts'
 import { navigate } from './navigation.ts'
 import { weekOf, type Fit, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
@@ -18,6 +18,7 @@ export interface RecipePageApi {
     day?: string | null,
   ): Promise<void>
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
+  setTags(recipeId: string, tags: string[]): Promise<void>
 }
 
 function minutes(m: number | null): string | null {
@@ -118,6 +119,15 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       <h2>{recipe.title}</h2>
       <p className="muted small">{facts.join(' · ')}</p>
       <DietChips diets={recipe.diets} />
+      {recipe.saved && (
+        <TagEditor
+          tags={recipe.tags}
+          onChange={async (tags) => {
+            await api.setTags(recipe.id, tags)
+            setRecipe({ ...recipe, tags })
+          }}
+        />
+      )}
       {recipe.sourceUrl && !recipe.license && (
         // The author's page is the main action: their instructions live there (policy).
         <ExternalLink className="button" href={recipe.sourceUrl}>
@@ -247,5 +257,92 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         )}
       </div>
     </article>
+  )
+}
+
+/** The user's own tags on a saved recipe (TYL-81): remove one with its ×, add
+ *  one by typing it. Changes are saved straight away. */
+function TagEditor({
+  tags,
+  onChange,
+}: {
+  tags: string[]
+  onChange: (tags: string[]) => Promise<void>
+}) {
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  async function save(next: string[]) {
+    setBusy(true)
+    setFailed(false)
+    try {
+      await onChange(next)
+      return true
+    } catch {
+      setFailed(true)
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function add(e: FormEvent) {
+    e.preventDefault()
+    const tag = cleanTag(draft)
+    if (!tag) return
+    if (tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+      setDraft('')
+      return
+    }
+    if (await save([...tags, tag])) setDraft('')
+  }
+
+  return (
+    <form className="tags" onSubmit={(e) => void add(e)}>
+      <ul className="tag-list" aria-label="Your tags">
+        {tags.map((t) => (
+          <li key={t} className="tag">
+            {t}
+            <button
+              type="button"
+              className="link"
+              disabled={busy}
+              aria-label={`Remove tag ${t}`}
+              onClick={() => void save(tags.filter((x) => x !== t))}
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+      {tags.length < 20 && (
+        <>
+          <label htmlFor="new-tag" className="visually-hidden">
+            Add a tag
+          </label>
+          <input
+            id="new-tag"
+            type="text"
+            placeholder="Add a tag, like weeknight"
+            maxLength={30}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="chip"
+            disabled={busy || !cleanTag(draft)}
+          >
+            Add tag
+          </button>
+        </>
+      )}
+      {failed && (
+        <p role="alert" className="error small">
+          We couldn't save your tags. Try again.
+        </p>
+      )}
+    </form>
   )
 }

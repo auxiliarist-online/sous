@@ -12,6 +12,7 @@ import {
   importRecipe,
   importText,
   removeSaved,
+  setTags,
   savedRecipes,
 } from './library.ts'
 import { route, usePath } from './navigation.ts'
@@ -81,6 +82,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     recipeFits: (ids) => recipeFits(db, ids),
     searchCatalog: (q, offset) => searchCatalog(db, q, offset),
     saveToLibrary: (id) => saveToLibrary(db, userId, id),
+    setTags: (id, tags) => setTags(db, id, tags),
     setPantry: (ingredientId, status) =>
       setPantry(db, userId, ingredientId, status),
   }

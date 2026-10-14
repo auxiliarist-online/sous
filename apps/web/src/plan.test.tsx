@@ -202,6 +202,7 @@ const saved = (id: string, title: string): SavedRecipe => ({
   savedAt: '2026-10-01',
   diets: [],
   ingredients: [],
+  tags: [],
 })
 
 const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
@@ -223,6 +224,7 @@ const DETAIL: RecipeDetail = {
   sourceNote: null,
   license: null,
   saved: true,
+  tags: [],
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,

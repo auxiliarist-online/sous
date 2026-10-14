@@ -2523,3 +2523,60 @@ describe('bunch prices (TYL-84)', () => {
     ])
   })
 })
+
+describe('recipe tags (TYL-81)', () => {
+  it('lets users tag their own saved recipes, privately', async () => {
+    const r = await recipe('Tagged soup', [])
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2), ($3, $2)',
+      [ALICE, r, BOB],
+    )
+    await as('authenticated', ALICE, () =>
+      db.query(
+        `update user_saved_recipes set tags = '{weeknight,For guests}' where recipe_id = $1`,
+        [r],
+      ),
+    )
+    // Bob's update can't reach Alice's row, and he sees only his own tags.
+    const bobSees = await as('authenticated', BOB, async () => {
+      await db.query(
+        `update user_saved_recipes set tags = '{mine}' where user_id = $1`,
+        [ALICE],
+      )
+      const { rows } = await db.query(
+        'select user_id, tags from user_saved_recipes where recipe_id = $1',
+        [r],
+      )
+      return rows
+    })
+    assert.deepEqual(bobSees, [{ user_id: BOB, tags: [] }])
+    const { rows } = await db.query(
+      'select tags from user_saved_recipes where user_id = $1 and recipe_id = $2',
+      [ALICE, r],
+    )
+    assert.deepEqual(rows[0].tags, ['weeknight', 'For guests'])
+  })
+
+  it('rejects blank, padded, overlong and repeated tags', async () => {
+    const r = await recipe('Badly tagged soup', [])
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+      [ALICE, r],
+    )
+    for (const tags of [
+      [''],
+      [' weeknight'],
+      ['x'.repeat(31)],
+      ['Weeknight', 'weeknight'],
+      Array.from({ length: 21 }, (_, i) => `tag ${i}`),
+    ]) {
+      await assert.rejects(
+        db.query(
+          'update user_saved_recipes set tags = $1 where user_id = $2 and recipe_id = $3',
+          [tags, ALICE, r],
+        ),
+        /user_saved_recipes_tags_valid/,
+      )
+    }
+  })
+})

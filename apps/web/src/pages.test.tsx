@@ -1,7 +1,13 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
+import {
+  allTags,
+  cleanTag,
+  filterRecipes,
+  NO_FILTER,
+  type SavedRecipe,
+} from './library.ts'
 import { route } from './navigation.ts'
 import { weekOf, type Fit, type Scale } from './plan.ts'
 import { RecipeForm } from './RecipeForm.tsx'
@@ -42,6 +48,7 @@ const BURRITOS: RecipeDetail = {
   sourceNote: null,
   license: null,
   saved: true,
+  tags: [],
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,
@@ -108,6 +115,7 @@ describe('RecipePage', () => {
     recipeFits: vi.fn(async (ids: string[]) =>
       Object.fromEntries(ids.map((id) => [id, fit])),
     ),
+    setTags: vi.fn(async (_id: string, _tags: string[]) => {}),
   })
 
   it('shows where it is from, its labels, and stars the ingredient to check', async () => {
@@ -156,6 +164,33 @@ describe('RecipePage', () => {
     expect(
       await screen.findByRole('link', { name: 'See the plan' }),
     ).toHaveAttribute('href', '/plan')
+  })
+
+  it('adds and removes the user’s own tags on a saved recipe', async () => {
+    const fake = api({ ...BURRITOS, tags: ['weeknight'] })
+    render(<RecipePage id={BURRITOS.id} api={fake} />)
+    const tags = await screen.findByRole('list', { name: 'Your tags' })
+    expect(within(tags).getByText('weeknight')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Add a tag'), '  For   guests ')
+    await userEvent.click(screen.getByRole('button', { name: 'Add tag' }))
+    expect(fake.setTags).toHaveBeenCalledWith(BURRITOS.id, [
+      'weeknight',
+      'For guests',
+    ])
+    expect(await within(tags).findByText('For guests')).toBeInTheDocument()
+    expect(screen.getByLabelText('Add a tag')).toHaveValue('')
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove tag weeknight' }),
+    )
+    expect(fake.setTags).toHaveBeenLastCalledWith(BURRITOS.id, ['For guests'])
+  })
+
+  it('has no tags for a recipe the user hasn’t saved', async () => {
+    render(
+      <RecipePage id={BURRITOS.id} api={api({ ...BURRITOS, saved: false })} />,
+    )
+    await screen.findByRole('heading', { name: 'Bean burritos' })
+    expect(screen.queryByLabelText('Add a tag')).toBeNull()
   })
 
   it('warns before planning a recipe that breaks the user’s rules', async () => {
@@ -442,7 +477,23 @@ describe('helpers', () => {
     savedAt: '',
     diets: [],
     ingredients: [],
+    tags: [],
     ...over,
+  })
+
+  it('filters and searches by the user’s own tags, ignoring case', () => {
+    const quick = r({ id: 'q', tags: ['Weeknight'] })
+    const slow = r({ id: 's', tags: ['for guests'] })
+    expect(
+      filterRecipes([quick, slow], { ...NO_FILTER, tags: ['weeknight'] }),
+    ).toEqual([quick])
+    expect(
+      filterRecipes([quick, slow], { ...NO_FILTER, query: 'guest' }),
+    ).toEqual([slow])
+    expect(allTags([slow, quick, r({ tags: ['weeknight', 'Batch'] })])).toEqual(
+      ['Batch', 'for guests', 'Weeknight'],
+    )
+    expect(cleanTag('  For   guests  ')).toBe('For guests')
   })
 
   it('filters by words, diets and time', () => {
