@@ -2741,3 +2741,13 @@ describe('more public baselines (TYL-61)', () => {
     ])
   })
 })
+
+describe('estimates apply to any week', () => {
+  it('gives hand estimates no start date', async () => {
+    const { rows } = await db.query(
+      `select count(*)::int as n from prices
+       where source = 'seed' and region = 'asheville' and valid_from = date '2026-10-13'`,
+    )
+    assert.equal(rows[0].n, 0)
+  })
+})

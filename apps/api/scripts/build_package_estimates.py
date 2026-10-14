@@ -13,7 +13,6 @@ edited.
 import csv
 import math
 import sys
-from datetime import date
 from pathlib import Path
 
 API = Path(__file__).resolve().parents[1]
@@ -68,8 +67,9 @@ def load() -> list[tuple[str, int, float, str]]:
     return rows
 
 
-def migration(rows: list[tuple[str, int, float, str]], on: date) -> str:
-    """The migration's SQL: insert each estimate, dated `on`, unless seeded already."""
+def migration(rows: list[tuple[str, int, float, str]]) -> str:
+    """The migration's SQL: insert each estimate unless seeded already. No
+    start date: an estimate applies to any week, past ones included."""
     values = ",\n".join(
         f"  ({sql_text(name)}, {cents}, {qty:g}, {sql_text(unit)})"
         for name, cents, qty, unit in rows
@@ -81,8 +81,8 @@ def migration(rows: list[tuple[str, int, float, str]], on: date) -> str:
 -- Hand estimates for ingredients no baseline covers, so every ingredient has
 -- some price. Shown as estimates; store prices win when there are some.
 
-insert into public.prices (source, ingredient_id, region, price_cents, quantity, unit, valid_from)
-select 'seed', i.id, 'asheville', v.price_cents, v.quantity, v.unit, date '{on.isoformat()}'
+insert into public.prices (source, ingredient_id, region, price_cents, quantity, unit)
+select 'seed', i.id, 'asheville', v.price_cents, v.quantity, v.unit
 from (values
 {values}
 ) as v(name, price_cents, quantity, unit)
@@ -100,5 +100,5 @@ if __name__ == "__main__":
     if out.exists():
         sys.exit(f"{out.name} exists; migrations are append-only, pick a new name")
     rows = load()
-    out.write_text(migration(rows, date.today()), encoding="utf-8")
+    out.write_text(migration(rows), encoding="utf-8")
     print(f"wrote {out.name}: {len(rows)} prices")
