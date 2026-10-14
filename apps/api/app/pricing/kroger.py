@@ -100,6 +100,9 @@ def _local_date(value: str | None) -> date | None:
 
 
 class Kroger:
+    """Kroger's public API: products and prices at a store, and stores near a
+    zip code. Gets and renews its own access token."""
+
     def __init__(self, client: httpx.Client) -> None:
         self.client = client
         self._token: str | None = None

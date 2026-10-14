@@ -9,6 +9,7 @@ type Status =
   | { state: 'sent'; email: string }
   | { state: 'error'; message: string }
 
+/** Sign in with a code emailed to you; links to the privacy page. */
 export function SignIn({ auth }: { auth: Auth }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<Status>({ state: 'idle' })

@@ -177,7 +177,7 @@ describe('Welcome', () => {
   it('walks through setup and saves it all at the end', async () => {
     const api = welcomeApi()
     const onDone = vi.fn()
-    render(<Welcome api={api} onDone={onDone} />)
+    render(<Welcome api={api} initial={NO_PREFERENCES} onDone={onDone} />)
     const next = async () =>
       userEvent.click(screen.getByRole('button', { name: 'Next' }))
 
@@ -226,7 +226,7 @@ describe('Welcome', () => {
   it('goes back a step, and says when saving fails', async () => {
     const api = welcomeApi()
     vi.mocked(api.savePreferences).mockRejectedValueOnce(new Error('nope'))
-    render(<Welcome api={api} onDone={vi.fn()} />)
+    render(<Welcome api={api} initial={NO_PREFERENCES} onDone={vi.fn()} />)
     await screen.findByRole('heading', { name: 'How do you eat?' })
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
     await userEvent.click(screen.getByRole('button', { name: 'Back' }))
@@ -237,6 +237,55 @@ describe('Welcome', () => {
     expect(
       await screen.findByText("We couldn't save. Try again."),
     ).toBeInTheDocument()
+  })
+})
+
+describe('Welcome when things fail', () => {
+  it('can still be finished when the diet and cuisine lists fail', async () => {
+    const api = welcomeApi()
+    vi.mocked(api.options).mockRejectedValue(new Error('down'))
+    const onDone = vi.fn()
+    render(<Welcome api={api} initial={NO_PREFERENCES} onDone={onDone} />)
+    expect(
+      await screen.findByText(/We couldn't load the list/),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Skip the rest/ }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+  })
+
+  it('saves the pantry before marking setup done', async () => {
+    const api = welcomeApi()
+    const order: string[] = []
+    vi.mocked(api.setPantry).mockImplementation(async () => {
+      order.push('pantry')
+    })
+    vi.mocked(api.savePreferences).mockImplementation(async () => {
+      order.push('preferences')
+    })
+    render(<Welcome api={api} initial={NO_PREFERENCES} onDone={vi.fn()} />)
+    for (let i = 0; i < 6; i++) {
+      await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+    }
+    await userEvent.click(await screen.findByRole('button', { name: 'salt' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
+    await waitFor(() => expect(order).toEqual(['pantry', 'preferences']))
+  })
+
+  it('doesn’t end setup when the pantry can’t be saved', async () => {
+    const api = welcomeApi()
+    vi.mocked(api.setPantry).mockRejectedValue(new Error('nope'))
+    const onDone = vi.fn()
+    render(<Welcome api={api} initial={NO_PREFERENCES} onDone={onDone} />)
+    for (let i = 0; i < 6; i++) {
+      await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+    }
+    await userEvent.click(await screen.findByRole('button', { name: 'salt' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
+    expect(
+      await screen.findByText("We couldn't save. Try again."),
+    ).toBeInTheDocument()
+    expect(api.savePreferences).not.toHaveBeenCalled()
+    expect(onDone).not.toHaveBeenCalled()
   })
 })
 
@@ -268,6 +317,7 @@ describe('Settings: store and account', () => {
     )
     expect(api.exportMyData).toHaveBeenCalled()
     await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled() // later, once it's started
 
     await userEvent.click(
       screen.getByRole('button', { name: 'Delete my account' }),

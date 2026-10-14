@@ -37,16 +37,20 @@ const TITLES = [
  *  doesn't come back. */
 export function Welcome({
   api,
+  initial,
   onDone,
 }: {
   api: WelcomeApi
+  /** The user's preferences as App loaded them: setup starts from these. */
+  initial: Preferences
   onDone: (p: Preferences) => void
 }) {
-  const [prefs, setPrefs] = useState<Preferences | null>(null)
+  const [prefs, setPrefs] = useState<Preferences>(initial)
   const [options, setOptions] = useState<{
     diets: Option[]
     cuisines: Option[]
   } | null>(null)
+  const [optionsFailed, setOptionsFailed] = useState(false)
   const [staples, setStaples] = useState<{ id: string; name: string }[]>([])
   const [out, setOut] = useState<string[]>([])
   const [step, setStep] = useState(0)
@@ -54,13 +58,15 @@ export function Welcome({
 
   useEffect(() => {
     let live = true
-    Promise.all([api.preferences(), api.options()]).then(
-      ([p, o]) => {
+    // Without the diet and cuisine lists those steps are empty, but setup
+    // can still be finished or skipped.
+    api.options().then(
+      (o) => live && setOptions(o),
+      () => {
         if (!live) return
-        setPrefs(p)
-        setOptions(o)
+        setOptions({ diets: [], cuisines: [] })
+        setOptionsFailed(true)
       },
-      () => live && setStatus('error'),
     )
     // Only for the last step; it's skipped if they don't load.
     api.pantryStaples().then(
@@ -72,15 +78,7 @@ export function Welcome({
     }
   }, [api])
 
-  if (!prefs || !options) {
-    return status === 'error' ? (
-      <p className="card error" role="alert">
-        We couldn't load setup. Try reloading.
-      </p>
-    ) : (
-      <p className="card muted">Loading…</p>
-    )
-  }
+  if (!options) return <p className="card muted">Loading…</p>
 
   const set = (patch: Partial<Preferences>) => setPrefs({ ...prefs, ...patch })
   const last = TITLES.length - 1
@@ -89,9 +87,10 @@ export function Welcome({
   async function finish(chosen: Preferences, pantryOut: string[]) {
     setStatus('saving')
     try {
+      // The pantry first: saving preferences is what ends setup.
+      for (const id of pantryOut) await api.setPantry(id, 'out')
       const saved = { ...chosen, saved: true }
       await api.savePreferences(saved)
-      for (const id of pantryOut) await api.setPantry(id, 'out')
       onDone(saved)
     } catch {
       setStatus('error')
@@ -100,7 +99,7 @@ export function Welcome({
 
   // The current step's question.
   function current(step: number) {
-    if (!prefs || !options) return null
+    if (!options) return null
     switch (step) {
       case 0:
         return (
@@ -226,6 +225,12 @@ export function Welcome({
         aria-label="Setup progress"
       />
       <h2 id="welcome-title">{TITLES[step]}</h2>
+      {optionsFailed && (step === 0 || step === 2) && (
+        <p role="alert" className="muted small">
+          We couldn't load the list. Skip this step for now; it's in Preferences
+          later.
+        </p>
+      )}
       {current(step)}
       <div className="welcome-nav">
         {step > 0 && (

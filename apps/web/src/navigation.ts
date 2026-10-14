@@ -38,6 +38,7 @@ export type Route =
 
 const UUID = '[0-9a-f-]{36}'
 
+/** Which page an address shows; anything unknown is the library. */
 export function route(path: string): Route {
   let m = path.match(new RegExp(`^/recipe/(${UUID})/?$`, 'i'))
   if (m) return { page: 'recipe', id: m[1] }

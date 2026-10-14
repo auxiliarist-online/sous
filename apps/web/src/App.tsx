@@ -121,12 +121,17 @@ interface Props {
   libraryApi?: (session: Session) => SousApi
 }
 
+/** The app: sign-in, then the signed-in pages by address, with first-login
+ *  setup (TYL-58) and the privacy page readable either way. */
 function App({ auth = defaultAuth, libraryApi }: Props) {
   const session = useSession(auth)
   const path = usePath()
   const [shared] = useState(pendingShare)
   const [sharedPage] = useState(pendingPage)
-  const [prefs, setPrefs] = useState<Preferences | null>(null)
+  const [loaded, setPrefs] = useState<Preferences | null>(null)
+  // Whose preferences those are: another account signing in mustn't be
+  // routed by them, so they count only for the account they were loaded for.
+  const [prefsFor, setPrefsFor] = useState<string | null>(null)
 
   const api = useMemo(() => {
     if (!session) return null
@@ -140,20 +145,30 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
     if (session && sharedPage) clearPage()
   }, [session, shared, sharedPage])
 
+  const userId = session?.user.id ?? null
   useEffect(() => {
     if (!api) return
     let live = true
     api.preferences().then(
-      (p) => live && setPrefs(p),
+      (p) => {
+        if (!live) return
+        setPrefs(p)
+        setPrefsFor(userId)
+      },
       // Preferences only shape filters; the app works without them. Marked
       // saved, so a failed load doesn't send an existing user to setup.
-      () => live && setPrefs({ ...NO_PREFERENCES, saved: true }),
+      () => {
+        if (!live) return
+        setPrefs({ ...NO_PREFERENCES, saved: true })
+        setPrefsFor(userId)
+      },
     )
     return () => {
       live = false
     }
-  }, [api])
+  }, [api, userId])
 
+  const prefs = prefsFor === userId ? loaded : null
   const at = route(path)
   const signedIn = !!(auth && session && api)
 
@@ -240,9 +255,13 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
               }}
             />
           )}
-          {at.page === 'welcome' && (
+          {at.page === 'welcome' && !prefs && (
+            <p className="card muted">Loading…</p>
+          )}
+          {at.page === 'welcome' && prefs && (
             <Welcome
               api={api}
+              initial={prefs}
               onDone={(p) => {
                 clearBrowseCache()
                 setPrefs(p)

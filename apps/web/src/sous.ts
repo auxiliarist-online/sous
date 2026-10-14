@@ -281,6 +281,8 @@ function ingredientRefs(rows: { ingredient: IngredientRef | null }[] | null) {
   return (rows ?? []).flatMap((r) => (r.ingredient ? [r.ingredient] : []))
 }
 
+/** The user's preferences: profile (with home zip), diets, cuisines and
+ *  ingredients. `saved` is false until they've saved once. */
 export async function loadPreferences(
   db: SupabaseClient,
   userId: string,
@@ -350,6 +352,8 @@ async function replaceRows(
   if (ins.error) throw ins.error
 }
 
+/** Save the user's preferences, replacing their diet, cuisine and
+ *  ingredient rows with these. */
 export async function savePreferences(
   db: SupabaseClient,
   userId: string,

@@ -148,7 +148,10 @@ async def add_live_prices(user_id: str, inputs: dict[str, Any]) -> str | None:
             chosen: dict[str, str] = {}
             for m in rows:
                 chosen.setdefault(m["ingredient_id"], m["product_id"])
-            matches = {product: ingredient for ingredient, product in chosen.items()}
+            # Two ingredients can be bought as one product; each gets its price.
+            matches: dict[str, list[str]] = {}
+            for ingredient, product in chosen.items():
+                matches.setdefault(product, []).append(ingredient)
         if not matches:
             return None
         products = await asyncio.to_thread(_fetch, list(matches), store["external_location_id"])
@@ -158,15 +161,17 @@ async def add_live_prices(user_id: str, inputs: dict[str, Any]) -> str | None:
 
     now = datetime.now(UTC)
     for p in products:
-        ingredient_id = matches.get(p.product_id)
-        if ingredient_id is None or not p.regular:
+        # Not on this store's shelf (a chain-wide match it doesn't carry):
+        # leave it to the estimates.
+        if not p.regular or not p.in_store:
             continue
-        info = inputs["ingredients"][ingredient_id]
-        rows = _quotes(ingredient_id, p, info, store["id"], now)
-        if not rows:
-            continue
-        inputs.setdefault("prices", []).extend(rows)
-        info.update(_package(p, info))
+        for ingredient_id in matches.get(p.product_id, []):
+            info = inputs["ingredients"][ingredient_id]
+            rows = _quotes(ingredient_id, p, info, store["id"], now)
+            if not rows:
+                continue
+            inputs.setdefault("prices", []).extend(rows)
+            info.update(_package(p, info))
     inputs["store_name"] = store["name"]
     return str(store["id"])
 

@@ -415,7 +415,8 @@ function Account({
       a.href = url
       a.download = 'sous-data.json'
       a.click()
-      URL.revokeObjectURL(url)
+      // Some browsers start the download after click() returns.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
       setState('idle')
     } catch {
       setState('error')

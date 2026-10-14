@@ -238,6 +238,32 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/')
   })
 
+  it('doesn’t route a newly signed-in account by the last one’s setup', async () => {
+    window.history.replaceState(null, '', '/')
+    const { auth, emit } = fakeAuth(null)
+    const first = { ...session, user: { id: 'a', email: 'a@x' } } as Session
+    const second = { ...session, user: { id: 'b', email: 'b@x' } } as Session
+    const newUser = library(NO_PREFERENCES)
+    const other = library()
+    // The second account's preferences are still loading.
+    vi.mocked(other.preferences).mockImplementation(() => new Promise(() => {}))
+    render(
+      <App
+        auth={auth}
+        libraryApi={(s) => (s.user.id === 'a' ? newUser : other)}
+      />,
+    )
+    await screen.findByLabelText('Email')
+    act(() => emit(first))
+    await screen.findByRole('heading', { name: 'How do you eat?' })
+    act(() => emit(null))
+    window.history.replaceState(null, '', '/plan')
+    act(() => emit(second))
+    await waitFor(() => expect(other.preferences).toHaveBeenCalled())
+    expect(window.location.pathname).toBe('/plan')
+    window.history.replaceState(null, '', '/')
+  })
+
   it('shows the privacy page signed out', async () => {
     window.history.replaceState(null, '', '/privacy')
     const { auth } = fakeAuth(null)
