@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.auth import current_user_id
 from app.main import app
 from app.plans import routes, store
-from app.plans.cost import Item, PlanCost, plan_cost
+from app.plans.cost import Item, PlanCost, added_costs, plan_cost
 from app.recipes.store import StoreError
 from tests.unit.conftest import Install
 
@@ -80,21 +80,28 @@ def line(ingredient: str | None, quantity: float | None, unit: str | None) -> di
     return {"ingredient_id": ingredient, "quantity": quantity, "unit": unit, "raw_text": "x"}
 
 
-def entry(lines: list[dict[str, Any]], scale: float = 1, id_: str = "e") -> dict[str, Any]:
-    return {"id": id_, "recipe_id": "r", "scale": scale, "lines": lines}
+def entry(
+    lines: list[dict[str, Any]], scale: float = 1, id_: str = "e", **extra: Any
+) -> dict[str, Any]:
+    return {"id": id_, "recipe_id": "r", "scale": scale, "lines": lines, **extra}
+
+
+def inputs_of(
+    *entries: dict[str, Any],
+    pantry: dict[str, str] | None = None,
+    prices: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    ingredients = {k: {**v, "pantry": (pantry or {}).get(k)} for k, v in INGREDIENTS.items()}
+    return {
+        "budget_cents": 5000,
+        "entries": list(entries),
+        "ingredients": ingredients,
+        "prices": PRICES if prices is None else prices,
+    }
 
 
 def cost_of(*entries: dict[str, Any], pantry: dict[str, str] | None = None) -> PlanCost:
-    ingredients = {k: {**v, "pantry": (pantry or {}).get(k)} for k, v in INGREDIENTS.items()}
-    return plan_cost(
-        {
-            "budget_cents": 5000,
-            "entries": list(entries),
-            "ingredients": ingredients,
-            "prices": PRICES,
-        },
-        on=MONDAY,
-    )
+    return plan_cost(inputs_of(*entries, pantry=pantry), on=MONDAY)
 
 
 def item(cost: PlanCost, name: str) -> Item:
@@ -270,12 +277,115 @@ class TestBoughtAs:
         assert (eggs.name, eggs.amount_unknown, eggs.packages) == ("eggs", True, 1)
 
 
+class TestShares:
+    def test_each_recipe_gets_its_share_and_they_add_up(self) -> None:
+        # A 2 lb bag of rice ($4): one recipe uses 2 cups, the other 1 cup.
+        cost = cost_of(
+            entry([line(RICE, 2, "cups"), line(CARROTS, 1, "lb")], id_="a"),
+            entry([line(RICE, 1, "cup")], id_="b"),
+        )
+        shares = {e.entry_id: e.cents for e in cost.entries}
+        assert shares == {"a": 267 + 100, "b": 133}
+        assert sum(shares.values()) == cost.total_cents
+
+    def test_an_unknown_amount_splits_evenly(self) -> None:
+        cost = cost_of(
+            entry([line(EGGS, None, None)], id_="a"),
+            entry([line(EGGS, 2, None)], id_="b"),
+            entry([line(EGGS, 1, None)], id_="c"),
+        )
+        shares = {e.entry_id: e.cents for e in cost.entries}
+        assert shares == {"a": 120, "b": 120, "c": 120}
+
+    def test_staples_on_hand_cost_nothing(self) -> None:
+        cost = cost_of(entry([line(SALT, 1, "tsp")], id_="a"))
+        assert [(e.entry_id, e.cents) for e in cost.entries] == [("a", 0)]
+
+
+class TestPriceSource:
+    def test_says_where_each_price_came_from(self) -> None:
+        prices = [
+            seed(RICE, 200, 1, "lb"),
+            {**seed(EGGS, 300, 12, "each"), "source": "user"},
+            {**seed(CARROTS, 150, 1, "lb"), "source": "store_api", "store_id": "s"},
+        ]
+        cost = plan_cost(
+            inputs_of(
+                entry([line(RICE, 1, "cup"), line(EGGS, 2, None), line(CARROTS, 1, "lb")]),
+                prices=prices,
+            ),
+            on=MONDAY,
+            store_id="s",
+        )
+        assert [(i.name, i.price_source, i.estimated) for i in cost.items] == [
+            ("eggs", "user", False),
+            ("white rice", "estimate", True),
+            ("carrots", "store", False),
+        ]
+        assert cost.store_id == "s"
+
+    def test_a_users_price_per_bunch_is_priced_by_weight(self) -> None:
+        # TYL-34: the user says a bunch of cilantro is $1.29 at their store.
+        cilantro = {
+            "name": "cilantro",
+            "aisle": "produce",
+            "sold_by": "package",
+            "package_quantity": 1,
+            "package_unit": "bunch",
+            "units": {"bunch": 60},
+        }
+        user_price = {**seed("cilantro", 129, 1, "bunch"), "source": "user"}
+        cost = plan_cost(
+            {
+                "entries": [entry([line("cilantro", 0.5, "bunch")])],
+                "ingredients": {"cilantro": cilantro},
+                "prices": [user_price],
+            },
+            on=MONDAY,
+        )
+        assert (cost.items[0].cents, cost.items[0].price_source) == (129, "user")
+
+
+class TestAddedCosts:
+    def test_a_recipe_adds_what_the_week_would_newly_buy(self) -> None:
+        planned = entry([line(RICE, 1, "cup")], id_="p")
+        # More rice still fits in the bag already bought; carrots are new.
+        rice_more = entry([line(RICE, 1, "cup")], id_="c1", recipe_id="more-rice", candidate=True)
+        carrots = entry([line(CARROTS, 2, "lb")], id_="c2", recipe_id="carrots", candidate=True)
+        unknown = entry([line(None, 1, "cup")], id_="c3", recipe_id="mystery", candidate=True)
+        inputs = inputs_of(planned, rice_more, carrots, unknown)
+        added = {a.recipe_id: a for a in added_costs(inputs, on=MONDAY)}
+        assert {k: a.cents for k, a in added.items()} == {
+            "more-rice": 0,
+            "carrots": 200,
+            "mystery": 0,
+        }
+        assert added["mystery"].unpriced and not added["carrots"].unpriced
+        assert added["carrots"].estimated and not added["more-rice"].estimated
+
+    def test_candidates_are_left_out_of_the_week(self) -> None:
+        cost = plan_cost(
+            inputs_of(
+                entry([line(RICE, 1, "cup")], id_="p"),
+                entry([line(CARROTS, 2, "lb")], id_="c", candidate=True),
+            ),
+            on=MONDAY,
+        )
+        assert cost.total_cents == 400
+        assert [e.entry_id for e in cost.entries] == ["p"]
+
+
 class TestCostInputs:
     def test_calls_plan_cost_inputs_for_the_user(self, supabase: Install) -> None:
         seen = supabase(lambda r: httpx.Response(200, json={"entries": []}))
         assert asyncio.run(store.cost_inputs("user-1", MONDAY)) == {"entries": []}
         assert seen[0].url == "https://proj.supabase.co/rest/v1/rpc/plan_cost_inputs"
         assert json.loads(seen[0].content) == {"p_user": "user-1", "p_week": "2026-10-12"}
+
+    def test_asks_for_candidates_when_there_are_some(self, supabase: Install) -> None:
+        seen = supabase(lambda r: httpx.Response(200, json={"entries": []}))
+        asyncio.run(store.cost_inputs("user-1", MONDAY, ["r-1", "r-2"]))
+        assert json.loads(seen[0].content)["p_candidates"] == ["r-1", "r-2"]
 
     def test_failures(self, supabase: Install) -> None:
         supabase(lambda r: httpx.Response(500, text="boom"))
@@ -288,13 +398,19 @@ class TestRoute:
     def client(self, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
         calls: list[tuple[str, date]] = []
 
-        async def fake_inputs(user_id: str, week: date) -> dict[str, Any]:
+        async def fake_inputs(
+            user_id: str, week: date, candidates: list[str] | None = None
+        ) -> dict[str, Any]:
             calls.append((user_id, week))
             if week.year == 1999:
                 raise StoreError("down")
+            extra = [
+                entry([line(CARROTS, 1, "lb")], id_=f"c-{r}", recipe_id=r, candidate=True)
+                for r in candidates or []
+            ]
             return {
                 "budget_cents": 5000,
-                "entries": [entry([line(EGGS, 2, None)], id_="e-1")],
+                "entries": [entry([line(EGGS, 2, None)], id_="e-1"), *extra],
                 "ingredients": INGREDIENTS,
                 "prices": PRICES,
             }
@@ -313,7 +429,24 @@ class TestRoute:
         assert body["total_cents"] == 360
         assert body["items"][0]["name"] == "eggs"
         assert body["items"][0]["packages"] == 1
+        assert body["items"][0]["price_source"] == "estimate"
+        assert body["entries"] == [{"entry_id": "e-1", "cents": 360}]
         assert client.calls == [("user-1", MONDAY)]  # type: ignore[attr-defined]
+
+    def test_says_what_each_recipe_would_add(self, client: TestClient) -> None:
+        resp = client.post("/plans/2026-10-12/added", json={"recipe_ids": ["r-1", "r-1"]})
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "budget_cents": 5000,
+            "total_cents": 360,
+            "recipes": [{"recipe_id": "r-1", "cents": 100, "unpriced": False, "estimated": True}],
+        }
+
+    def test_added_needs_some_recipes_and_not_too_many(self, client: TestClient) -> None:
+        assert client.post("/plans/2026-10-12/added", json={"recipe_ids": []}).status_code == 422
+        many = {"recipe_ids": [str(n) for n in range(101)]}
+        assert client.post("/plans/2026-10-12/added", json=many).status_code == 422
+        assert client.post("/plans/2026-10-13/added", json={"recipe_ids": ["r"]}).status_code == 422
 
     def test_weeks_start_on_monday(self, client: TestClient) -> None:
         assert client.get("/plans/2026-10-13/cost").status_code == 422

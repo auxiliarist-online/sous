@@ -624,3 +624,63 @@ select {
 .buy-price {
   font-variant-numeric: tabular-nums;
 }
+
+/* Name and price on the first row, the pantry button at the end; "Edit price"
+   under the name, and the price form across the row (TYL-34). */
+.buy-list li > .buy-name {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.buy-list li > .buy-price {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+}
+
+.buy-list li > .chip {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.buy-list li > .edit-price {
+  grid-column: 1;
+  justify-self: start;
+  padding: 0;
+  min-height: 24px;
+}
+
+.price-source {
+  display: block;
+  font-size: 0.75rem;
+}
+
+.price-form {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.price-form label {
+  flex-basis: 100%;
+}
+
+.price-form input {
+  width: 6rem;
+}
+
+/* Cheaper recipes offered when a pick would go over budget (TYL-30). */
+.cheaper ul {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.cheaper p {
+  margin: 0.5rem 0 0;
+}

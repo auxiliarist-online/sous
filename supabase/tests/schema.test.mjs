@@ -1708,6 +1708,68 @@ describe('meal planner', () => {
       /only callable by the API/,
     )
   })
+
+  it('brings recipes the user might add, but not ones they cannot see', async () => {
+    const r = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        'select plan_cost_inputs($1, $2, $3) as r',
+        [DAVE, MONDAY, [peanutNoodles, alicesSecret]],
+      )
+      return rows[0].r
+    })
+    const candidates = r.entries.filter((e) => e.candidate)
+    assert.deepEqual(
+      candidates.map((e) => [e.id, e.recipe_id, e.scale]),
+      [[`candidate-${peanutNoodles}`, peanutNoodles, 1]],
+    )
+    assert.equal(r.entries.filter((e) => !e.candidate).length, 2)
+  })
+
+  it('keeps one own price per ingredient and store, private to the user (TYL-34)', async () => {
+    const tofu = await ingredient('tofu')
+    const { rows: stores } = await db.query(
+      `insert into stores (chain_slug, name) values ('aldi', 'Co-op') returning id`,
+    )
+    const coop = stores[0].id
+    await asDave('select set_my_price($1, $2, 299, 14, $3)', [tofu, coop, 'oz'])
+    await asDave('select set_my_price($1, $2, 249, 14, $3)', [tofu, coop, 'oz'])
+    await asDave('select set_my_price($1, null, 279, 14, $2)', [tofu, 'oz'])
+    const mine = await asDave(
+      `select price_cents, store_id from prices
+       where source = 'user' and ingredient_id = $1 order by price_cents`,
+      [tofu],
+    )
+    assert.deepEqual(mine, [
+      { price_cents: 249, store_id: coop },
+      { price_cents: 279, store_id: null },
+    ])
+    const seenByAlice = await as('authenticated', ALICE, async () => {
+      const { rows } = await db.query(
+        `select 1 from prices
+         where source = 'user' and ingredient_id = $1 and user_id = $2`,
+        [tofu, DAVE],
+      )
+      return rows
+    })
+    assert.equal(seenByAlice.length, 0)
+    await as('authenticated', ALICE, () =>
+      db.query('select clear_my_price($1, $2)', [tofu, coop]),
+    )
+    await asDave('select clear_my_price($1, $2)', [tofu, coop])
+    const left = await asDave(
+      `select price_cents from prices where source = 'user' and ingredient_id = $1`,
+      [tofu],
+    )
+    assert.deepEqual(left, [{ price_cents: 279 }])
+    await assert.rejects(
+      asDave('select set_my_price($1, null, 100, 1, $2)', [tofu, 'handful']),
+      /unknown unit/,
+    )
+    await assert.rejects(
+      asDave('select set_my_price($1, null, -1, 1, $2)', [tofu, 'oz']),
+      /check/,
+    )
+  })
 })
 
 describe('buying: packages, recipe sizes and the pantry', () => {

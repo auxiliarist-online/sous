@@ -121,6 +121,7 @@ describe('savedRecipes', () => {
         diets: [{ slug: 'vegan', checks: [] }],
         ingredients: ['red lentils'],
         tags: ['weeknight'],
+        cuisines: [],
       },
     ])
     expect(order).toHaveBeenCalledWith('created_at', { ascending: false })
@@ -212,6 +213,7 @@ describe('tags (TYL-81)', () => {
     diets: [],
     ingredients: [],
     tags: [],
+    cuisines: [],
     ...over,
   })
 

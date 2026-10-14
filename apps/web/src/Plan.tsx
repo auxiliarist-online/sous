@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
 import {
   addDays,
   dayName,
   buyText,
   dollars,
+  parseDollars,
+  priceBasis,
   saleText,
   formatQuantity,
   scaledLine,
@@ -12,6 +14,8 @@ import {
   weekDays,
   weekLabel,
   weekOf,
+  type AddedCost,
+  type AddedCosts,
   type BuyItem,
   type Fit,
   type PantryStatus,
@@ -39,8 +43,20 @@ export interface PlanApi {
   removeEntry(id: string): Promise<void>
   copyPlan(from: string, to: string): Promise<number>
   planCost(weekStart: string): Promise<PlanCost>
+  /** What adding each recipe would add to the week (TYL-30). */
+  addedCosts(weekStart: string, recipeIds: string[]): Promise<AddedCosts>
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
+  /** The user's favorite cuisine slugs, to suggest those first. */
+  favoriteCuisines(): Promise<string[]>
   setPantry(ingredientId: string, status: PantryStatus | null): Promise<void>
+  /** The user's own price for an ingredient at a store (TYL-34). */
+  setMyPrice(
+    ingredientId: string,
+    storeId: string | null,
+    cents: number,
+    basis: { quantity: number; unit: string },
+  ): Promise<void>
+  clearMyPrice(ingredientId: string, storeId: string | null): Promise<void>
 }
 
 /** The week's meals (TYL-15): what's planned on which day and at what size,
@@ -145,6 +161,21 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
                 "We couldn't update your pantry. Try again.",
               )
             }
+            onPrice={(item, cents) => {
+              const storeId = cost && cost !== 'error' ? cost.storeId : null
+              void change(
+                () =>
+                  cents === null
+                    ? api.clearMyPrice(item.ingredientId!, storeId)
+                    : api.setMyPrice(
+                        item.ingredientId!,
+                        storeId,
+                        cents,
+                        priceBasis(item),
+                      ),
+                "We couldn't save your price. Try again.",
+              )
+            }}
           />
 
           {entries.length === 0 && (
@@ -172,6 +203,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
                     <Entry
                       key={e.id}
                       entry={e}
+                      cost={cost && cost !== 'error' ? cost : null}
                       days={days}
                       api={api}
                       busy={busy}
@@ -202,6 +234,8 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
 
           <AddRecipe
             api={api}
+            week={week}
+            version={version}
             busy={busy}
             onAdd={(r) =>
               void change(
@@ -216,16 +250,21 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   )
 }
 
+/** The week's cost against the budget, and the buy list: where each price
+ *  is from, with the pantry and the user's own prices editable. */
 function Budget({
   cost,
   empty,
   busy,
   onPantry,
+  onPrice,
 }: {
   cost: PlanCost | 'error' | null
   empty: boolean
   busy: boolean
   onPantry: (item: BuyItem, status: PantryStatus) => void
+  /** Save the user's price for one item (null clears it). */
+  onPrice: (item: BuyItem, cents: number | null) => void
 }) {
   if (cost === null) {
     return empty ? null : <p className="muted small">Working out the cost…</p>
@@ -286,7 +325,9 @@ function Budget({
               key={i.ingredientId ?? `x${n}`}
               item={i}
               busy={busy}
+              storeName={cost.storeName}
               onPantry={onPantry}
+              onPrice={onPrice}
             />
           ))}
         </ul>
@@ -303,7 +344,9 @@ function Budget({
                   key={i.ingredientId}
                   item={i}
                   busy={busy}
+                  storeName={cost.storeName}
                   onPantry={onPantry}
+                  onPrice={onPrice}
                 />
               ))}
             </ul>
@@ -314,16 +357,31 @@ function Budget({
   )
 }
 
+const SOURCE_LABELS = { user: 'your price', estimate: 'estimate' } as const
+
+/** One thing to buy: amount, price and where it's from, with buttons for the
+ *  pantry and for the user's own price. */
 function BuyRow({
   item,
   busy,
+  storeName,
   onPantry,
+  onPrice,
 }: {
   item: BuyItem
   busy: boolean
+  storeName: string | null
   onPantry: (item: BuyItem, status: PantryStatus) => void
+  onPrice: (item: BuyItem, cents: number | null) => void
 }) {
+  const [editing, setEditing] = useState(false)
   const amount = buyText(item)
+  const source =
+    item.priceSource === 'store'
+      ? storeName
+      : item.priceSource
+        ? SOURCE_LABELS[item.priceSource]
+        : null
   const leftover =
     item.leftover && item.packageQuantity && item.packageUnit !== 'each'
       ? item.leftover / item.packageQuantity
@@ -353,7 +411,33 @@ function BuyRow({
             ? `${item.estimated ? '~' : ''}${dollars(item.cents)}`
             : '—'
           : ''}
+        {item.buy && item.cents !== null && source && (
+          <span className="muted price-source"> {source}</span>
+        )}
       </span>
+      {item.buy && item.ingredientId && !editing && (
+        <button
+          type="button"
+          className="link small edit-price"
+          disabled={busy}
+          aria-label={`Set your price for ${item.name}`}
+          onClick={() => setEditing(true)}
+        >
+          Edit price
+        </button>
+      )}
+      {editing && (
+        <PriceForm
+          item={item}
+          storeName={storeName}
+          busy={busy}
+          onSave={(cents) => {
+            setEditing(false)
+            onPrice(item, cents)
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
       {item.ingredientId && (
         <button
           type="button"
@@ -371,8 +455,71 @@ function BuyRow({
   )
 }
 
+/** "Your price at Harris Teeter for 14 oz: $__": saves the user's own
+ *  price for one package (or pound) of an item, or clears it (TYL-34). */
+function PriceForm({
+  item,
+  storeName,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  item: BuyItem
+  storeName: string | null
+  busy: boolean
+  onSave: (cents: number | null) => void
+  onCancel: () => void
+}) {
+  const basis = priceBasis(item)
+  const [text, setText] = useState('')
+  const cents = parseDollars(text)
+  const id = `price-${item.ingredientId}`
+
+  // Save the typed price, if it is one.
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (cents !== null) onSave(cents)
+  }
+
+  return (
+    <form className="price-form" onSubmit={submit}>
+      <label htmlFor={id} className="small">
+        Your price{storeName ? ` at ${storeName}` : ''} for {basis.label}{' '}
+        {item.name}
+      </label>
+      <input
+        id={id}
+        inputMode="decimal"
+        placeholder="$0.00"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        aria-invalid={text !== '' && cents === null}
+      />
+      <button type="submit" className="chip" disabled={busy || cents === null}>
+        Save
+      </button>
+      {item.priceSource === 'user' && (
+        <button
+          type="button"
+          className="link small"
+          disabled={busy}
+          onClick={() => onSave(null)}
+        >
+          Use the usual price
+        </button>
+      )}
+      <button type="button" className="link small" onClick={onCancel}>
+        Cancel
+      </button>
+    </form>
+  )
+}
+
+/** One planned recipe: its size, day and share of the cost, with its
+ *  ingredients at the planned size on request. */
 function Entry({
   entry,
+  cost,
   days,
   api,
   busy,
@@ -380,6 +527,8 @@ function Entry({
   onRemove,
 }: {
   entry: PlanEntry
+  /** The week's cost, for this recipe's share of it (TYL-30). */
+  cost: PlanCost | null
   days: string[]
   api: PlanApi
   busy: boolean
@@ -404,6 +553,12 @@ function Entry({
       <div className="entry-head">
         <Link to={`/recipe/${entry.recipeId}`}>{entry.title}</Link>
         {serves && <span className="muted small">serves {serves}</span>}
+        {cost && cost.entryCents[entry.id] !== undefined && (
+          <span className="muted small" aria-label="This recipe's share">
+            {cost.estimated ? '~' : ''}
+            {dollars(cost.entryCents[entry.id])}
+          </span>
+        )}
       </div>
       <div className="entry-controls">
         <div
@@ -475,22 +630,37 @@ function Entry({
   )
 }
 
-/** Pick from the user's saved recipes. One that breaks their diets,
- *  allergies or exclusions is marked, and adding it asks first (TYL-85). */
+/** "+~$4.10", or "+~$4.10 or more" when some of what it needs has no price. */
+function addedText(a: AddedCost): string {
+  return `+${a.estimated ? '~' : ''}${dollars(a.cents)}${a.unpriced ? ' or more' : ''}`
+}
+
+/** Pick from the user's saved recipes, each with what it would add to the
+ *  week's cost (TYL-30). One that breaks their diets, allergies or exclusions
+ *  (TYL-85), or would take the week over budget, asks first; going over also
+ *  suggests cheaper recipes that fit the budget and their rules, favorite
+ *  cuisines first. */
 function AddRecipe({
   api,
+  week,
+  version,
   busy,
   onAdd,
 }: {
   api: PlanApi
+  week: string
+  /** Changes whenever the plan does, so the costs are worked out again. */
+  version: number
   busy: boolean
   onAdd: (r: SavedRecipe) => void
 }) {
   const [recipes, setRecipes] = useState<SavedRecipe[] | null>(null)
   const [fits, setFits] = useState<Record<string, Fit>>({})
+  const [added, setAdded] = useState<AddedCosts | null>(null)
+  const [favorites, setFavorites] = useState<string[]>([])
   const [query, setQuery] = useState('')
   const [failed, setFailed] = useState(false)
-  // A recipe that breaks the user's rules, waiting for "Add anyway" (TYL-85).
+  // A recipe waiting for "Add anyway": it breaks the user's rules, or the budget.
   const [confirming, setConfirming] = useState<string | null>(null)
 
   useEffect(() => {
@@ -504,10 +674,33 @@ function AddRecipe({
         setRecipes(list)
       })
       .catch(() => live && setFailed(true))
+    // Only for ordering suggestions, so it can fail quietly.
+    api.favoriteCuisines().then(
+      (c) => live && setFavorites(c),
+      () => {},
+    )
     return () => {
       live = false
     }
   }, [api])
+
+  // What each would add; without it the list still works, just without costs.
+  useEffect(() => {
+    if (!recipes?.length) return
+    let live = true
+    api
+      .addedCosts(
+        week,
+        recipes.map((r) => r.id),
+      )
+      .then(
+        (a) => live && setAdded(a),
+        () => live && setAdded(null),
+      )
+    return () => {
+      live = false
+    }
+  }, [api, week, version, recipes])
 
   if (failed) {
     return (
@@ -517,6 +710,32 @@ function AddRecipe({
   if (!recipes) return null
 
   const shown = filterRecipes(recipes, { ...NO_FILTER, query })
+  const budget = added?.budgetCents ?? null
+  // How far over budget the week would go with this recipe; 0 when it fits.
+  const overBy = (r: SavedRecipe) => {
+    const a = added?.recipes[r.id]
+    if (!added || budget === null || !a) return 0
+    return Math.max(0, added.totalCents + a.cents - budget)
+  }
+  // Up to three other recipes that fit the budget and the user's rules: from
+  // their favorite cuisines first, then cheapest.
+  const favorite = (r: SavedRecipe) =>
+    r.cuisines.some((c) => favorites.includes(c)) ? 0 : 1
+  const cheaper = (r: SavedRecipe) =>
+    recipes
+      .filter(
+        (o) =>
+          o.id !== r.id &&
+          fits[o.id] !== 'excluded' &&
+          added?.recipes[o.id] &&
+          overBy(o) === 0,
+      )
+      .sort(
+        (a, b) =>
+          favorite(a) - favorite(b) ||
+          added!.recipes[a.id].cents - added!.recipes[b.id].cents,
+      )
+      .slice(0, 3)
 
   return (
     <section className="add-to-plan">
@@ -541,65 +760,116 @@ function AddRecipe({
             onChange={(e) => setQuery(e.target.value)}
           />
           <ul className="recipes" aria-label="Recipes you can add">
-            {shown.map((r) => (
-              <li key={r.id}>
-                <span>
-                  {r.title}
-                  {fits[r.id] === 'check_label' && (
-                    <span
-                      className="star"
-                      aria-label="fits if you check the label"
-                    >
-                      {' '}
-                      *
-                    </span>
-                  )}
-                </span>
-                {confirming === r.id ? (
-                  <button
-                    type="button"
-                    className="link"
-                    aria-label={`Don't add ${r.title}`}
-                    onClick={() => setConfirming(null)}
-                  >
-                    Cancel
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="chip"
-                    disabled={busy}
-                    aria-label={`Add ${r.title}`}
-                    onClick={() =>
-                      fits[r.id] === 'excluded' ? setConfirming(r.id) : onAdd(r)
-                    }
-                  >
-                    + Add
-                  </button>
-                )}
-                {fits[r.id] === 'excluded' && confirming !== r.id && (
-                  <span className="small warning">
-                    Doesn't fit your diets or allergies
+            {shown.map((r) => {
+              const cost = added?.recipes[r.id]
+              const excluded = fits[r.id] === 'excluded'
+              const over = overBy(r)
+              const others = confirming === r.id && over > 0 ? cheaper(r) : []
+              return (
+                <li key={r.id}>
+                  <span>
+                    {r.title}
+                    {fits[r.id] === 'check_label' && (
+                      <span
+                        className="star"
+                        aria-label="fits if you check the label"
+                      >
+                        {' '}
+                        *
+                      </span>
+                    )}
                   </span>
-                )}
-                {confirming === r.id && (
-                  <p className="small warning confirm" role="alert">
-                    {r.title} doesn't fit your diets or allergies.{' '}
+                  {confirming === r.id ? (
                     <button
                       type="button"
                       className="link"
-                      disabled={busy}
-                      onClick={() => {
-                        setConfirming(null)
-                        onAdd(r)
-                      }}
+                      aria-label={`Don't add ${r.title}`}
+                      onClick={() => setConfirming(null)}
                     >
-                      Add anyway
+                      Cancel
                     </button>
-                  </p>
-                )}
-              </li>
-            ))}
+                  ) : (
+                    <button
+                      type="button"
+                      className="chip"
+                      disabled={busy}
+                      aria-label={`Add ${r.title}`}
+                      onClick={() =>
+                        excluded || over > 0 ? setConfirming(r.id) : onAdd(r)
+                      }
+                    >
+                      + Add
+                    </button>
+                  )}
+                  {confirming !== r.id && (cost || excluded) && (
+                    <span className="small">
+                      {cost && (
+                        <span className="muted" aria-label="Adds to this week">
+                          {addedText(cost)}
+                        </span>
+                      )}
+                      {cost && over > 0 && (
+                        <span className="warning"> · over budget</span>
+                      )}
+                      {cost && excluded && ' · '}
+                      {excluded && (
+                        <span className="warning">
+                          Doesn't fit your diets or allergies
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {confirming === r.id && (
+                    <div className="small warning confirm" role="alert">
+                      {excluded && (
+                        <p>{r.title} doesn't fit your diets or allergies.</p>
+                      )}
+                      {over > 0 && cost && budget !== null && (
+                        <p>
+                          Adding it ({addedText(cost)}) puts the week at{' '}
+                          {cost.estimated ? '~' : ''}
+                          {dollars(added!.totalCents + cost.cents)},{' '}
+                          {dollars(over)} over your {dollars(budget)} budget.
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="link"
+                        disabled={busy}
+                        onClick={() => {
+                          setConfirming(null)
+                          onAdd(r)
+                        }}
+                      >
+                        Add anyway
+                      </button>
+                      {others.length > 0 && (
+                        <div className="cheaper">
+                          <p className="muted">Cheaper picks that fit:</p>
+                          <ul aria-label="Cheaper picks">
+                            {others.map((o) => (
+                              <li key={o.id}>
+                                <button
+                                  type="button"
+                                  className="chip"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setConfirming(null)
+                                    onAdd(o)
+                                  }}
+                                >
+                                  {o.title} {addedText(added!.recipes[o.id])}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
           {shown.length === 0 && (
             <p className="muted small">No recipes match “{query}”.</p>

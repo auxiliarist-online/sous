@@ -472,6 +472,7 @@ describe('helpers', () => {
     diets: [],
     ingredients: [],
     tags: [],
+    cuisines: [],
     ...over,
   })
 

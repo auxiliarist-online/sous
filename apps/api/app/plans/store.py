@@ -9,7 +9,15 @@ from app.config import settings
 from app.recipes.store import StoreError
 
 
-async def cost_inputs(user_id: str, week_start: date) -> dict[str, Any]:
+async def cost_inputs(
+    user_id: str, week_start: date, candidates: list[str] | None = None
+) -> dict[str, Any]:
+    """The week's plan, ingredients and prices for pricing it. `candidates`
+    are recipes the user might add (TYL-30): they come back as entries marked
+    "candidate", at full size."""
+    body: dict[str, Any] = {"p_user": user_id, "p_week": week_start.isoformat()}
+    if candidates:
+        body["p_candidates"] = candidates
     if not settings.supabase_url or not settings.supabase_service_role_key:
         raise StoreError("Supabase is not configured")
     key = settings.supabase_service_role_key
@@ -17,7 +25,7 @@ async def cost_inputs(user_id: str, week_start: date) -> dict[str, Any]:
         resp = await client.post(
             f"{settings.supabase_url}/rest/v1/rpc/plan_cost_inputs",
             headers={"apikey": key, "Authorization": f"Bearer {key}"},
-            json={"p_user": user_id, "p_week": week_start.isoformat()},
+            json=body,
         )
     if resp.status_code != 200:
         raise StoreError(f"plan_cost_inputs failed: {resp.status_code} {resp.text[:300]}")

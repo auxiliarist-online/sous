@@ -229,6 +229,9 @@ export interface BuyItem {
   cents: number | null
   /** A rough baseline price rather than the store's. */
   estimated: boolean
+  /** Where the price came from (TYL-61): the user's own, the store's, or a
+   *  rough estimate. */
+  priceSource: 'user' | 'store' | 'estimate' | null
   /** The store's sale price. */
   onSale: boolean
   /** The sale's last day (YYYY-MM-DD), and the cost after it. */
@@ -246,6 +249,10 @@ export interface PlanCost {
   items: BuyItem[]
   /** The store whose prices these are, when they're live from it. */
   storeName: string | null
+  /** Its id, where the user's own prices are saved (null: anywhere). */
+  storeId: string | null
+  /** Each planned recipe's share of the total, by plan entry id (TYL-30). */
+  entryCents: Record<string, number>
 }
 
 interface ItemBody {
@@ -265,6 +272,7 @@ interface ItemBody {
   buy: boolean
   cents: number | null
   estimated?: boolean
+  price_source?: BuyItem['priceSource']
   on_sale?: boolean
   sale_ends?: string | null
   regular_cents?: number | null
@@ -284,6 +292,8 @@ export async function planCost(
     unpriced: number
     items: ItemBody[]
     store_name?: string | null
+    store_id?: string | null
+    entries?: { entry_id: string; cents: number }[]
   }
   return {
     budgetCents: body.budget_cents,
@@ -307,12 +317,127 @@ export async function planCost(
       buy: i.buy,
       cents: i.cents,
       estimated: i.estimated ?? false,
+      priceSource: i.price_source ?? null,
       onSale: i.on_sale ?? false,
       saleEnds: i.sale_ends ?? null,
       regularCents: i.regular_cents ?? null,
     })),
     storeName: body.store_name ?? null,
+    storeId: body.store_id ?? null,
+    entryCents: Object.fromEntries(
+      (body.entries ?? []).map((e) => [e.entry_id, e.cents]),
+    ),
   }
+}
+
+/** What adding a recipe at full size would add to the week (TYL-30). */
+export interface AddedCost {
+  cents: number
+  /** It brings items with no price yet, so it would add more than this. */
+  unpriced: boolean
+  estimated: boolean
+}
+
+export interface AddedCosts {
+  budgetCents: number | null
+  totalCents: number
+  /** By recipe id; recipes the user can't see are left out. */
+  recipes: Record<string, AddedCost>
+}
+
+/** What adding each of these recipes would add to the week's cost. */
+export async function addedCosts(
+  session: Session,
+  weekStart: string,
+  recipeIds: string[],
+  send: typeof apiFetch = apiFetch,
+): Promise<AddedCosts> {
+  const resp = await send(session, `/plans/${weekStart}/added`, {
+    method: 'POST',
+    body: JSON.stringify({ recipe_ids: recipeIds.slice(0, 100) }),
+  })
+  if (!resp.ok) throw new Error(`added costs: ${resp.status}`)
+  const body = (await resp.json()) as {
+    budget_cents: number | null
+    total_cents: number
+    recipes: {
+      recipe_id: string
+      cents: number
+      unpriced: boolean
+      estimated: boolean
+    }[]
+  }
+  return {
+    budgetCents: body.budget_cents,
+    totalCents: body.total_cents,
+    recipes: Object.fromEntries(
+      body.recipes.map((r) => [
+        r.recipe_id,
+        { cents: r.cents, unpriced: r.unpriced, estimated: r.estimated },
+      ]),
+    ),
+  }
+}
+
+/** How much the user's own price is for (TYL-34): one package as the list
+ *  buys it ("14 oz", "1 bunch", "pack of 12"), or a pound of what's loose. */
+export function priceBasis(i: BuyItem): {
+  quantity: number
+  unit: string
+  label: string
+} {
+  if (i.soldBy === 'package' && i.packageQuantity && i.packageUnit) {
+    const label =
+      i.packageUnit === 'each'
+        ? i.packageQuantity > 1
+          ? `a pack of ${formatQuantity(i.packageQuantity)}`
+          : 'one'
+        : amountText(i.packageQuantity, i.packageUnit)
+    return { quantity: i.packageQuantity, unit: i.packageUnit, label }
+  }
+  if (i.unit === 'each') return { quantity: 1, unit: 'each', label: 'one' }
+  return { quantity: 1, unit: 'lb', label: '1 lb' }
+}
+
+/** Save the user's own price for an ingredient at a store (null: anywhere).
+ *  It replaces their earlier price there and wins over the store's. */
+export async function setMyPrice(
+  db: SupabaseClient,
+  ingredientId: string,
+  storeId: string | null,
+  cents: number,
+  basis: { quantity: number; unit: string },
+): Promise<void> {
+  const { error } = await db.rpc('set_my_price', {
+    p_ingredient: ingredientId,
+    p_store: storeId,
+    p_price_cents: cents,
+    p_quantity: basis.quantity,
+    p_unit: basis.unit,
+  })
+  if (error) throw error
+}
+
+/** Forget the user's own price for an ingredient at a store. */
+export async function clearMyPrice(
+  db: SupabaseClient,
+  ingredientId: string,
+  storeId: string | null,
+): Promise<void> {
+  const { error } = await db.rpc('clear_my_price', {
+    p_ingredient: ingredientId,
+    p_store: storeId,
+  })
+  if (error) throw error
+}
+
+/** Dollars as typed ("2.49", "$2", "2,49") to cents; null when it isn't a
+ *  price. */
+export function parseDollars(text: string): number | null {
+  const t = text.trim().replace(/^\$/, '').replace(',', '.')
+  if (!/^\d+(\.\d{0,2})?$|^\.\d{1,2}$/.test(t)) return null
+  const cents = Math.round(parseFloat(t) * 100)
+  return cents <= 100_000 ? cents : null
 }
 
 /** "2 × 15 oz", "pack of 12", "1.2 lb", or null when the amount isn't known. */

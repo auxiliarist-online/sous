@@ -9,10 +9,15 @@ double size), then bought the way it's sold:
 
 The user's pantry decides what's already on hand. Until it says otherwise,
 pantry staples (salt, oil, spices) are on hand and everything else is bought.
+
+Each recipe's share of the week (TYL-30) splits every item's cost among the
+recipes that use it, by how much each uses, so the shares add up to the total.
+What a recipe would add (added_costs) is the week's total with it minus
+without it: a recipe that uses up the rest of a bag of rice adds little.
 """
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -48,10 +53,21 @@ class Item:
     buy: bool = True
     cents: int | None = None
     estimated: bool = False
+    # Where the price came from (TYL-61): the user's own, the store's, or a
+    # rough estimate.
+    price_source: Literal["user", "store", "estimate"] | None = None
     on_sale: bool = False
     # For a sale price: its last day, and what it would cost after.
     sale_ends: date | None = None
     regular_cents: int | None = None
+
+
+@dataclass
+class EntryCost:
+    """One planned recipe's share of the week's cost (TYL-30)."""
+
+    entry_id: str
+    cents: int
 
 
 @dataclass
@@ -63,8 +79,29 @@ class PlanCost:
     # Items to buy that have no price yet.
     unpriced: int
     items: list[Item] = field(default_factory=list)
-    # The store whose live prices were used ("Prices from Harris Teeter").
+    # The store whose live prices were used ("Prices from Harris Teeter"),
+    # and its id, for saving the user's own price there (TYL-34).
     store_name: str | None = None
+    store_id: str | None = None
+    entries: list[EntryCost] = field(default_factory=list)
+
+
+@dataclass
+class AddedCost:
+    """What adding a recipe at full size would add to the week (TYL-30)."""
+
+    recipe_id: str
+    cents: int
+    # True when it brings items with no price, so it would add more than this.
+    unpriced: bool
+    estimated: bool
+
+
+SOURCES: dict[str, Literal["user", "store", "estimate"]] = {
+    "user": "user",
+    "store_api": "store",
+    "deal": "store",
+}
 
 
 def _date(value: str | None) -> date | None:
@@ -142,11 +179,25 @@ def _bought_as(
     return {**line, "ingredient_id": source, "quantity": grams * ratio, "unit": "g", "scaled": True}
 
 
+def _shares(cents: int, used: dict[str, float | None]) -> dict[str, int]:
+    """Split an item's cost among the entries that use it: by how much each
+    uses when every amount is known, else evenly. Whole cents that add up."""
+    known = all(q is not None for q in used.values()) and sum(q or 0 for q in used.values()) > 0
+    weights = {e: (q or 0.0) if known else 1.0 for e, q in used.items()}
+    total = sum(weights.values())
+    exact = {e: cents * w / total for e, w in weights.items()}
+    out = {e: math.floor(x) for e, x in exact.items()}
+    # Hand the leftover cents to the largest remainders.
+    for e in sorted(exact, key=lambda e: exact[e] - out[e], reverse=True)[
+        : cents - sum(out.values())
+    ]:
+        out[e] += 1
+    return out
+
+
 def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) -> PlanCost:
-    """`inputs` is what plan_cost_inputs() returns."""
-    quotes: dict[str, list[PriceQuote]] = {}
-    for row in inputs.get("prices", []):
-        quotes.setdefault(row["ingredient_id"], []).append(_quote(row))
+    """`inputs` is what plan_cost_inputs() returns. Candidate entries (recipes
+    the user might add) are left out; added_costs() prices them."""
     info: dict[str, dict[str, Any]] = inputs.get("ingredients", {})
     conversions = {
         id_: Ingredient(
@@ -158,10 +209,24 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
     own_units: dict[str, dict[str, float]] = {
         id_: {u: float(g) for u, g in (i.get("units") or {}).items()} for id_, i in info.items()
     }
+    quotes: dict[str, list[PriceQuote]] = {}
+    for row in inputs.get("prices", []):
+        quote = _quote(row)
+        # A price per bunch (the user's own, TYL-34) is priced by weight, as
+        # the list is.
+        grams = own_units.get(row["ingredient_id"], {}).get(quote.unit)
+        if grams:
+            quote = replace(quote, quantity=quote.quantity * grams, unit="g")
+        quotes.setdefault(row["ingredient_id"], []).append(quote)
 
     items: dict[str, Item] = {}
+    # How much of each item each entry uses, in the item's unit (None when
+    # that entry's amount isn't known), for splitting the cost.
+    used: dict[str, dict[str, float | None]] = {}
     unmatched: list[Item] = []
-    for entry in inputs.get("entries", []):
+    planned = [e for e in inputs.get("entries", []) if not e.get("candidate")]
+    for entry in planned:
+        entry_id = str(entry.get("id"))
         scale = float(entry.get("scale") or 1)
         for line in entry["lines"]:
             ingredient_id = line.get("ingredient_id")
@@ -185,15 +250,19 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
                 )
                 if item.sold_by == "package":
                     item.unit = item.package_unit
+            share = used.setdefault(ingredient_id, {})
+            share.setdefault(entry_id, 0.0)
             quantity = _float(line.get("quantity"))
             if quantity is None:
                 item.amount_unknown = True
+                share[entry_id] = None
                 continue
             unit = line.get("unit") or "each"
             conv, units = conversions[ingredient_id], own_units[ingredient_id]
             if item.unit is None:
                 if _convert(1, unit, unit, conv, units) is None:
                     item.amount_unknown = True  # a unit we can't count, like "pinch" of a herb
+                    share[entry_id] = None
                     continue
                 item.unit = unit
             # Lines converted to what's bought are already at the planned size.
@@ -201,11 +270,15 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
             added = _convert(quantity * factor, unit, item.unit, conv, units)
             if added is None:
                 item.amount_unknown = True
+                share[entry_id] = None
                 continue
             item.quantity = (item.quantity or 0) + added
+            if share[entry_id] is not None:
+                share[entry_id] = (share[entry_id] or 0) + added
 
     total = 0
     estimated = False
+    by_entry = {str(e.get("id")): 0 for e in planned}
     for item in items.values():
         item.buy = item.pantry == "out" or (item.pantry is None and not item.staple)
         if item.sold_by == "package" and item.package_quantity and item.package_unit:
@@ -234,6 +307,7 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
         if found is not None:
             item.cents = found.cents
             item.estimated = found.is_estimate
+            item.price_source = SOURCES.get(found.quote.source, "estimate")
             item.on_sale = found.quote.on_sale
             if found.quote.on_sale:
                 item.sale_ends = found.quote.valid_to
@@ -248,6 +322,8 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
                 item.regular_cents = regular.cents if regular else None
             total += found.cents
             estimated = estimated or found.is_estimate
+            for entry_id, cents in _shares(found.cents, used[item.ingredient_id]).items():
+                by_entry[entry_id] += cents
 
     listed = sorted(items.values(), key=lambda i: (i.aisle or "", i.name)) + unmatched
     return PlanCost(
@@ -257,4 +333,35 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
         unpriced=sum(1 for i in listed if i.buy and i.cents is None),
         items=listed,
         store_name=inputs.get("store_name") if store_id else None,
+        store_id=store_id,
+        entries=[EntryCost(entry_id=e, cents=c) for e, c in by_entry.items()],
     )
+
+
+def added_costs(
+    inputs: dict[str, Any], *, on: date, store_id: str | None = None
+) -> list[AddedCost]:
+    """For each candidate entry in `inputs`, what adding it would add to the
+    week's cost: the total with it minus the total without it."""
+    planned = [e for e in inputs.get("entries", []) if not e.get("candidate")]
+    base = plan_cost({**inputs, "entries": planned}, on=on, store_id=store_id)
+    before = {i.ingredient_id: i.cents for i in base.items}
+    out = []
+    for candidate in (e for e in inputs.get("entries", []) if e.get("candidate")):
+        withit = plan_cost(
+            {**inputs, "entries": [*planned, {**candidate, "candidate": False}]},
+            on=on,
+            store_id=store_id,
+        )
+        changed = [
+            i for i in withit.items if i.ingredient_id and i.cents != before.get(i.ingredient_id)
+        ]
+        out.append(
+            AddedCost(
+                recipe_id=str(candidate["recipe_id"]),
+                cents=withit.total_cents - base.total_cents,
+                unpriced=withit.unpriced > base.unpriced,
+                estimated=any(i.estimated for i in changed),
+            )
+        )
+    return out

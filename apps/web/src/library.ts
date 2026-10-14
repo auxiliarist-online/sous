@@ -27,6 +27,8 @@ export interface SavedRecipe {
   ingredients: string[]
   /** The user's own tags ("weeknight"), private to them (TYL-81). */
   tags: string[]
+  /** Cuisine slugs ("indian"), to prefer the user's favorites. */
+  cuisines: string[]
 }
 
 /** A diet a recipe fits. `checks` lists ingredients whose brand decides it:
@@ -122,6 +124,7 @@ interface SavedRow {
         }[]
       | null
     ingredients: { name: string | null }[] | null
+    cuisines?: { cuisine_slug: string }[] | null
   } | null
 }
 
@@ -131,7 +134,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
   const { data, error } = await db
     .from('user_saved_recipes')
     .select(
-      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name))',
+      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name), cuisines:recipe_cuisines(cuisine_slug))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -153,6 +156,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
         i.name ? [i.name] : [],
       ),
       tags: row.tags ?? [],
+      cuisines: (row.recipe!.cuisines ?? []).map((c) => c.cuisine_slug),
     }))
 }
 
