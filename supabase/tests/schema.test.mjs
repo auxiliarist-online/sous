@@ -2615,7 +2615,8 @@ describe('recipe tags (TYL-81)', () => {
 
 describe('package estimates (TYL-61)', () => {
   it('prices every ingredient in the estimates file', async () => {
-    // Others are priced by baselines or, live, by their Harris Teeter match.
+    // With baselines that's every ingredient; production is checked after
+    // applying, since other tests here change prices.
     const csv = await readFile(
       new URL('../../apps/api/data/package_estimates.csv', import.meta.url),
       'utf8',
@@ -2633,7 +2634,7 @@ describe('package estimates (TYL-61)', () => {
        )`,
       [names],
     )
-    assert.equal(names.length, 169)
+    assert.equal(names.length, 556)
     assert.deepEqual(rows, [])
   })
 

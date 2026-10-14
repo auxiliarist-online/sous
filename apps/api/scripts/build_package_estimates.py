@@ -53,8 +53,9 @@ def load() -> list[tuple[str, int, float, str]]:
         except ValueError:
             errors.append(f"line {n}: price and quantity must be numbers")
             continue
-        if not (math.isfinite(price) and math.isfinite(qty)) or price <= 0 or qty <= 0:
-            errors.append(f"line {n}: price and quantity must be positive numbers")
+        # A price can be zero (water from the tap); a quantity can't.
+        if not (math.isfinite(price) and math.isfinite(qty)) or price < 0 or qty <= 0:
+            errors.append(f"line {n}: price must be zero or more, and quantity positive")
             continue
         if (name, unit) not in own:
             try:
