@@ -37,6 +37,7 @@ def chain_slug(chain: str) -> str:
 
 
 def _headers() -> dict[str, str]:
+    """The service role's headers for Supabase's REST API."""
     key = settings.supabase_service_role_key
     return {"apikey": key, "Authorization": f"Bearer {key}"}
 
@@ -48,6 +49,7 @@ def _kroger(call: str, *args: Any) -> Any:
 
 
 def _out(loc: Location) -> dict[str, Any]:
+    """A store as the web app reads it, with our chain slug."""
     return {**asdict(loc), "chain_slug": chain_slug(loc.chain)}
 
 

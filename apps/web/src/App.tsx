@@ -15,7 +15,7 @@ import {
   setTags,
   savedRecipes,
 } from './library.ts'
-import { route, usePath } from './navigation.ts'
+import { navigate, route, usePath } from './navigation.ts'
 import { Browse, type BrowseApi } from './Browse.tsx'
 import { clearBrowseCache } from './browseCache.ts'
 import { clearPage, pendingPage } from './page.ts'
@@ -37,10 +37,20 @@ import {
 } from './plan.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
+import { Privacy } from './Privacy.tsx'
 import { Link } from './router.tsx'
-import { Settings, type SettingsApi } from './Settings.tsx'
+import { Settings } from './Settings.tsx'
 import { clearShare, pendingShare } from './share.ts'
 import { SignIn } from './SignIn.tsx'
+import {
+  chooseStore,
+  deleteMyAccount,
+  exportMyData,
+  myStore,
+  pantryStaples,
+  storesNear,
+} from './stores.ts'
+import { Welcome, type WelcomeApi } from './Welcome.tsx'
 import {
   loadPreferences,
   NO_PREFERENCES,
@@ -58,7 +68,7 @@ import {
 export type SousApi = LibraryApi &
   RecipePageApi &
   RecipeFormApi &
-  SettingsApi &
+  WelcomeApi &
   PlanApi &
   BrowseApi
 
@@ -96,6 +106,12 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     setTags: (id, tags) => setTags(db, id, tags),
     setPantry: (ingredientId, status) =>
       setPantry(db, userId, ingredientId, status),
+    storesNear: (zip) => storesNear(session, zip),
+    myStore: () => myStore(session),
+    chooseStore: (locationId) => chooseStore(session, locationId),
+    exportMyData: () => exportMyData(db),
+    deleteMyAccount: () => deleteMyAccount(db),
+    pantryStaples: () => pantryStaples(db),
   }
 }
 
@@ -129,8 +145,9 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
     let live = true
     api.preferences().then(
       (p) => live && setPrefs(p),
-      // Preferences only shape filters; the app works without them.
-      () => live && setPrefs(NO_PREFERENCES),
+      // Preferences only shape filters; the app works without them. Marked
+      // saved, so a failed load doesn't send an existing user to setup.
+      () => live && setPrefs({ ...NO_PREFERENCES, saved: true }),
     )
     return () => {
       live = false
@@ -139,6 +156,15 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
 
   const at = route(path)
   const signedIn = !!(auth && session && api)
+
+  // A new user sets up first (TYL-58), unless they came to save a recipe.
+  const needsSetup =
+    signedIn && prefs !== null && !prefs.saved && !shared && !sharedPage
+  useEffect(() => {
+    if (needsSetup && at.page !== 'welcome' && at.page !== 'privacy') {
+      navigate('/welcome', true)
+    }
+  }, [needsSetup, at.page])
   // Any date in the address shows the week it falls in.
   const week =
     at.page === 'plan' && at.week
@@ -170,7 +196,8 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
           VITE_SUPABASE_ANON_KEY.
         </p>
       )}
-      {auth && session === null && (
+      {at.page === 'privacy' && <Privacy signedIn={signedIn} />}
+      {auth && session === null && at.page !== 'privacy' && (
         <>
           {(shared || sharedPage) && (
             <p className="card muted">Sign in to save the recipe you shared.</p>
@@ -207,6 +234,20 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
                 setPrefs(p)
               }}
               onSignOut={() => void auth.signOut()}
+              onDeleted={() => {
+                void auth.signOut()
+                navigate('/', true)
+              }}
+            />
+          )}
+          {at.page === 'welcome' && (
+            <Welcome
+              api={api}
+              onDone={(p) => {
+                clearBrowseCache()
+                setPrefs(p)
+                navigate('/', true)
+              }}
             />
           )}
         </>

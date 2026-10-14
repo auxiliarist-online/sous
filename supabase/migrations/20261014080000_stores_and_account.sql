@@ -10,6 +10,10 @@ on conflict (slug) do nothing;
 -- location id: those are shared stores, set up by the API. Otherwise a user
 -- could create "Kroger, location 02900540" first, and everyone choosing that
 -- store would be attached to (and renamed by) their row.
+-- Any such row made before this rule loses its location id, or choosing that
+-- store would collide with it.
+update public.stores set external_location_id = null
+where created_by is not null and external_location_id is not null;
 drop policy "Manage own stores" on public.stores;
 create policy "Manage own stores" on public.stores for all to authenticated
   using (created_by = (select auth.uid()))

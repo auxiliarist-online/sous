@@ -344,6 +344,25 @@ describe('Settings', () => {
     searchIngredients: vi.fn(async (q: string) =>
       q.startsWith('cil') ? [{ id: 'i1', name: 'cilantro' }] : [],
     ),
+    storesNear: vi.fn(async (_zip: string) => [
+      {
+        locationId: '09700181',
+        chainSlug: 'harris_teeter',
+        name: 'Harris Teeter - Arctic Avenue',
+        address: '2800 Arctic Ave',
+        city: 'Virginia Beach',
+        state: 'VA',
+        zip: '23451',
+      },
+    ]),
+    myStore: vi.fn(async () => ({
+      name: 'Harris Teeter – Village at Chestnut Street',
+      address: null,
+      isDefault: true,
+    })),
+    chooseStore: vi.fn(async (_id: string) => {}),
+    exportMyData: vi.fn(async () => '{"profile": null}'),
+    deleteMyAccount: vi.fn(async () => {}),
   })
 
   it('lets the household size be cleared and retyped', async () => {
@@ -354,6 +373,7 @@ describe('Settings', () => {
         email="cook@example.com"
         onSaved={vi.fn()}
         onSignOut={vi.fn()}
+        onDeleted={vi.fn()}
       />,
     )
     const size = await screen.findByLabelText('People you cook for')
@@ -380,6 +400,7 @@ describe('Settings', () => {
         email="cook@example.com"
         onSaved={onSaved}
         onSignOut={vi.fn()}
+        onDeleted={vi.fn()}
       />,
     )
     const diets = within(await screen.findByRole('group', { name: 'Diets' }))
@@ -439,7 +460,15 @@ describe('Settings', () => {
   it('says when saving fails', async () => {
     const a = api()
     a.savePreferences.mockRejectedValueOnce(new Error('nope'))
-    render(<Settings api={a} email="x" onSaved={vi.fn()} onSignOut={vi.fn()} />)
+    render(
+      <Settings
+        api={a}
+        email="x"
+        onSaved={vi.fn()}
+        onSignOut={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    )
     await userEvent.click(
       await screen.findByRole('button', { name: 'Save preferences' }),
     )
