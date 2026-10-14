@@ -990,7 +990,7 @@ describe('ingredient parsing', () => {
       'select count(*)::int as n from ingredient_aliases',
     )
     // Seed migration + more_ingredients + everyday_ingredients (TYL-60).
-    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6) // + ingredients_from_recipes + ponzu_powdered_milk
+    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6 + 9) // + ingredients_from_recipes + ponzu_powdered_milk + croutons_crostini_nondairy_milk
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
@@ -2482,6 +2482,28 @@ describe('ponzu and powdered milk (TYL-83)', () => {
         ['ponzu sauce', ['soy', 'gluten'], ['fish']],
         ['powdered milk', ['dairy'], []],
         ['whole wheat flour', ['gluten'], []],
+      ],
+    )
+  })
+})
+
+describe('croutons, crostini and non-dairy milk (TYL-83)', () => {
+  it('matches serving breads and non-dairy milk, keeping what they may contain', async () => {
+    const { rows } = await db.query(
+      `select i.name, i.contains, i.may_contain from ingredients i
+       where i.id = match_ingredient(array['croutons'])
+          or i.id = match_ingredient(array['crostini'])
+          or i.id = match_ingredient(array['plant-based milk'])
+          or i.id = match_ingredient(array['pita wedges'])
+       order by i.name`,
+    )
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.contains, r.may_contain]),
+      [
+        ['crostini', ['gluten'], []],
+        ['croutons', ['gluten'], ['dairy', 'egg']],
+        ['non-dairy milk', [], ['tree_nut', 'soy', 'gluten']],
+        ['pita bread', ['gluten'], []],
       ],
     )
   })

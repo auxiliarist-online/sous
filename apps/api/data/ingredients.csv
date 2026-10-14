@@ -556,3 +556,6 @@ gin,beverages,alcohol,,
 coffee liqueur,beverages,alcohol,,kahlua
 ponzu sauce,international,soy|gluten,fish,ponzu
 powdered milk,pantry,dairy,,dry milk|nonfat dry milk|milk powder|dried milk
+croutons,pantry,gluten,dairy|egg,crouton|seasoned croutons
+crostini,bakery,gluten,,crostini toasts
+non-dairy milk,dairy_eggs,,tree_nut|soy|gluten,nondairy milk|non dairy milk|dairy-free milk|plant milk|plant-based milk
