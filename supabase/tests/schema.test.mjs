@@ -2751,3 +2751,121 @@ describe('estimates apply to any week', () => {
     assert.equal(rows[0].n, 0)
   })
 })
+
+describe('your store and your account (TYL-19, TYL-74)', () => {
+  const ERIN = '00000000-0000-0000-0000-0000000000e1'
+  const FRAN = '00000000-0000-0000-0000-0000000000f1'
+  const asErin = (sql, params) =>
+    as('authenticated', ERIN, async () => (await db.query(sql, params)).rows)
+
+  before(async () => {
+    await db.query(
+      'insert into auth.users (id) values ($1), ($2) on conflict do nothing',
+      [ERIN, FRAN],
+    )
+  })
+
+  it('keeps the chosen store as the one primary store, only through the API', async () => {
+    const choose = (location, name) =>
+      as('service_role', null, async () => {
+        const { rows } = await db.query(
+          `select set_my_store($1, 'kroger', $2, '3901 Holland Rd', '23452', $3) as id`,
+          [ERIN, name, location],
+        )
+        return rows[0].id
+      })
+    const holland = await choose(
+      '02900540',
+      'Kroger Marketplace - Holland Road',
+    )
+    const again = await choose('02900540', 'Kroger Marketplace - Holland Rd')
+    assert.equal(again, holland, 'the same store is reused')
+    const republic = await choose('02900533', 'Kroger - Republic Road')
+    const { rows } = await db.query(
+      `select s.name, us.is_primary from user_stores us join stores s on s.id = us.store_id
+       where us.user_id = $1 order by s.name`,
+      [ERIN],
+    )
+    assert.deepEqual(rows, [
+      { name: 'Kroger - Republic Road', is_primary: true },
+      { name: 'Kroger Marketplace - Holland Rd', is_primary: false },
+    ])
+    assert.ok(republic)
+    await assert.rejects(
+      asErin(`select set_my_store($1, 'kroger', 'x', 'x', null, '1')`, [ERIN]),
+      /only callable by the API/,
+    )
+  })
+
+  it('exports only the signed-in user’s own data', async () => {
+    await db.query(
+      `insert into profiles (user_id, household_size) values ($1, 3), ($2, 5)`,
+      [ERIN, FRAN],
+    )
+    const soup = await recipe('Erin’s exported soup', [])
+    await db.query(
+      `insert into user_saved_recipes (user_id, recipe_id, tags) values ($1, $2, '{weeknight}')`,
+      [ERIN, soup],
+    )
+    const [{ data }] = await asErin('select export_my_data() as data')
+    assert.equal(data.profile.household_size, 3)
+    assert.deepEqual(
+      data.saved_recipes.map((r) => [r.title, r.tags]),
+      [['Erin’s exported soup', ['weeknight']]],
+    )
+    assert.deepEqual(
+      data.stores.map((s) => s.primary),
+      [true, false],
+    )
+  })
+
+  it('deletes the account and every row about the user', async () => {
+    const own = await recipe('Fran’s own stew', [], {
+      url: null,
+      visibility: 'private',
+      addedBy: FRAN,
+    })
+    await db.query('update recipes set source_url = null where id = $1', [own])
+    const imported = await recipe('A blog soup Fran imported', [], {
+      addedBy: FRAN,
+    })
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2), ($1, $3)',
+      [FRAN, own, imported],
+    )
+    await as('authenticated', FRAN, async () => {
+      await db.query('select add_to_meal_plan($1, $2, 1)', ['2026-10-12', own])
+      await db.query('select delete_my_account()')
+    })
+    const { rows: tables } = await db.query(
+      `select table_name from information_schema.columns
+       where table_schema = 'public' and column_name = 'user_id'`,
+    )
+    for (const { table_name } of tables) {
+      const { rows } = await db.query(
+        `select count(*)::int as n from public.${table_name} where user_id = $1`,
+        [FRAN],
+      )
+      assert.equal(rows[0].n, 0, `${table_name} still has Fran's rows`)
+    }
+    const { rows: recipes } = await db.query(
+      'select title, added_by from recipes where id = any($1) order by title',
+      [[own, imported]],
+    )
+    assert.deepEqual(recipes, [
+      { title: 'A blog soup Fran imported', added_by: null },
+    ])
+    const { rows: users } = await db.query(
+      'select 1 from auth.users where id = $1',
+      [FRAN],
+    )
+    assert.equal(users.length, 0)
+  })
+
+  it('will not delete anything without a signed-in user', async () => {
+    await assert.rejects(
+      as('authenticated', null, () => db.query('select delete_my_account()')),
+      /not signed in/,
+    )
+  })
+})

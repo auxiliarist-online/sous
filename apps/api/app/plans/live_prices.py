@@ -32,7 +32,7 @@ def _rest(client: httpx.AsyncClient, path: str, params: dict[str, str]) -> Any:
 
 async def _store(client: httpx.AsyncClient, user_id: str) -> dict[str, Any] | None:
     """The user's primary store if it has live prices, else the default one."""
-    select = "id,name,external_location_id,store_chains!inner(price_source)"
+    select = "id,name,external_location_id,chain_slug,store_chains!inner(price_source)"
     resp = await _rest(
         client,
         "user_stores",
@@ -132,17 +132,23 @@ async def add_live_prices(user_id: str, inputs: dict[str, Any]) -> str | None:
             if store is None:
                 return None
             ids = ",".join(inputs["ingredients"])
+            # Stores of one chain carry the same products, so a match made at
+            # any of them serves (TYL-19); one made at this store comes first.
             resp = await _rest(
                 client,
                 "kroger_product_matches",
                 {
-                    "select": "ingredient_id,product_id",
-                    "store_id": f"eq.{store['id']}",
+                    "select": "ingredient_id,product_id,store_id,stores!inner(chain_slug)",
+                    "stores.chain_slug": f"eq.{store['chain_slug']}",
                     "ingredient_id": f"in.({ids})",
                 },
             )
             resp.raise_for_status()
-            matches = {m["product_id"]: m["ingredient_id"] for m in resp.json()}
+            rows = sorted(resp.json(), key=lambda m: m["store_id"] != store["id"])
+            chosen: dict[str, str] = {}
+            for m in rows:
+                chosen.setdefault(m["ingredient_id"], m["product_id"])
+            matches = {product: ingredient for ingredient, product in chosen.items()}
         if not matches:
             return None
         products = await asyncio.to_thread(_fetch, list(matches), store["external_location_id"])
