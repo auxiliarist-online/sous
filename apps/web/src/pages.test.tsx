@@ -1,13 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  allTags,
-  cleanTag,
-  filterRecipes,
-  NO_FILTER,
-  type SavedRecipe,
-} from './library.ts'
+import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
 import { route } from './navigation.ts'
 import { weekOf, type Fit, type Scale } from './plan.ts'
 import { RecipeForm } from './RecipeForm.tsx'
@@ -479,21 +473,6 @@ describe('helpers', () => {
     ingredients: [],
     tags: [],
     ...over,
-  })
-
-  it('filters and searches by the user’s own tags, ignoring case', () => {
-    const quick = r({ id: 'q', tags: ['Weeknight'] })
-    const slow = r({ id: 's', tags: ['for guests'] })
-    expect(
-      filterRecipes([quick, slow], { ...NO_FILTER, tags: ['weeknight'] }),
-    ).toEqual([quick])
-    expect(
-      filterRecipes([quick, slow], { ...NO_FILTER, query: 'guest' }),
-    ).toEqual([slow])
-    expect(allTags([slow, quick, r({ tags: ['weeknight', 'Batch'] })])).toEqual(
-      ['Batch', 'for guests', 'Weeknight'],
-    )
-    expect(cleanTag('  For   guests  ')).toBe('For guests')
   })
 
   it('filters by words, diets and time', () => {

@@ -18,6 +18,7 @@ export interface RecipePageApi {
     day?: string | null,
   ): Promise<void>
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
+  /** Replace the user's tags on a recipe they've saved (TYL-81). */
   setTags(recipeId: string, tags: string[]): Promise<void>
 }
 
@@ -273,6 +274,7 @@ function TagEditor({
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
 
+  // Save the whole new list; true when it saved, so the field can clear.
   async function save(next: string[]) {
     setBusy(true)
     setFailed(false)
@@ -287,6 +289,7 @@ function TagEditor({
     }
   }
 
+  // Add the typed tag, tidied; one already there (ignoring case) is skipped.
   async function add(e: FormEvent) {
     e.preventDefault()
     const tag = cleanTag(draft)

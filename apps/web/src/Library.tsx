@@ -44,6 +44,8 @@ type Status =
   | { state: 'saved'; result: ImportResult }
   | { state: 'error'; message: string; code: string }
 
+/** The user's recipes: save one by link, page or pasted text, then search
+ *  and filter what they've saved. */
 export function Library({
   api,
   shared,
@@ -479,6 +481,8 @@ const FILTER_DIETS: [slug: string, label: string][] = [
   ['dairy_free', 'Dairy-free'],
 ]
 
+/** Search and filter chips for the user's recipes: their diets, common
+ *  diets, quick recipes, and each of their own tags. */
 function Filters({
   filter,
   onChange,
@@ -491,11 +495,15 @@ function Filters({
   /** The user's own tags across their recipes, offered as filters. */
   tags: string[]
 }) {
+  // Tags compare without case, as filterRecipes does: a "weeknight" chip
+  // clears a "Weeknight" filter left from a recipe since removed.
+  const hasTag = (tag: string) =>
+    filter.tags.some((t) => t.toLowerCase() === tag.toLowerCase())
   const toggleTag = (tag: string) =>
     onChange({
       ...filter,
-      tags: filter.tags.includes(tag)
-        ? filter.tags.filter((t) => t !== tag)
+      tags: hasTag(tag)
+        ? filter.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase())
         : [...filter.tags, tag],
     })
   const toggleDiet = (slug: string) =>
@@ -566,7 +574,7 @@ function Filters({
             key={`tag-${t}`}
             type="button"
             className="chip"
-            aria-pressed={filter.tags.includes(t)}
+            aria-pressed={hasTag(t)}
             onClick={() => toggleTag(t)}
           >
             #{t}
@@ -577,6 +585,8 @@ function Filters({
   )
 }
 
+/** The filtered recipes, each with its source, time, labels and tags, and a
+ *  button to remove it. */
 function RecipeList({
   recipes,
   onRemove,

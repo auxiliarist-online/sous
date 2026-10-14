@@ -2507,6 +2507,38 @@ describe('croutons, crostini and non-dairy milk (TYL-83)', () => {
       ],
     )
   })
+
+  it('says how croutons, crostini and non-dairy milk are bought', async () => {
+    const { rows } = await db.query(
+      `select name, sold_by, package_quantity::float as qty, package_unit, pantry_staple
+       from ingredients
+       where name in ('crostini', 'croutons', 'non-dairy milk')
+       order by name`,
+    )
+    assert.deepEqual(rows, [
+      {
+        name: 'crostini',
+        sold_by: 'package',
+        qty: 6,
+        package_unit: 'oz',
+        pantry_staple: false,
+      },
+      {
+        name: 'croutons',
+        sold_by: 'package',
+        qty: 5,
+        package_unit: 'oz',
+        pantry_staple: false,
+      },
+      {
+        name: 'non-dairy milk',
+        sold_by: 'package',
+        qty: 64,
+        package_unit: 'fl_oz',
+        pantry_staple: false,
+      },
+    ])
+  })
 })
 
 describe('bunch prices (TYL-84)', () => {

@@ -1,7 +1,12 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  allTags,
+  cleanTag,
   dietLabels,
+  filterRecipes,
+  NO_FILTER,
+  type SavedRecipe,
   ImportError,
   firstUrl,
   importPage,
@@ -192,5 +197,36 @@ describe('dietLabels', () => {
       notes: ['Check the refried beans: some brands contain gluten or meat.'],
       starred: ['refried beans'],
     })
+  })
+})
+
+describe('tags (TYL-81)', () => {
+  const r = (over: Partial<SavedRecipe>): SavedRecipe => ({
+    id: 'x',
+    title: 'Red lentil dal',
+    sourceUrl: null,
+    sourceName: null,
+    sourceNote: null,
+    totalMinutes: 35,
+    savedAt: '',
+    diets: [],
+    ingredients: [],
+    tags: [],
+    ...over,
+  })
+
+  it('filters and searches by the user’s own tags, ignoring case', () => {
+    const quick = r({ id: 'q', tags: ['Weeknight'] })
+    const slow = r({ id: 's', tags: ['for guests'] })
+    expect(
+      filterRecipes([quick, slow], { ...NO_FILTER, tags: ['weeknight'] }),
+    ).toEqual([quick])
+    expect(
+      filterRecipes([quick, slow], { ...NO_FILTER, query: 'guest' }),
+    ).toEqual([slow])
+    expect(allTags([slow, quick, r({ tags: ['weeknight', 'Batch'] })])).toEqual(
+      ['Batch', 'for guests', 'Weeknight'],
+    )
+    expect(cleanTag('  For   guests  ')).toBe('For guests')
   })
 })

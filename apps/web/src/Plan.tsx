@@ -475,8 +475,8 @@ function Entry({
   )
 }
 
-/** Pick from the user's saved recipes, leaving out any that break their
- *  diets, allergies or exclusions (a hard filter). */
+/** Pick from the user's saved recipes. One that breaks their diets,
+ *  allergies or exclusions is marked, and adding it asks first (TYL-85). */
 function AddRecipe({
   api,
   busy,

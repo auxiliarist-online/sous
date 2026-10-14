@@ -84,6 +84,8 @@ interface RecipeRow {
   cuisines: { cuisine_slug: string }[]
 }
 
+/** One recipe with its ingredients, labels and cuisines, plus whether the
+ *  user saved it and their tags on it; null when they can't see it. */
 export async function recipeDetail(
   db: SupabaseClient,
   userId: string,
