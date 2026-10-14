@@ -2612,3 +2612,41 @@ describe('recipe tags (TYL-81)', () => {
     }
   })
 })
+
+describe('package estimates (TYL-61)', () => {
+  it('prices every ingredient in the estimates file', async () => {
+    // Others are priced by baselines or, live, by their Harris Teeter match.
+    const csv = await readFile(
+      new URL('../../apps/api/data/package_estimates.csv', import.meta.url),
+      'utf8',
+    )
+    const names = csv
+      .trim()
+      .split('\n')
+      .slice(1)
+      .map((line) => line.split(',')[0])
+    const { rows } = await db.query(
+      `select v.name from unnest($1::text[]) as v(name)
+       where not exists (
+         select 1 from prices p join ingredients i on i.id = p.ingredient_id
+         where lower(i.name) = v.name and p.source = 'seed'
+       )`,
+      [names],
+    )
+    assert.equal(names.length, 169)
+    assert.deepEqual(rows, [])
+  })
+
+  it('prices a package, or a pound of what is sold loose', async () => {
+    const { rows } = await db.query(
+      `select i.name, p.price_cents, p.quantity::float as quantity, p.unit
+       from prices p join ingredients i on i.id = p.ingredient_id
+       where p.source = 'seed' and i.name in ('margarine', 'chicken')
+       order by i.name`,
+    )
+    assert.deepEqual(rows, [
+      { name: 'chicken', price_cents: 350, quantity: 1, unit: 'lb' },
+      { name: 'margarine', price_cents: 300, quantity: 16, unit: 'oz' },
+    ])
+  })
+})
