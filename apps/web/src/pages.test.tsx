@@ -86,7 +86,12 @@ const SOUP: RecipeDetail = {
 
 describe('route', () => {
   it.each([
-    ['/', { page: 'library' }],
+    ['/', { page: 'home' }],
+    ['/recipes', { page: 'library' }],
+    ['/share', { page: 'library' }],
+    ['/list', { page: 'list', week: null }],
+    ['/list/2026-10-12', { page: 'list', week: '2026-10-12' }],
+    ['/pantry', { page: 'pantry' }],
     [`/recipe/${BURRITOS.id}`, { page: 'recipe', id: BURRITOS.id }],
     [`/edit/${SOUP.id}/`, { page: 'edit', id: SOUP.id }],
     ['/new', { page: 'new' }],
@@ -256,7 +261,7 @@ describe('RecipePage', () => {
       await screen.findByRole('button', { name: 'Remove from my recipes' }),
     )
     expect(a.remove).toHaveBeenCalledWith(SOUP.id)
-    await waitFor(() => expect(window.location.pathname).toBe('/'))
+    await waitFor(() => expect(window.location.pathname).toBe('/recipes'))
   })
 })
 

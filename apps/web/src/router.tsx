@@ -7,10 +7,16 @@ export function Link({
   className,
   children,
   onNavigate,
+  current,
+  label,
 }: {
   to: string
   className?: string
   children: ReactNode
+  /** The page the user is on (a tab bar's current tab). */
+  current?: boolean
+  /** An accessible name, when the text alone isn't one (an icon). */
+  label?: string
   /** Runs just before navigating (e.g. to remember the scroll position). */
   onNavigate?: () => void
 }) {
@@ -22,7 +28,13 @@ export function Link({
     navigate(to)
   }
   return (
-    <a href={to} className={className} onClick={click}>
+    <a
+      href={to}
+      className={className}
+      onClick={click}
+      aria-current={current ? 'page' : undefined}
+      aria-label={label}
+    >
       {children}
     </a>
   )
