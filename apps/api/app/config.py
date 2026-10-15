@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     # Whose prices to show users who haven't picked a store: during the beta,
     # the Harris Teeter at Village at Chestnut Street, Asheville.
     kroger_default_location_id: str = "09700348"
+    # Google Cloud Vision: reading recipes from photos of cookbook pages (TYL-52).
+    google_vision_api_key: str = ""
+    # Pages read from photos, at most: a month for everyone (Vision's free
+    # tier is 1,000), and a day per user.
+    photo_pages_per_month: int = 900
+    photo_pages_per_day: int = 40
 
 
 settings = Settings()

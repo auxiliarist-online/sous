@@ -3064,3 +3064,52 @@ describe('shopping list (TYL-18)', () => {
     )
   })
 })
+
+describe('photo reads (TYL-52)', () => {
+  const HAL = '00000000-0000-0000-0000-0000000000b8'
+  const IVY = '00000000-0000-0000-0000-0000000000b9'
+  before(async () => {
+    await db.query(
+      'insert into auth.users (id) values ($1), ($2) on conflict do nothing',
+      [HAL, IVY],
+    )
+  })
+  const read = (user, pages, monthCap = 10, dayCap = 5) =>
+    as('service_role', null, async () => {
+      const { rows } = await db.query(
+        'select record_photo_read($1, $2, $3, $4) as ok',
+        [user, pages, monthCap, dayCap],
+      )
+      return rows[0].ok
+    })
+
+  it('counts pages, and stops at the daily and monthly limits', async () => {
+    assert.equal(await read(HAL, 4), true)
+    assert.equal(await read(HAL, 2), false, 'Hal would pass 5 pages today')
+    assert.equal(await read(HAL, 1), true)
+    assert.equal(await read(IVY, 4), true)
+    // 9 of 10 pages read this month: Ivy's 2 more would pass it.
+    assert.equal(await read(IVY, 2), false)
+    const { rows } = await db.query(
+      'select user_id, sum(pages)::int as pages from photo_reads group by user_id order by 1',
+    )
+    assert.deepEqual(rows, [
+      { user_id: HAL, pages: 5 },
+      { user_id: IVY, pages: 4 },
+    ])
+  })
+
+  it('is for the API only, and private', async () => {
+    await assert.rejects(
+      as('authenticated', HAL, () =>
+        db.query('select record_photo_read($1, 1, 10, 5)', [HAL]),
+      ),
+      /only callable by the API/,
+    )
+    const seen = await as('authenticated', HAL, async () => {
+      const { rows } = await db.query('select * from photo_reads')
+      return rows
+    })
+    assert.equal(seen.length, 0)
+  })
+})
