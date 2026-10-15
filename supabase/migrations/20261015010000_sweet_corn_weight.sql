@@ -10,4 +10,5 @@ where lower(name) = 'sweet corn kernels' and grams_per_cup is null;
 update public.recipe_ingredients ri
 set grams = public.line_grams(ri.ingredient_id, ri.quantity, ri.unit)
 from public.ingredients i
-where i.id = ri.ingredient_id and lower(i.name) = 'sweet corn kernels';
+where i.id = ri.ingredient_id and lower(i.name) = 'sweet corn kernels'
+  and ri.grams is null;

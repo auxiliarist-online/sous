@@ -192,11 +192,16 @@ def main() -> None:
     resp.raise_for_status()
     print(f"saved {len(rows)} matches")
     if blanked:
-        # An override says this store's match is wrong: drop it, whoever set it.
+        # An override says the chain's match is wrong: drop it at every store
+        # of the chain (live prices read any of them), whoever set it.
+        chain_stores = db.get(
+            "/stores",
+            params={"select": "id", "chain_slug": f"eq.{chain}", "created_by": "is.null"},
+        ).json()
         db.delete(
             "/kroger_product_matches",
             params={
-                "store_id": f"eq.{store_id}",
+                "store_id": f"in.({','.join(s['id'] for s in chain_stores)})",
                 "ingredient_id": f"in.({','.join(blanked)})",
             },
         ).raise_for_status()
