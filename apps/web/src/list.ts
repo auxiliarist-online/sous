@@ -222,12 +222,17 @@ export function applyOp(state: ListState, op: ListOp): ListState {
 
 // Kept per account, so on a shared phone nobody sees (or sends) another's.
 const PREFIX = 'sous:list'
-// Where a week's list is kept, and an account's unsent changes.
+// Where an account's list for a week is kept.
 const listKey = (user: string, week: string) => `${PREFIX}:${user}:${week}`
+// Where an account's unsent changes are kept.
 const queueKey = (user: string) => `${PREFIX}-queue:${user}`
-// A change that keeps failing while online is dropped after this many tries,
-// so one bad change can't hold up the rest for good.
-const MAX_TRIES = 5
+/** True for an error the database will give every time: a change it refuses
+ *  (row-level security, a constraint, bad data), not a dropped connection or
+ *  a server having a moment. Only those changes are given up on. */
+export function isRefused(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  return typeof code === 'string' && /^(42501|23|22|PGRST1|PGRST2)/.test(code)
+}
 
 /** Local storage, or nothing when the browser won't give it. */
 function store(): Storage | null {
@@ -298,9 +303,11 @@ export function queueOp(user: string, op: ListOp): void {
   write(key, [...(read<Queued[]>(key) ?? []), { qid, op, tries: 0 }])
 }
 
-// One send at a time per account: each call waits for the one before.
+// The send running for each account, if any.
 const inflight = new Map<string, Promise<number>>()
 
+/** Send the account's queued changes, one send at a time: a call made while
+ *  one is running waits for it. Returns how many are left. */
 export function flushOps(
   user: string,
   send: (op: ListOp) => Promise<void>,
@@ -330,17 +337,18 @@ async function flushQueue(
     try {
       await send(first.op)
       write(key, without())
-    } catch {
-      const tries = first.tries + 1
-      if (tries < MAX_TRIES || !navigator.onLine) {
-        // Offline, or not failing for long: keep it, and try again later.
-        const queue = (read<Queued[]>(key) ?? []).map((q) =>
-          q.qid === first.qid ? { ...q, tries } : q,
-        )
-        write(key, queue)
-        return queue.length
+    } catch (err) {
+      if (isRefused(err)) {
+        // The database won't take it, now or later: it can't hold up the rest.
+        write(key, without())
+        continue
       }
-      write(key, without()) // it keeps failing with a connection: give up on it
+      // Offline, or a passing failure: keep it, and try again later.
+      const queue = (read<Queued[]>(key) ?? []).map((q) =>
+        q.qid === first.qid ? { ...q, tries: q.tries + 1 } : q,
+      )
+      write(key, queue)
+      return queue.length
     }
   }
 }

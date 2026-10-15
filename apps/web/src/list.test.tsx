@@ -9,6 +9,7 @@ import {
   clearListData,
   cachedList,
   flushOps,
+  isRefused,
   listText,
   pendingOps,
   plannedItems,
@@ -186,18 +187,34 @@ describe('offline queue', () => {
     expect(pendingOps('u')).toEqual([])
   })
 
-  it('gives up on a change that keeps failing with a connection', async () => {
+  it('keeps a change through passing failures, and drops only a refused one', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
     queueOp('u', { kind: 'check', id: 'bad', checked: true })
+    queueOp('u', { kind: 'check', id: 'flaky', checked: true })
     queueOp('u', { kind: 'check', id: 'good', checked: true })
+    let flakyLeft = 6
     const sent: string[] = []
     const send = async (op: { kind: string; id?: string }) => {
-      if (op.id === 'bad') throw new Error('nope')
+      if (op.id === 'bad')
+        throw { code: '42501', message: 'row-level security' }
+      if (op.id === 'flaky' && flakyLeft-- > 0)
+        throw new Error('Failed to fetch')
       sent.push(op.id!)
     }
-    for (let i = 0; i < 4; i++) expect(await flushOps('u', send)).toBe(2)
+    // The refused change goes at once; the flaky one stays through six
+    // failures (more than any retry limit) and is sent in the end.
+    for (let i = 0; i < 6; i++) expect(await flushOps('u', send)).toBe(2)
     expect(await flushOps('u', send)).toBe(0)
-    expect(sent).toEqual(['good'])
+    expect(sent).toEqual(['flaky', 'good'])
+  })
+
+  it('tells refused changes from passing failures', () => {
+    expect(isRefused({ code: '42501' })).toBe(true)
+    expect(isRefused({ code: '23505' })).toBe(true)
+    expect(isRefused({ code: 'PGRST204' })).toBe(true)
+    expect(isRefused({ code: '57014' })).toBe(false) // a timeout
+    expect(isRefused(new TypeError('Failed to fetch'))).toBe(false)
+    expect(isRefused(null)).toBe(false)
   })
 })
 
@@ -616,6 +633,21 @@ describe('PantryPage', () => {
       screen.getByRole('button', { name: "I'm out of rice" }),
     )
     expect(api.setPantry).toHaveBeenCalledWith('rice', null)
+  })
+
+  it('waits for one save before taking another tap on the same staple', async () => {
+    let finish!: () => void
+    const api: PantryApi = {
+      pantry: vi.fn(async () => []),
+      pantryStaples: vi.fn(async () => [{ id: 'salt', name: 'salt' }]),
+      setPantry: vi.fn(() => new Promise<void>((r) => (finish = r))),
+    }
+    render(<PantryPage api={api} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'salt' }))
+    const out = screen.getByRole('button', { name: 'Out of salt' })
+    expect(out).toBeDisabled()
+    finish()
+    await waitFor(() => expect(out).toBeEnabled())
   })
 
   it('keeps the pantry on screen and puts back only what failed to save', async () => {

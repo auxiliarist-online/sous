@@ -24,6 +24,8 @@ export function PantryPage({ api }: { api: PantryApi }) {
   const [staples, setStaples] = useState<{ id: string; name: string }[]>([])
   const [failed, setFailed] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  // Ingredients being saved: their buttons wait, so saves can't cross.
+  const [saving, setSaving] = useState<string[]>([])
 
   useEffect(() => {
     let live = true
@@ -66,11 +68,14 @@ export function PantryPage({ api }: { api: PantryApi }) {
       ])
     replace(next ? { ingredientId: id, name, status: next } : undefined)
     setSaveFailed(false)
+    setSaving((s) => [...s, id])
     try {
       await api.setPantry(id, next)
     } catch {
       replace(before)
       setSaveFailed(true)
+    } finally {
+      setSaving((s) => s.filter((x) => x !== id))
     }
   }
 
@@ -95,6 +100,7 @@ export function PantryPage({ api }: { api: PantryApi }) {
               type="button"
               className="chip"
               aria-pressed={out}
+              disabled={saving.includes(s.id)}
               onClick={() => void mark(s.id, s.name, out ? null : 'out')}
             >
               {out ? `Out of ${s.name}` : s.name}
@@ -112,6 +118,7 @@ export function PantryPage({ api }: { api: PantryApi }) {
                 <button
                   type="button"
                   className="chip"
+                  disabled={saving.includes(m.ingredientId)}
                   aria-label={`I'm out of ${m.name}`}
                   onClick={() => void mark(m.ingredientId, m.name, null)}
                 >

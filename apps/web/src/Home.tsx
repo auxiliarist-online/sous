@@ -41,6 +41,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
       (e) => {
         if (!live) return
         setEntries(e)
+        setCostFailed(false) // a new request: an earlier failure no longer holds
         // The cost comes from the API; home works without it.
         if (e.length)
           api.planCost(week).then(
