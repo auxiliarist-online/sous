@@ -2894,3 +2894,173 @@ describe('sweet corn by the cup', () => {
     assert.equal(grams, 290)
   })
 })
+
+describe('shopping list (TYL-18)', () => {
+  const GRACE = '00000000-0000-0000-0000-0000000000a7'
+  const asGrace = (sql, params) =>
+    as('authenticated', GRACE, async () => (await db.query(sql, params)).rows)
+  const WEEK = '2026-10-12'
+  let eggs, rice, milk, salt
+
+  before(async () => {
+    await db.query(
+      'insert into auth.users (id) values ($1) on conflict do nothing',
+      [GRACE],
+    )
+    eggs = await ingredient('eggs')
+    rice = await ingredient('white rice')
+    milk = await ingredient('whole milk')
+    salt = await ingredient('salt')
+  })
+
+  const item = (id, name, amount, aisle = 'pantry') => ({
+    ingredient_id: id,
+    name,
+    amount,
+    aisle,
+  })
+  const sync = (items) =>
+    asGrace('select sync_shopping_list($1, $2) as id', [
+      WEEK,
+      JSON.stringify(items),
+    ])
+  const rows = () =>
+    asGrace(
+      `select name, amount, is_manual, edited, removed, checked_at is not null as checked
+       from shopping_list_items order by name`,
+    )
+
+  it('fills the week’s list from the plan, once per week', async () => {
+    const [{ id }] = await sync([
+      item(eggs, 'eggs', '12', 'dairy_eggs'),
+      item(rice, 'white rice', '2 lb'),
+      item(milk, 'whole milk', '1 gal', 'dairy_eggs'),
+    ])
+    const [{ id: again }] = await sync([item(eggs, 'eggs', '12', 'dairy_eggs')])
+    assert.equal(again, id)
+    const [{ n }] = await asGrace(
+      'select count(*)::int as n from shopping_lists where week_start = $1',
+      [WEEK],
+    )
+    assert.equal(n, 1)
+  })
+
+  it('keeps what the user did when the plan changes', async () => {
+    await sync([
+      item(eggs, 'eggs', '12', 'dairy_eggs'),
+      item(rice, 'white rice', '2 lb'),
+      item(milk, 'whole milk', '1 gal', 'dairy_eggs'),
+    ])
+    const [{ id: list }] = await asGrace(
+      'select id from shopping_lists where week_start = $1',
+      [WEEK],
+    )
+    // Rice is bought; milk's amount is changed by hand; eggs are taken off;
+    // paper towels are added.
+    await asGrace(
+      `update shopping_list_items set checked_at = now() where ingredient_id = $1`,
+      [rice],
+    )
+    await asGrace(
+      `update shopping_list_items set amount = 'half gallon', edited = true
+       where ingredient_id = $1`,
+      [milk],
+    )
+    await asGrace(
+      `update shopping_list_items set removed = true where ingredient_id = $1`,
+      [eggs],
+    )
+    await asGrace(
+      `insert into shopping_list_items (shopping_list_id, name, amount, is_manual)
+       values ($1, 'paper towels', '1 pack', true)`,
+      [list],
+    )
+    // The plan now needs 18 eggs and salt, and no rice or milk.
+    await sync([
+      item(eggs, 'eggs', '18', 'dairy_eggs'),
+      item(salt, 'salt', '26 oz', 'spices'),
+    ])
+    assert.deepEqual(await rows(), [
+      // Taken off, so it stays off (with the plan's new amount).
+      {
+        name: 'eggs',
+        amount: '18',
+        is_manual: false,
+        edited: false,
+        removed: true,
+        checked: false,
+      },
+      {
+        name: 'paper towels',
+        amount: '1 pack',
+        is_manual: true,
+        edited: false,
+        removed: false,
+        checked: false,
+      },
+      {
+        name: 'salt',
+        amount: '26 oz',
+        is_manual: false,
+        edited: false,
+        removed: false,
+        checked: false,
+      },
+      // Bought and edited items stay even though the plan dropped them.
+      {
+        name: 'white rice',
+        amount: '2 lb',
+        is_manual: false,
+        edited: false,
+        removed: false,
+        checked: true,
+      },
+      {
+        name: 'whole milk',
+        amount: 'half gallon',
+        is_manual: false,
+        edited: true,
+        removed: false,
+        checked: false,
+      },
+    ])
+  })
+
+  it('keeps an item taken off off, even if the plan drops it and needs it again', async () => {
+    await sync([
+      item(eggs, 'eggs', '18', 'dairy_eggs'),
+      item(salt, 'salt', '26 oz', 'spices'),
+    ])
+    await sync([item(salt, 'salt', '26 oz', 'spices')])
+    await sync([
+      item(eggs, 'eggs', '6', 'dairy_eggs'),
+      item(salt, 'salt', '26 oz', 'spices'),
+    ])
+    const [eggRow] = await asGrace(
+      `select removed from shopping_list_items where ingredient_id = $1`,
+      [eggs],
+    )
+    assert.deepEqual(eggRow, { removed: true })
+  })
+
+  it('is private, and only for Mondays', async () => {
+    const seen = await as('authenticated', ALICE, async () => {
+      const { rows } = await db.query(
+        'select 1 from shopping_list_items i join shopping_lists l on l.id = i.shopping_list_id where l.user_id = $1',
+        [GRACE],
+      )
+      return rows
+    })
+    assert.equal(seen.length, 0)
+    await assert.rejects(
+      asGrace('select sync_shopping_list($1, $2)', ['2026-10-13', '[]']),
+      /weeks start on Monday/,
+    )
+    await assert.rejects(
+      as('authenticated', null, () =>
+        db.query('select sync_shopping_list($1, $2)', [WEEK, '[]']),
+      ),
+      /not signed in/,
+    )
+  })
+})

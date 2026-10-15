@@ -281,7 +281,7 @@ export function Settings({
   return (
     <form className="card settings" onSubmit={submit}>
       <Link to="/" className="small">
-        ← Your recipes
+        ← This week
       </Link>
       <h2>Your preferences</h2>
 

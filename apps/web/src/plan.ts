@@ -184,6 +184,32 @@ export async function recipeFits(
 
 // ---------- the pantry (start of TYL-49) ----------
 
+/** What the user has marked on hand or out, with names. */
+export async function loadPantry(
+  db: SupabaseClient,
+): Promise<{ ingredientId: string; name: string; status: PantryStatus }[]> {
+  const { data, error } = await db
+    .from('user_pantry')
+    .select('status, ingredient:ingredients(id, name)')
+  if (error) throw error
+  return (
+    data as unknown as {
+      status: PantryStatus
+      ingredient: { id: string; name: string } | null
+    }[]
+  ).flatMap((r) =>
+    r.ingredient
+      ? [
+          {
+            ingredientId: r.ingredient.id,
+            name: r.ingredient.name,
+            status: r.status,
+          },
+        ]
+      : [],
+  )
+}
+
 export type PantryStatus = 'have' | 'out'
 
 /** Record what the user has on hand; null forgets it (back to the default:

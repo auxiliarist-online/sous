@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
@@ -55,6 +55,12 @@ const library = (
   exportMyData: vi.fn(async () => '{}'),
   deleteMyAccount: vi.fn(async () => {}),
   pantryStaples: vi.fn(async () => []),
+  syncList: vi.fn(async () => 'list-1'),
+  loadList: vi.fn(async () => null),
+  sendListOp: vi.fn(async () => {}),
+  places: vi.fn(async () => []),
+  addPlace: vi.fn(async (name: string) => ({ id: 'p', name })),
+  pantry: vi.fn(async () => []),
   plan: vi.fn(async () => []),
   addToPlan: vi.fn(async () => {}),
   updateEntry: vi.fn(async () => {}),
@@ -163,7 +169,7 @@ describe('App', () => {
       type: 'email',
     })
     expect(
-      await screen.findByRole('heading', { name: 'Your recipes' }),
+      await screen.findByRole('heading', { name: 'This week' }),
     ).toBeInTheDocument()
   })
 
@@ -220,7 +226,7 @@ describe('App', () => {
       ),
     )
     expect(
-      await screen.findByRole('heading', { name: 'Your recipes' }),
+      await screen.findByRole('heading', { name: 'This week' }),
     ).toBeInTheDocument()
     expect(window.location.pathname).toBe('/')
   })
@@ -232,7 +238,7 @@ describe('App', () => {
     vi.mocked(api.preferences).mockRejectedValue(new Error('down'))
     render(<App auth={auth} libraryApi={() => api} />)
     expect(
-      await screen.findByRole('heading', { name: 'Your recipes' }),
+      await screen.findByRole('heading', { name: 'This week' }),
     ).toBeInTheDocument()
     await waitFor(() => expect(api.preferences).toHaveBeenCalled())
     expect(window.location.pathname).toBe('/')
@@ -264,6 +270,40 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
+  it('has a tab bar for the week, recipes, list and pantry', async () => {
+    window.history.replaceState(null, '', '/')
+    const { auth } = fakeAuth(session)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    const tabs = await screen.findByRole('navigation', { name: 'Main' })
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map((a) => [a.textContent, a.getAttribute('href')]),
+    ).toEqual([
+      ['Week', '/'],
+      ['Recipes', '/recipes'],
+      ['List', '/list'],
+      ['Pantry', '/pantry'],
+    ])
+    expect(within(tabs).getByRole('link', { name: 'Week' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    await userEvent.click(within(tabs).getByRole('link', { name: 'Recipes' }))
+    expect(
+      await screen.findByRole('heading', { name: 'Your recipes' }),
+    ).toBeInTheDocument()
+    expect(within(tabs).getByRole('link', { name: 'Recipes' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(screen.getByRole('link', { name: 'Preferences' })).toHaveAttribute(
+      'href',
+      '/settings',
+    )
+    window.history.replaceState(null, '', '/')
+  })
+
   it('shows the privacy page signed out', async () => {
     window.history.replaceState(null, '', '/privacy')
     const { auth } = fakeAuth(null)
@@ -281,7 +321,7 @@ describe('App', () => {
     await screen.findByLabelText('Email')
     act(() => emit(session))
     expect(
-      await screen.findByRole('heading', { name: 'Your recipes' }),
+      await screen.findByRole('heading', { name: 'This week' }),
     ).toBeInTheDocument()
   })
 })

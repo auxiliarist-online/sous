@@ -69,10 +69,11 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     }
   }
 
+  // Take the recipe out of the user's recipes, after asking.
   async function remove(r: RecipeDetail) {
     if (!confirm(`Remove “${r.title}” from your recipes?`)) return
     await api.remove(r.id)
-    navigate('/')
+    navigate('/recipes')
   }
 
   async function save(r: RecipeDetail) {
@@ -96,7 +97,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     return (
       <section className="card">
         <h2>Recipe not found</h2>
-        <Link to="/">Back to your recipes</Link>
+        <Link to="/recipes">Back to your recipes</Link>
       </section>
     )
   }
@@ -114,7 +115,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
 
   return (
     <article className="card recipe">
-      <Link to="/" className="small">
+      <Link to="/recipes" className="small">
         ← Your recipes
       </Link>
       <h2>{recipe.title}</h2>

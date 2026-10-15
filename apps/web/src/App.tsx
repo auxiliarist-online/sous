@@ -6,7 +6,10 @@ import {
   useSession,
   type Auth,
 } from './auth.ts'
+import { Home, type HomeApi } from './Home.tsx'
 import { Library, type LibraryApi } from './Library.tsx'
+import { ListPage, type ListApi } from './ListPage.tsx'
+import { PantryPage, type PantryApi } from './PantryPage.tsx'
 import {
   importPage,
   importRecipe,
@@ -24,6 +27,7 @@ import {
   addToPlan,
   copyPlan,
   isMonday,
+  loadPantry,
   loadPlan,
   addedCosts,
   clearMyPrice,
@@ -35,6 +39,14 @@ import {
   updateEntry,
   weekOf,
 } from './plan.ts'
+import {
+  addPlace,
+  clearListData,
+  loadList,
+  places,
+  sendOp,
+  syncList,
+} from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
 import { Privacy } from './Privacy.tsx'
@@ -69,6 +81,9 @@ export type SousApi = LibraryApi &
   RecipePageApi &
   RecipeFormApi &
   WelcomeApi &
+  HomeApi &
+  ListApi &
+  PantryApi &
   PlanApi &
   BrowseApi
 
@@ -112,6 +127,12 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     exportMyData: () => exportMyData(db),
     deleteMyAccount: () => deleteMyAccount(db),
     pantryStaples: () => pantryStaples(db),
+    syncList: (week, items) => syncList(db, week, items),
+    loadList: (week) => loadList(db, week),
+    sendListOp: (op) => sendOp(db, op),
+    places: () => places(db, userId),
+    addPlace: (name) => addPlace(db, userId, name),
+    pantry: () => loadPantry(db),
   }
 }
 
@@ -182,11 +203,23 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
   }, [needsSetup, at.page])
   // Any date in the address shows the week it falls in.
   const week =
-    at.page === 'plan' && at.week
+    (at.page === 'plan' || at.page === 'list') && at.week
       ? isMonday(at.week)
         ? at.week
         : weekOf(new Date(`${at.week}T12:00`))
       : weekOf()
+  // Which tab is current (TYL-72): Find and recipe pages sit under Recipes,
+  // the plan under Week.
+  const tab =
+    at.page === 'home' || at.page === 'plan'
+      ? 'week'
+      : at.page === 'list'
+        ? 'list'
+        : at.page === 'pantry'
+          ? 'pantry'
+          : ['library', 'recipe', 'new', 'edit', 'browse'].includes(at.page)
+            ? 'recipes'
+            : null
 
   return (
     <main className="app" aria-busy={session === undefined}>
@@ -196,14 +229,32 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         </h1>
         <p>Plan the week. Shop the deals.</p>
         {signedIn && (
-          <nav className="app-nav" aria-label="Main">
-            <Link to="/">Recipes</Link>
-            <Link to="/browse">Find</Link>
-            <Link to="/plan">Plan</Link>
-            <Link to="/settings">Preferences</Link>
-          </nav>
+          <Link
+            to="/settings"
+            className="profile-link"
+            current={at.page === 'settings'}
+            label="Preferences"
+          >
+            <span aria-hidden="true">☰</span>
+          </Link>
         )}
       </header>
+      {signedIn && at.page !== 'welcome' && (
+        <nav className="tab-bar" aria-label="Main">
+          <Link to="/" current={tab === 'week'}>
+            Week
+          </Link>
+          <Link to="/recipes" current={tab === 'recipes'}>
+            Recipes
+          </Link>
+          <Link to="/list" current={tab === 'list'}>
+            List
+          </Link>
+          <Link to="/pantry" current={tab === 'pantry'}>
+            Pantry
+          </Link>
+        </nav>
+      )}
 
       {!auth && (
         <p className="error" role="alert">
@@ -222,7 +273,9 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
       )}
       {signedIn && api && auth && session && (
         <>
-          {at.page === 'library' && (
+          {at.page === 'home' && !shared && !sharedPage && <Home api={api} />}
+          {(at.page === 'library' ||
+            (at.page === 'home' && (shared || sharedPage))) && (
             <Library
               api={api}
               shared={shared}
@@ -240,6 +293,10 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
           )}
           {at.page === 'browse' && <Browse api={api} />}
           {at.page === 'plan' && <PlanPage key={week} api={api} week={week} />}
+          {at.page === 'list' && (
+            <ListPage key={week} api={api} week={week} user={session.user.id} />
+          )}
+          {at.page === 'pantry' && <PantryPage api={api} />}
           {at.page === 'settings' && (
             <Settings
               api={api}
@@ -248,8 +305,12 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
                 clearBrowseCache() // Find's ranking depends on preferences
                 setPrefs(p)
               }}
-              onSignOut={() => void auth.signOut()}
+              onSignOut={() => {
+                clearListData() // someone else may sign in on this phone
+                void auth.signOut()
+              }}
               onDeleted={() => {
+                clearListData()
                 void auth.signOut()
                 navigate('/', true)
               }}

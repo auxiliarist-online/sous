@@ -26,7 +26,9 @@ export function usePath(): string {
 }
 
 export type Route =
+  | { page: 'home' }
   | { page: 'library' }
+  | { page: 'pantry' }
   | { page: 'recipe'; id: string }
   | { page: 'new' }
   | { page: 'edit'; id: string }
@@ -34,20 +36,28 @@ export type Route =
   | { page: 'browse' }
   | { page: 'plan'; week: string | null }
   | { page: 'welcome' }
+  | { page: 'list'; week: string | null }
   | { page: 'privacy' }
 
 const UUID = '[0-9a-f-]{36}'
 
-/** Which page an address shows; anything unknown is the library. */
+/** Which page an address shows: "/" is the week (TYL-72); anything unknown
+ *  (like /share, from Android's share sheet) is the library. */
 export function route(path: string): Route {
   let m = path.match(new RegExp(`^/recipe/(${UUID})/?$`, 'i'))
   if (m) return { page: 'recipe', id: m[1] }
   m = path.match(new RegExp(`^/edit/(${UUID})/?$`, 'i'))
   if (m) return { page: 'edit', id: m[1] }
+  if (path === '/' || path === '') return { page: 'home' }
+  if (/^\/recipes\/?$/.test(path)) return { page: 'library' }
+  if (/^\/pantry\/?$/.test(path)) return { page: 'pantry' }
   if (/^\/new\/?$/.test(path)) return { page: 'new' }
   if (/^\/settings\/?$/.test(path)) return { page: 'settings' }
   if (/^\/browse\/?$/.test(path)) return { page: 'browse' }
   if (/^\/welcome\/?$/.test(path)) return { page: 'welcome' }
+  if (/^\/list\/?$/.test(path)) return { page: 'list', week: null }
+  m = path.match(/^\/list\/(\d{4}-\d{2}-\d{2})\/?$/)
+  if (m) return { page: 'list', week: m[1] }
   if (/^\/privacy\/?$/.test(path)) return { page: 'privacy' }
   if (/^\/plan\/?$/.test(path)) return { page: 'plan', week: null }
   m = path.match(/^\/plan\/(\d{4}-\d{2}-\d{2})\/?$/)
