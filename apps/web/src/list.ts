@@ -227,11 +227,16 @@ const listKey = (user: string, week: string) => `${PREFIX}:${user}:${week}`
 // Where an account's unsent changes are kept.
 const queueKey = (user: string) => `${PREFIX}-queue:${user}`
 /** True for an error the database will give every time: a change it refuses
- *  (row-level security, a constraint, bad data), not a dropped connection or
- *  a server having a moment. Only those changes are given up on. */
+ *  (42501 row-level security, 23xxx a constraint, 22xxx bad data, PGRST1xx a
+ *  malformed request). Not a dropped connection, a server having a moment,
+ *  or a schema-cache miss (PGRST2xx) that clears after a migration. Only
+ *  refused changes are given up on. */
 export function isRefused(err: unknown): boolean {
   const code = (err as { code?: unknown } | null)?.code
-  return typeof code === 'string' && /^(42501|23|22|PGRST1|PGRST2)/.test(code)
+  return (
+    typeof code === 'string' &&
+    /^(42501$|23\d{3}$|22\d{3}$|PGRST1\d\d$)/.test(code)
+  )
 }
 
 /** Local storage, or nothing when the browser won't give it. */

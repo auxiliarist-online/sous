@@ -211,7 +211,10 @@ describe('offline queue', () => {
   it('tells refused changes from passing failures', () => {
     expect(isRefused({ code: '42501' })).toBe(true)
     expect(isRefused({ code: '23505' })).toBe(true)
-    expect(isRefused({ code: 'PGRST204' })).toBe(true)
+    expect(isRefused({ code: 'PGRST102' })).toBe(true) // a malformed body
+    // A schema-cache miss clears after a migration or cache refresh.
+    expect(isRefused({ code: 'PGRST204' })).toBe(false)
+    expect(isRefused({ code: 'PGRST205' })).toBe(false)
     expect(isRefused({ code: '57014' })).toBe(false) // a timeout
     expect(isRefused(new TypeError('Failed to fetch'))).toBe(false)
     expect(isRefused(null)).toBe(false)
