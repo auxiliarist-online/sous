@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { Auth } from './auth.ts'
+import { Link } from './router.tsx'
 import { codeError, sendError } from './signInErrors.ts'
 
 type Status =
@@ -8,6 +9,7 @@ type Status =
   | { state: 'sent'; email: string }
   | { state: 'error'; message: string }
 
+/** Sign in with a code emailed to you; links to the privacy page. */
 export function SignIn({ auth }: { auth: Auth }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<Status>({ state: 'idle' })
@@ -58,6 +60,9 @@ export function SignIn({ auth }: { auth: Auth }) {
       <button type="submit" disabled={status.state === 'sending'}>
         {status.state === 'sending' ? 'Sending…' : 'Email me a code'}
       </button>
+      <Link to="/privacy" className="small">
+        What Sous keeps about you
+      </Link>
       {status.state === 'error' && (
         <p role="alert" className="error">
           {status.message}

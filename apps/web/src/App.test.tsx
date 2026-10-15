@@ -1,10 +1,10 @@
 import type { Session } from '@supabase/supabase-js'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 import type { SousApi } from './App.tsx'
-import { NO_PREFERENCES } from './sous.ts'
+import { NO_PREFERENCES, type Preferences } from './sous.ts'
 import type { Auth } from './auth.ts'
 
 type Listener = (event: string, session: Session | null) => void
@@ -35,7 +35,9 @@ const session = {
   user: { email: 'cook@example.com' },
 } as Session
 
-const library = (): SousApi => ({
+const library = (
+  prefs: Preferences = { ...NO_PREFERENCES, saved: true },
+): SousApi => ({
   list: vi.fn(async () => []),
   save: vi.fn(),
   savePage: vi.fn(),
@@ -43,10 +45,16 @@ const library = (): SousApi => ({
   remove: vi.fn(),
   recipe: vi.fn(async () => null),
   saveManual: vi.fn(),
-  preferences: vi.fn(async () => NO_PREFERENCES),
+  preferences: vi.fn(async () => prefs),
   savePreferences: vi.fn(async () => {}),
   options: vi.fn(async () => ({ diets: [], cuisines: [] })),
   searchIngredients: vi.fn(async () => []),
+  storesNear: vi.fn(async () => []),
+  myStore: vi.fn(async () => null),
+  chooseStore: vi.fn(async () => {}),
+  exportMyData: vi.fn(async () => '{}'),
+  deleteMyAccount: vi.fn(async () => {}),
+  pantryStaples: vi.fn(async () => []),
   plan: vi.fn(async () => []),
   addToPlan: vi.fn(async () => {}),
   updateEntry: vi.fn(async () => {}),
@@ -137,7 +145,7 @@ describe('App', () => {
       emit(session)
       return { data: {}, error: null }
     })
-    render(<App auth={auth} libraryApi={library} />)
+    render(<App auth={auth} libraryApi={() => library()} />)
     await userEvent.type(
       await screen.findByLabelText('Email'),
       'cook@example.com',
@@ -182,7 +190,7 @@ describe('App', () => {
 
   it('shows who is signed in on the preferences page, and signs out', async () => {
     const { auth } = fakeAuth(session)
-    render(<App auth={auth} libraryApi={library} />)
+    render(<App auth={auth} libraryApi={() => library()} />)
     await userEvent.click(
       await screen.findByRole('link', { name: 'Preferences' }),
     )
@@ -191,17 +199,85 @@ describe('App', () => {
     expect(auth.signOut).toHaveBeenCalled()
   })
 
-  it('asks a new user to set preferences, once', async () => {
+  it('sets up a new user step by step, then goes to their recipes', async () => {
+    window.history.replaceState(null, '', '/plan')
     const { auth } = fakeAuth(session)
-    render(<App auth={auth} libraryApi={library} />)
+    const api = library(NO_PREFERENCES)
+    render(<App auth={auth} libraryApi={() => api} />)
     expect(
-      await screen.findByRole('heading', { name: 'Tell Sous how you eat' }),
+      await screen.findByRole('heading', { name: 'How do you eat?' }),
     ).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/welcome')
+    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(
+      screen.getByRole('heading', { name: 'Anything you can’t or won’t eat?' }),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Skip the rest/ }))
+    await waitFor(() =>
+      expect(api.savePreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ saved: true }),
+      ),
+    )
+    expect(
+      await screen.findByRole('heading', { name: 'Your recipes' }),
+    ).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('doesn’t send anyone to setup when preferences fail to load', async () => {
+    window.history.replaceState(null, '', '/')
+    const { auth } = fakeAuth(session)
+    const api = library()
+    vi.mocked(api.preferences).mockRejectedValue(new Error('down'))
+    render(<App auth={auth} libraryApi={() => api} />)
+    expect(
+      await screen.findByRole('heading', { name: 'Your recipes' }),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(api.preferences).toHaveBeenCalled())
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('doesn’t route a newly signed-in account by the last one’s setup', async () => {
+    window.history.replaceState(null, '', '/')
+    const { auth, emit } = fakeAuth(null)
+    const first = { ...session, user: { id: 'a', email: 'a@x' } } as Session
+    const second = { ...session, user: { id: 'b', email: 'b@x' } } as Session
+    const newUser = library(NO_PREFERENCES)
+    const other = library()
+    // The second account's preferences are still loading.
+    vi.mocked(other.preferences).mockImplementation(() => new Promise(() => {}))
+    render(
+      <App
+        auth={auth}
+        libraryApi={(s) => (s.user.id === 'a' ? newUser : other)}
+      />,
+    )
+    await screen.findByLabelText('Email')
+    act(() => emit(first))
+    await screen.findByRole('heading', { name: 'How do you eat?' })
+    act(() => emit(null))
+    window.history.replaceState(null, '', '/plan')
+    act(() => emit(second))
+    await waitFor(() => expect(other.preferences).toHaveBeenCalled())
+    expect(window.location.pathname).toBe('/plan')
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('shows the privacy page signed out', async () => {
+    window.history.replaceState(null, '', '/privacy')
+    const { auth } = fakeAuth(null)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    expect(
+      await screen.findByRole('heading', { name: 'What Sous keeps about you' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('Email')).toBeNull()
+    window.history.replaceState(null, '', '/')
   })
 
   it('follows sign-in from the emailed link', async () => {
     const { auth, emit } = fakeAuth()
-    render(<App auth={auth} libraryApi={library} />)
+    render(<App auth={auth} libraryApi={() => library()} />)
     await screen.findByLabelText('Email')
     act(() => emit(session))
     expect(

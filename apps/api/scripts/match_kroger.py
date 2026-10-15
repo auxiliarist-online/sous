@@ -3,6 +3,12 @@
     .venv/bin/python scripts/match_kroger.py            # print the picks, write nothing
     .venv/bin/python scripts/match_kroger.py --write    # save them
     .venv/bin/python scripts/match_kroger.py --only eggs --only "all-purpose flour"
+    .venv/bin/python scripts/match_kroger.py --location 02900540 --write   # a Kroger
+
+Stores of a chain carry the same products, so one store's picks serve the
+whole chain (TYL-19): the Asheville Harris Teeter for every Harris Teeter, and
+one Kroger for Kroger and the chains that sell its brand. A store that isn't
+in the database yet is looked up with Kroger and added.
 
 One product search per ingredient (Products allows 10,000 calls a day). The
 rules are in app/pricing/kroger_match.py; data/kroger_overrides.csv fixes the
@@ -31,6 +37,7 @@ from app.config import settings  # noqa: E402
 from app.pricing.kroger import Kroger, Product  # noqa: E402
 from app.pricing.kroger_match import choose, search_term  # noqa: E402
 from app.pricing.units import UnknownUnitError, normalize_unit  # noqa: E402
+from app.stores.routes import chain_slug  # noqa: E402
 
 LOCATION = "09700348"  # Harris Teeter, Village at Chestnut Street, Asheville
 OVERRIDES = API / "data" / "kroger_overrides.csv"
@@ -55,11 +62,50 @@ def describe(p: Product) -> str:
     return f"{p.description} | {p.size} | {p.sold_by} | {price}"
 
 
+def store_row(db: httpx.Client, location: str, write: bool) -> tuple[str | None, str]:
+    """(store id, chain slug) for a Kroger location, adding the shared store
+    row if it isn't there yet; on a dry run nothing is added (no id)."""
+    found = db.get(
+        "/stores",
+        params={
+            "select": "id,chain_slug",
+            "external_location_id": f"eq.{location}",
+            "created_by": "is.null",
+        },
+    ).json()
+    if found:
+        return found[0]["id"], found[0]["chain_slug"]
+    with httpx.Client(timeout=30.0) as client:
+        loc = Kroger(client).store(location)
+    if loc is None:
+        sys.exit(f"Kroger doesn't know location {location}")
+    if not write:
+        return None, chain_slug(loc.chain)
+    resp = db.post(
+        "/stores",
+        headers={"Prefer": "return=representation"},
+        json={
+            "chain_slug": chain_slug(loc.chain),
+            "name": loc.name,
+            "address": ", ".join(p for p in (loc.address, loc.city, loc.state) if p),
+            "zip": loc.zip or None,
+            "external_location_id": loc.location_id,
+        },
+    )
+    resp.raise_for_status()
+    row = resp.json()[0]
+    print(f"added {loc.name} ({row['chain_slug']})")
+    return row["id"], row["chain_slug"]
+
+
 def main() -> None:
+    """Pick a product for each ingredient at one store; print, or save."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--write", action="store_true", help="save the picks")
     parser.add_argument("--only", action="append", help="match just this ingredient")
+    parser.add_argument("--location", default=LOCATION, help="Kroger location id to match at")
     args = parser.parse_args()
+    location = args.location
 
     key = settings.supabase_service_role_key
     db = httpx.Client(
@@ -67,12 +113,8 @@ def main() -> None:
         headers={"apikey": key, "Authorization": f"Bearer {key}"},
         timeout=60.0,
     )
-    stores = db.get(
-        "/stores", params={"select": "id", "external_location_id": f"eq.{LOCATION}"}
-    ).json()
-    if not stores:
-        sys.exit(f"no store with location {LOCATION}; apply the migrations first")
-    store_id = stores[0]["id"]
+    store_id, chain = store_row(db, location, args.write)
+    print(f"matching at {location} for the {chain} chain")
     ingredients = db.get(
         "/ingredients",
         params={
@@ -82,6 +124,9 @@ def main() -> None:
         },
     ).json()
     names = [i["name"] for i in ingredients]
+    # The overrides hold at every chain: the blank ones stop the matcher's
+    # known mistakes, and the products are national (a store that doesn't
+    # carry one prices it from estimates).
     fixed = overrides()
     unknown = set(fixed) - set(names)
     if unknown:
@@ -102,7 +147,7 @@ def main() -> None:
                     )
                     print(f"{name}: {fixed[name]} (override)")
                 continue
-            found = kroger.search(search_term(name), LOCATION)
+            found = kroger.search(search_term(name), location)
             time.sleep(0.2)
             pick = choose(
                 name,
@@ -123,7 +168,7 @@ def main() -> None:
             print(f"{name}: {describe(pick)}")
 
     print(f"\n{len(picks)} matched, {len(missed)} without a match")
-    if not args.write:
+    if not args.write or store_id is None:
         return
     now = datetime.now(UTC).isoformat()
     rows = [{**p, "store_id": store_id, "matched_at": now} for p in picks]

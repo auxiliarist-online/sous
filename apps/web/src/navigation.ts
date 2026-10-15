@@ -33,9 +33,12 @@ export type Route =
   | { page: 'settings' }
   | { page: 'browse' }
   | { page: 'plan'; week: string | null }
+  | { page: 'welcome' }
+  | { page: 'privacy' }
 
 const UUID = '[0-9a-f-]{36}'
 
+/** Which page an address shows; anything unknown is the library. */
 export function route(path: string): Route {
   let m = path.match(new RegExp(`^/recipe/(${UUID})/?$`, 'i'))
   if (m) return { page: 'recipe', id: m[1] }
@@ -44,6 +47,8 @@ export function route(path: string): Route {
   if (/^\/new\/?$/.test(path)) return { page: 'new' }
   if (/^\/settings\/?$/.test(path)) return { page: 'settings' }
   if (/^\/browse\/?$/.test(path)) return { page: 'browse' }
+  if (/^\/welcome\/?$/.test(path)) return { page: 'welcome' }
+  if (/^\/privacy\/?$/.test(path)) return { page: 'privacy' }
   if (/^\/plan\/?$/.test(path)) return { page: 'plan', week: null }
   m = path.match(/^\/plan\/(\d{4}-\d{2}-\d{2})\/?$/)
   if (m) return { page: 'plan', week: m[1] }

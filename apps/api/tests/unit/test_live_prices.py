@@ -20,10 +20,11 @@ STORE = {
     "id": "store-ht",
     "name": "Harris Teeter – Village at Chestnut Street",
     "external_location_id": "09700348",
+    "chain_slug": "harris_teeter",
 }
 MATCHES = [
-    {"ingredient_id": EGGS, "product_id": "0007203663218"},
-    {"ingredient_id": CARROTS, "product_id": "0001111091637"},
+    {"ingredient_id": EGGS, "product_id": "0007203663218", "store_id": "store-ht"},
+    {"ingredient_id": CARROTS, "product_id": "0001111091637", "store_id": "store-ht"},
 ]
 
 
@@ -138,19 +139,23 @@ def test_the_users_own_store_comes_first(
 ) -> None:
     monkeypatch.setattr(settings, "kroger_client_id", "id")
     mine = {**STORE, "id": "store-mine"}
+    # TYL-19: another Harris Teeter's matches serve, but one made at the
+    # user's own store wins.
+    own_eggs = {"ingredient_id": EGGS, "product_id": "0000000000111", "store_id": "store-mine"}
 
     def handle(r: httpx.Request) -> httpx.Response:
         if r.url.path.endswith("/user_stores"):
             assert r.url.params["user_id"] == "eq.user-1"
             return httpx.Response(200, json=[{"stores": mine}])
         assert not r.url.path.endswith("/stores"), "no need for the default"
-        assert r.url.params["store_id"] == "eq.store-mine"
-        return httpx.Response(200, json=MATCHES)
+        assert r.url.params["stores.chain_slug"] == "eq.harris_teeter"
+        return httpx.Response(200, json=[*MATCHES, own_eggs])
 
     seen = supabase(handle)
-    fetched(monkeypatch, EGGS_18)
+    asked = fetched(monkeypatch, EGGS_18)
     assert asyncio.run(add_live_prices("user-1", inputs())) == "store-mine"
     assert len(seen) == 2
+    assert sorted(asked[0]) == ["0000000000111", "0001111091637"]
 
 
 def test_without_credentials_nothing_is_called(supabase: Install) -> None:
@@ -171,7 +176,9 @@ def test_a_bunch_sold_as_one_each_is_one_bunch(
             return httpx.Response(200, json=[])
         if r.url.path.endswith("/stores"):
             return httpx.Response(200, json=[STORE])
-        return httpx.Response(200, json=[{"ingredient_id": "scallions", "product_id": "4068"}])
+        return httpx.Response(
+            200, json=[{"ingredient_id": "scallions", "product_id": "4068", "store_id": "store-ht"}]
+        )
 
     supabase(handle)
     fetched(monkeypatch, kroger_product("4068", size="1 each", regular=1.89))
@@ -195,3 +202,36 @@ def test_a_bunch_sold_as_one_each_is_one_bunch(
     scallions = cost.items[0]
     # 1 1/2 cups is 150 g: two 100 g bunches at $1.89.
     assert (scallions.package_unit, scallions.packages, scallions.cents) == ("bunch", 2, 378)
+
+
+def test_a_product_the_store_doesnt_stock_is_left_to_estimates(
+    db: list[httpx.Request], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # TYL-19: a chain-wide match this store doesn't carry.
+    fetched(monkeypatch, kroger_product("0007203663218", in_store=False))
+    assert asyncio.run(add_live_prices("user-1", (given := inputs()))) == "store-ht"
+    assert all(p["source"] != "store_api" for p in given["prices"])
+
+
+def test_ingredients_sharing_a_product_each_get_its_price(
+    supabase: Install, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "kroger_client_id", "id")
+    both = [
+        {"ingredient_id": EGGS, "product_id": "0007203663218", "store_id": "store-ht"},
+        {"ingredient_id": CARROTS, "product_id": "0007203663218", "store_id": "store-ht"},
+    ]
+
+    def handle(r: httpx.Request) -> httpx.Response:
+        if r.url.path.endswith("/user_stores"):
+            return httpx.Response(200, json=[])
+        if r.url.path.endswith("/stores"):
+            return httpx.Response(200, json=[STORE])
+        return httpx.Response(200, json=both)
+
+    supabase(handle)
+    fetched(monkeypatch, EGGS_18)
+    given = inputs()
+    asyncio.run(add_live_prices("user-1", given))
+    live = {p["ingredient_id"] for p in given["prices"] if p["source"] == "store_api"}
+    assert live == {EGGS, CARROTS}

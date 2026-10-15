@@ -161,11 +161,11 @@ export function Library({
         <section className="card onboarding">
           <h2>Tell Sous how you eat</h2>
           <p className="muted">
-            Your diets, allergies and favorite cuisines shape what Sous shows
-            you.
+            Your diets, allergies, favorite cuisines and store shape what Sous
+            shows you.
           </p>
-          <Link to="/settings" className="button">
-            Set my preferences
+          <Link to="/welcome" className="button">
+            Set up Sous
           </Link>
         </section>
       )}

@@ -238,6 +238,8 @@ export interface Preferences {
   strictMayContain: boolean
   householdSize: number
   weeklyBudgetCents: number | null
+  /** Five digits, for finding nearby stores (TYL-14); kept coarse on purpose. */
+  homeZip: string | null
   favoriteCuisines: string[]
   favoriteIngredients: IngredientRef[]
   dislikedIngredients: IngredientRef[]
@@ -251,6 +253,7 @@ export const NO_PREFERENCES: Preferences = {
   strictMayContain: false,
   householdSize: 1,
   weeklyBudgetCents: null,
+  homeZip: null,
   favoriteCuisines: [],
   favoriteIngredients: [],
   dislikedIngredients: [],
@@ -278,6 +281,8 @@ function ingredientRefs(rows: { ingredient: IngredientRef | null }[] | null) {
   return (rows ?? []).flatMap((r) => (r.ingredient ? [r.ingredient] : []))
 }
 
+/** The user's preferences: profile (with home zip), diets, cuisines and
+ *  ingredients. `saved` is false until they've saved once. */
 export async function loadPreferences(
   db: SupabaseClient,
   userId: string,
@@ -286,7 +291,7 @@ export async function loadPreferences(
     db
       .from('profiles')
       .select(
-        'allergens, avoid_categories, strict_may_contain, household_size, weekly_budget_cents',
+        'allergens, avoid_categories, strict_may_contain, household_size, weekly_budget_cents, home_zip',
       )
       .eq('user_id', userId)
       .maybeSingle(),
@@ -307,6 +312,7 @@ export async function loadPreferences(
     strict_may_contain: boolean
     household_size: number
     weekly_budget_cents: number | null
+    home_zip?: string | null
   } | null
   return {
     saved: !!p,
@@ -316,6 +322,7 @@ export async function loadPreferences(
     strictMayContain: p?.strict_may_contain ?? false,
     householdSize: p?.household_size ?? 1,
     weeklyBudgetCents: p?.weekly_budget_cents ?? null,
+    homeZip: p?.home_zip ?? null,
     favoriteCuisines: (cuisines.data ?? []).map(
       (c: { cuisine_slug: string }) => c.cuisine_slug,
     ),
@@ -345,6 +352,8 @@ async function replaceRows(
   if (ins.error) throw ins.error
 }
 
+/** Save the user's preferences, replacing their diet, cuisine and
+ *  ingredient rows with these. */
 export async function savePreferences(
   db: SupabaseClient,
   userId: string,
@@ -357,6 +366,7 @@ export async function savePreferences(
     strict_may_contain: p.strictMayContain,
     household_size: p.householdSize,
     weekly_budget_cents: p.weeklyBudgetCents,
+    home_zip: p.homeZip,
   })
   if (profile.error) throw profile.error
   await replaceRows(db, 'user_diets', userId, 'diet_slug', p.diets)

@@ -684,3 +684,69 @@ select {
 .cheaper p {
   margin: 0.5rem 0 0;
 }
+
+/* First-login setup (TYL-58): one question per screen. */
+.welcome progress {
+  width: 100%;
+  accent-color: var(--color-accent);
+}
+
+.welcome-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.welcome-nav button:only-child {
+  margin-left: auto;
+}
+
+.welcome h3 {
+  margin: 0.75rem 0 0.25rem;
+}
+
+/* Where you shop (TYL-19). */
+.store-picker .row {
+  align-items: end;
+}
+
+.store-picker input {
+  width: 7rem;
+}
+
+/* Your data: export and delete (TYL-74). */
+.account-data {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+}
+
+.danger {
+  color: #b3261e;
+}
+
+button.danger:not(.link) {
+  background: #b3261e;
+  border-color: #b3261e;
+  color: #fff;
+}
+
+.privacy h3 {
+  margin: 1rem 0 0.25rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .danger {
+    color: #f2b8b5;
+  }
+
+  button.danger:not(.link) {
+    background: #8c1d18;
+    border-color: #8c1d18;
+    color: #fff;
+  }
+}

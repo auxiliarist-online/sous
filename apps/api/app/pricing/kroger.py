@@ -1,4 +1,5 @@
-"""The Kroger API: Harris Teeter products and prices (TYL-80).
+"""The Kroger API: Harris Teeter products and prices (TYL-80), and stores
+near a zip code (TYL-19).
 
 Kroger's terms (§5e.1) don't allow keeping their content: product responses
 carry no cache header, so names, sizes and prices are used for the request
@@ -46,6 +47,34 @@ class Product:
     categories: tuple[str, ...] = ()
 
 
+@dataclass
+class Location:
+    """A Kroger-family store (Kroger, Harris Teeter, Ralphs...)."""
+
+    location_id: str
+    # Kroger's chain code: "HART" for Harris Teeter, "KROGER", "RALPHS"...
+    chain: str
+    name: str
+    address: str
+    city: str
+    state: str
+    zip: str
+
+
+def parse_location(loc: dict[str, Any]) -> Location:
+    """A store from the Locations API's response."""
+    a = loc.get("address") or {}
+    return Location(
+        location_id=str(loc["locationId"]),
+        chain=str(loc.get("chain") or ""),
+        name=str(loc.get("name") or ""),
+        address=str(a.get("addressLine1") or ""),
+        city=str(a.get("city") or ""),
+        state=str(a.get("state") or ""),
+        zip=str(a.get("zipCode") or "")[:5],
+    )
+
+
 def parse_product(p: dict[str, Any]) -> Product:
     item = (p.get("items") or [{}])[0]
     price = item.get("price") or {}
@@ -71,6 +100,9 @@ def _local_date(value: str | None) -> date | None:
 
 
 class Kroger:
+    """Kroger's public API: products and prices at a store, and stores near a
+    zip code. Gets and renews its own access token."""
+
     def __init__(self, client: httpx.Client) -> None:
         self.client = client
         self._token: str | None = None
@@ -101,6 +133,40 @@ class Kroger:
             return []  # some searches that find nothing answer 404
         resp.raise_for_status()
         return [parse_product(p) for p in resp.json().get("data") or []]
+
+    def _get(self, path: str, params: dict[str, Any]) -> httpx.Response:
+        """GET from the API, retrying the odd 429 or 5xx."""
+        for wait in RETRY_WAITS:
+            resp = self.client.get(f"{BASE}/{path}", params=params, headers=self._auth())
+            if resp.status_code != 429 and resp.status_code < 500:
+                break
+            time.sleep(wait)
+        return resp
+
+    def stores_near(self, zip_code: str, miles: int = 15, limit: int = 10) -> list[Location]:
+        """Kroger-family stores near a zip code, nearest first. (Locations
+        allows 1,600 calls a day.)"""
+        resp = self._get(
+            "locations",
+            {
+                "filter.zipCode.near": zip_code,
+                "filter.radiusInMiles": miles,
+                "filter.limit": limit,
+            },
+        )
+        if resp.status_code == 404:
+            return []
+        resp.raise_for_status()
+        return [parse_location(loc) for loc in resp.json().get("data") or []]
+
+    def store(self, location_id: str) -> Location | None:
+        """One store by its location id; None when Kroger doesn't know it."""
+        resp = self._get(f"locations/{location_id}", {})
+        if resp.status_code in (400, 404):
+            return None
+        resp.raise_for_status()
+        data = resp.json().get("data")
+        return parse_location(data) if data else None
 
     def search(self, term: str, location_id: str, limit: int = 20) -> list[Product]:
         """Products matching `term` at a store, in Kroger's order."""

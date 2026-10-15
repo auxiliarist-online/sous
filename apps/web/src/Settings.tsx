@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from './router.tsx'
+import { StorePicker, type StoreApi } from './StorePicker.tsx'
 import {
   CATEGORIES,
   type IngredientRef,
@@ -7,11 +8,15 @@ import {
   type Preferences,
 } from './sous.ts'
 
-export interface SettingsApi {
+export interface SettingsApi extends StoreApi {
   preferences(): Promise<Preferences>
   savePreferences(p: Preferences): Promise<void>
   options(): Promise<{ diets: Option[]; cuisines: Option[] }>
   searchIngredients(query: string): Promise<IngredientRef[]>
+  /** Everything Sous keeps about the user, as JSON (TYL-74). */
+  exportMyData(): Promise<string>
+  /** Delete the account and everything about the user (TYL-74). */
+  deleteMyAccount(): Promise<void>
 }
 
 function toggle(list: string[], value: string): string[] {
@@ -20,7 +25,8 @@ function toggle(list: string[], value: string): string[] {
     : [...list, value]
 }
 
-function ChipGroup({
+/** Toggle chips, one per option. */
+export function ChipGroup({
   options,
   selected,
   onChange,
@@ -46,7 +52,8 @@ function ChipGroup({
   )
 }
 
-function Section({
+/** A titled group of preferences. */
+export function Section({
   title,
   hint,
   children,
@@ -65,7 +72,7 @@ function Section({
 }
 
 /** Search the canonical ingredients and pick some (favorites or dislikes). */
-function IngredientPicker({
+export function IngredientPicker({
   id,
   label,
   chosen,
@@ -147,17 +154,75 @@ function IngredientPicker({
   )
 }
 
+/** People cooked for and the weekly budget, shared with the setup wizard. */
+export function HouseholdFields({
+  prefs,
+  set,
+}: {
+  prefs: Preferences
+  set: (patch: Partial<Preferences>) => void
+}) {
+  const [household, setHousehold] = useState(String(prefs.householdSize))
+  return (
+    <div className="row">
+      <div>
+        <label htmlFor="household">People you cook for</label>
+        <input
+          id="household"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={20}
+          // Free typing (it can be empty for a moment); a whole number
+          // from 1 to 20 is kept when the field is left.
+          value={household}
+          onChange={(e) => {
+            setHousehold(e.target.value)
+            const n = Number(e.target.value)
+            if (Number.isInteger(n) && n >= 1 && n <= 20)
+              set({ householdSize: n })
+          }}
+          onBlur={() => setHousehold(String(prefs.householdSize))}
+        />
+      </div>
+      <div>
+        <label htmlFor="budget">Weekly grocery budget ($)</label>
+        <input
+          id="budget"
+          type="number"
+          inputMode="decimal"
+          min={1}
+          step="1"
+          value={prefs.weeklyBudgetCents ? prefs.weeklyBudgetCents / 100 : ''}
+          onChange={(e) => {
+            const dollars = Number(e.target.value)
+            set({
+              weeklyBudgetCents:
+                e.target.value.trim() && dollars > 0
+                  ? Math.round(dollars * 100)
+                  : null,
+            })
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
 /** How you eat (TYL-14) and what you like (TYL-24). */
 export function Settings({
   api,
   email,
   onSaved,
   onSignOut,
+  onDeleted,
 }: {
   api: SettingsApi
   email: string | undefined
   onSaved: (p: Preferences) => void
   onSignOut: () => void
+  /** After the account is deleted: sign out. */
+  onDeleted: () => void
 }) {
   const [prefs, setPrefs] = useState<Preferences | null>(null)
   const [options, setOptions] = useState<{
@@ -168,7 +233,6 @@ export function Settings({
     'idle',
   )
   const [loadError, setLoadError] = useState(false)
-  const [household, setHousehold] = useState('')
 
   useEffect(() => {
     let live = true
@@ -176,7 +240,6 @@ export function Settings({
       ([p, o]) => {
         if (!live) return
         setPrefs(p)
-        setHousehold(String(p.householdSize))
         setOptions(o)
       },
       () => live && setLoadError(true),
@@ -290,50 +353,18 @@ export function Settings({
       </Section>
 
       <Section title="Household">
-        <div className="row">
-          <div>
-            <label htmlFor="household">People you cook for</label>
-            <input
-              id="household"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={20}
-              // Free typing (it can be empty for a moment); a whole number
-              // from 1 to 20 is kept when the field is left.
-              value={household}
-              onChange={(e) => {
-                setHousehold(e.target.value)
-                const n = Number(e.target.value)
-                if (Number.isInteger(n) && n >= 1 && n <= 20)
-                  set({ householdSize: n })
-              }}
-              onBlur={() => setHousehold(String(prefs.householdSize))}
-            />
-          </div>
-          <div>
-            <label htmlFor="budget">Weekly grocery budget ($)</label>
-            <input
-              id="budget"
-              type="number"
-              inputMode="decimal"
-              min={1}
-              step="1"
-              value={
-                prefs.weeklyBudgetCents ? prefs.weeklyBudgetCents / 100 : ''
-              }
-              onChange={(e) => {
-                const dollars = Number(e.target.value)
-                set({
-                  weeklyBudgetCents:
-                    e.target.value.trim() && dollars > 0
-                      ? Math.round(dollars * 100)
-                      : null,
-                })
-              }}
-            />
-          </div>
-        </div>
+        <HouseholdFields prefs={prefs} set={set} />
+      </Section>
+
+      <Section
+        title="Where you shop"
+        hint="Your store's prices, live, for what you plan to buy."
+      >
+        <StorePicker
+          api={api}
+          zip={prefs.homeZip}
+          onZip={(homeZip) => set({ homeZip })}
+        />
       </Section>
 
       <button type="submit" disabled={status === 'saving'}>
@@ -354,7 +385,104 @@ export function Settings({
         <button type="button" className="link" onClick={onSignOut}>
           Sign out
         </button>
+        <Account api={api} onDeleted={onDeleted} />
       </section>
     </form>
+  )
+}
+
+/** What Sous keeps (TYL-74): the privacy page, a copy of your data, and
+ *  deleting your account. */
+function Account({
+  api,
+  onDeleted,
+}: {
+  api: SettingsApi
+  onDeleted: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const [state, setState] = useState<'idle' | 'working' | 'error'>('idle')
+
+  // Download everything as sous-data.json.
+  async function download() {
+    setState('working')
+    try {
+      const json = await api.exportMyData()
+      const url = URL.createObjectURL(
+        new Blob([json], { type: 'application/json' }),
+      )
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'sous-data.json'
+      a.click()
+      // Some browsers start the download after click() returns.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      setState('idle')
+    } catch {
+      setState('error')
+    }
+  }
+
+  // Delete the account for good, then sign out.
+  async function remove() {
+    setState('working')
+    try {
+      await api.deleteMyAccount()
+      onDeleted()
+    } catch {
+      setState('error')
+    }
+  }
+
+  return (
+    <div className="account-data">
+      <Link to="/privacy" className="small">
+        What Sous keeps about you
+      </Link>
+      <button
+        type="button"
+        className="link"
+        disabled={state === 'working'}
+        onClick={() => void download()}
+      >
+        Download my data
+      </button>
+      {!confirming ? (
+        <button
+          type="button"
+          className="link danger"
+          onClick={() => setConfirming(true)}
+        >
+          Delete my account
+        </button>
+      ) : (
+        <div className="confirm" role="alert">
+          <p className="small">
+            This deletes your preferences, plans, pantry, prices, tags, store
+            and the recipes you typed in. It can't be undone.
+          </p>
+          <button
+            type="button"
+            className="danger"
+            disabled={state === 'working'}
+            onClick={() => void remove()}
+          >
+            Delete everything
+          </button>
+          <button
+            type="button"
+            className="link"
+            onClick={() => setConfirming(false)}
+          >
+            Keep my account
+          </button>
+        </div>
+      )}
+      {state === 'error' && (
+        <p role="alert" className="error small">
+          That didn't work. Try again.
+        </p>
+      )}
+    </div>
   )
 }
