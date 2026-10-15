@@ -68,6 +68,7 @@ interface ItemRow {
   position: number
 }
 
+/** A list item as the app reads it. */
 function fromRow(r: ItemRow): ListItem {
   return {
     id: r.id,
@@ -147,15 +148,19 @@ export async function sendOp(db: SupabaseClient, op: ListOp): Promise<void> {
             : await items.update({ removed: true }).eq('id', op.id)
           : op.kind === 'restore'
             ? await items.update({ removed: false }).eq('id', op.id)
-            : await items.insert({
-                id: op.id,
-                shopping_list_id: op.listId,
-                name: op.name,
-                amount: op.amount,
-                is_manual: true,
-                // The user's own items go after the plan's.
-                position: 10_000,
-              })
+            : // Sent again after a lost reply, it's already there: no-op.
+              await items.upsert(
+                {
+                  id: op.id,
+                  shopping_list_id: op.listId,
+                  name: op.name,
+                  amount: op.amount,
+                  is_manual: true,
+                  // The user's own items go after the plan's.
+                  position: 10_000,
+                },
+                { onConflict: 'id', ignoreDuplicates: true },
+              )
   if (error) throw error
 }
 
@@ -191,6 +196,8 @@ export function applyOp(state: ListState, op: ListOp): ListState {
         items: change(op.id, (i) => ({ ...i, removed: false })),
       }
     case 'add':
+      // Already there (the server had it, and the queue still did too).
+      if (items.some((i) => i.id === op.id)) return state
       return {
         ...state,
         items: [
@@ -215,6 +222,7 @@ export function applyOp(state: ListState, op: ListOp): ListState {
 
 // Kept per account, so on a shared phone nobody sees (or sends) another's.
 const PREFIX = 'sous:list'
+// Where a week's list is kept, and an account's unsent changes.
 const listKey = (user: string, week: string) => `${PREFIX}:${user}:${week}`
 const queueKey = (user: string) => `${PREFIX}-queue:${user}`
 // A change that keeps failing while online is dropped after this many tries,
@@ -230,6 +238,7 @@ function store(): Storage | null {
   }
 }
 
+/** A JSON value kept on the phone, or null. */
 function read<T>(key: string): T | null {
   try {
     const raw = store()?.getItem(key)
@@ -239,6 +248,7 @@ function read<T>(key: string): T | null {
   }
 }
 
+/** Keep a JSON value on the phone, if storage allows. */
 function write(key: string, value: unknown): void {
   try {
     store()?.setItem(key, JSON.stringify(value))
@@ -252,6 +262,7 @@ export function cachedList(user: string, week: string): ListState | null {
   return read<ListState>(listKey(user, week))
 }
 
+/** Keep the list on the phone, for offline use. */
 export function cacheList(user: string, state: ListState): void {
   write(listKey(user, state.week), state)
 }
@@ -269,6 +280,8 @@ export function clearListData(): void {
 }
 
 interface Queued {
+  /** Which queued change this is, to take it off once sent. */
+  qid: string
   op: ListOp
   tries: number
 }
@@ -281,35 +294,55 @@ export function pendingOps(user: string): ListOp[] {
 /** Keep a change to send later. */
 export function queueOp(user: string, op: ListOp): void {
   const key = queueKey(user)
-  write(key, [...(read<Queued[]>(key) ?? []), { op, tries: 0 }])
+  const qid = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  write(key, [...(read<Queued[]>(key) ?? []), { qid, op, tries: 0 }])
+}
+
+// One send at a time per account: each call waits for the one before.
+const inflight = new Map<string, Promise<number>>()
+
+export function flushOps(
+  user: string,
+  send: (op: ListOp) => Promise<void>,
+): Promise<number> {
+  const previous = inflight.get(user) ?? Promise.resolve(0)
+  const next = previous.catch(() => 0).then(() => flushQueue(user, send))
+  inflight.set(user, next)
+  void next.finally(() => {
+    if (inflight.get(user) === next) inflight.delete(user)
+  })
+  return next
 }
 
 /** Send queued changes in order, stopping at the first that fails (it's kept
- *  for next time). Returns how many are left. */
-export async function flushOps(
+ *  for next time). The queue is read again after each send, so changes made
+ *  meanwhile are kept. Returns how many are left. */
+async function flushQueue(
   user: string,
   send: (op: ListOp) => Promise<void>,
 ): Promise<number> {
   const key = queueKey(user)
-  let queue = read<Queued[]>(key) ?? []
-  while (queue.length) {
-    const [first, ...rest] = queue
+  for (;;) {
+    const first = (read<Queued[]>(key) ?? [])[0]
+    if (!first) return 0
+    const without = () =>
+      (read<Queued[]>(key) ?? []).filter((q) => q.qid !== first.qid)
     try {
       await send(first.op)
-      queue = rest
+      write(key, without())
     } catch {
       const tries = first.tries + 1
       if (tries < MAX_TRIES || !navigator.onLine) {
         // Offline, or not failing for long: keep it, and try again later.
-        queue = [{ ...first, tries }, ...rest]
+        const queue = (read<Queued[]>(key) ?? []).map((q) =>
+          q.qid === first.qid ? { ...q, tries } : q,
+        )
         write(key, queue)
         return queue.length
       }
-      queue = rest // it keeps failing with a connection: give up on it
+      write(key, without()) // it keeps failing with a connection: give up on it
     }
-    write(key, queue)
   }
-  return 0
 }
 
 const AISLES: Record<string, string> = {

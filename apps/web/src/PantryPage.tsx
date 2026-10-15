@@ -12,6 +12,7 @@ export interface PantryApi {
   pantry(): Promise<PantryEntry[]>
   /** Staples assumed on hand until the pantry says otherwise. */
   pantryStaples(): Promise<{ id: string; name: string }[]>
+  /** Mark an ingredient on hand or out; null goes back to the default. */
   setPantry(ingredientId: string, status: PantryStatus | null): Promise<void>
 }
 
@@ -22,6 +23,7 @@ export function PantryPage({ api }: { api: PantryApi }) {
   const [marked, setMarked] = useState<PantryEntry[] | null>(null)
   const [staples, setStaples] = useState<{ id: string; name: string }[]>([])
   const [failed, setFailed] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -55,22 +57,31 @@ export function PantryPage({ api }: { api: PantryApi }) {
 
   // Mark an ingredient; null goes back to the default (staples on hand).
   async function mark(id: string, name: string, next: PantryStatus | null) {
-    const before = marked
-    setMarked([
-      ...(marked ?? []).filter((m) => m.ingredientId !== id),
-      ...(next ? [{ ingredientId: id, name, status: next }] : []),
-    ])
+    // Only this ingredient is put back if saving fails: others may have saved.
+    const before = (marked ?? []).find((m) => m.ingredientId === id)
+    const replace = (entry: PantryEntry | undefined) =>
+      setMarked((all) => [
+        ...(all ?? []).filter((m) => m.ingredientId !== id),
+        ...(entry ? [entry] : []),
+      ])
+    replace(next ? { ingredientId: id, name, status: next } : undefined)
+    setSaveFailed(false)
     try {
       await api.setPantry(id, next)
     } catch {
-      setMarked(before)
-      setFailed(true)
+      replace(before)
+      setSaveFailed(true)
     }
   }
 
   return (
     <section className="card pantry">
       <h2>Pantry</h2>
+      {saveFailed && (
+        <p role="alert" className="error small">
+          That didn't save. Try again.
+        </p>
+      )}
       <p className="muted small">
         Staples are assumed on hand, so they aren't on your list. Tap any you're
         out of, and they're bought with the week's shopping.

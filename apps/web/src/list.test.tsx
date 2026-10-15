@@ -201,6 +201,41 @@ describe('offline queue', () => {
   })
 })
 
+describe('sending changes', () => {
+  it('sends one at a time, so overlapping sends don’t repeat a change', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    const sent: string[] = []
+    let release!: () => void
+    const slow = new Promise<void>((r) => (release = r))
+    const send = vi.fn(async (op: { kind: string; id?: string }) => {
+      sent.push(op.id!)
+      if (op.id === 'a') await slow
+    })
+    queueOp('u', { kind: 'check', id: 'a', checked: true })
+    const first = flushOps('u', send)
+    // Queued while the first send is out; a second flush starts too.
+    queueOp('u', { kind: 'check', id: 'b', checked: true })
+    const second = flushOps('u', send)
+    release()
+    expect(await first).toBe(0)
+    expect(await second).toBe(0)
+    expect(sent).toEqual(['a', 'b'])
+    expect(pendingOps('u')).toEqual([])
+  })
+
+  it('shows a queued add once, even when the server already has it', () => {
+    const add = {
+      kind: 'add' as const,
+      id: 'c',
+      listId: 'list-1',
+      name: 'coffee',
+      amount: null,
+    }
+    const once = applyOp(state(item('eggs')), add)
+    expect(applyOp(once, add).items).toHaveLength(2)
+  })
+})
+
 describe('per account', () => {
   it('keeps each account’s list and changes apart, and forgets them on sign-out', () => {
     cacheList('a', state(item('eggs')))
@@ -218,12 +253,12 @@ describe('per account', () => {
 describe('list calls', () => {
   it('syncs the plan’s items and sends each kind of change', async () => {
     const rpc = vi.fn(async () => ({ data: 'list-1', error: null }))
-    const calls: [string, unknown][] = []
+    const calls: unknown[][] = []
     const chain = {
       update: (v: unknown) => (calls.push(['update', v]), chain),
       delete: () => (calls.push(['delete', null]), chain),
-      insert: async (v: unknown) => (
-        calls.push(['insert', v]),
+      upsert: async (v: unknown, o: unknown) => (
+        calls.push(['upsert', v, o]),
         { error: null }
       ),
       eq: async () => ({ error: null }),
@@ -266,7 +301,7 @@ describe('list calls', () => {
       ['delete', null],
       ['update', { removed: false }],
       [
-        'insert',
+        'upsert',
         {
           id: 'c',
           shopping_list_id: 'list-1',
@@ -275,6 +310,8 @@ describe('list calls', () => {
           is_manual: true,
           position: 10_000,
         },
+        // Sent twice (a reply lost on the way back), it's still one item.
+        { onConflict: 'id', ignoreDuplicates: true },
       ],
     ])
   })
@@ -455,6 +492,37 @@ describe('ListPage', () => {
     expect(await screen.findByText('List copied.')).toBeInTheDocument()
   })
 
+  it('sends offline changes before syncing with the plan, and holds the sync while any are left', async () => {
+    const order: string[] = []
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    queueOp('u', { kind: 'check', id: 'rice', checked: true })
+    const api = listApi({
+      sendListOp: vi.fn(async () => {
+        order.push('send')
+      }),
+      syncList: vi.fn(async () => {
+        order.push('sync')
+        return 'list-1'
+      }),
+    })
+    const { unmount } = render(<ListPage api={api} week={WEEK} user="u" />)
+    await waitFor(() => expect(order).toEqual(['send', 'sync']))
+    unmount()
+
+    // Now a change that can't be sent: no sync until it is.
+    localStorage.clear()
+    queueOp('u', { kind: 'check', id: 'eggs', checked: true })
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const stuck = listApi({
+      sendListOp: vi.fn(async () => {
+        throw new Error('Failed to fetch')
+      }),
+    })
+    render(<ListPage api={stuck} week={WEEK} user="u" />)
+    await waitFor(() => expect(stuck.planCost).toHaveBeenCalled())
+    expect(stuck.syncList).not.toHaveBeenCalled()
+  })
+
   it('says when there’s nothing yet', async () => {
     const api = listApi({ loadList: vi.fn(async () => null) })
     render(<ListPage api={api} week={WEEK} user="u" />)
@@ -503,6 +571,15 @@ describe('Home', () => {
     )
   })
 
+  it('says so when the cost can’t be worked out', async () => {
+    const api = homeApi([entry('1', '2026-10-14', 'Red lentil dal')])
+    vi.mocked(api.planCost).mockRejectedValue(new Error('down'))
+    render(<Home api={api} now={now} />)
+    expect(
+      await screen.findByText(/couldn't work out the cost just now/),
+    ).toBeInTheDocument()
+  })
+
   it('leads to planning when nothing is planned', async () => {
     render(<Home api={homeApi([])} now={now} />)
     expect(await screen.findByText('Nothing planned yet.')).toBeInTheDocument()
@@ -539,5 +616,33 @@ describe('PantryPage', () => {
       screen.getByRole('button', { name: "I'm out of rice" }),
     )
     expect(api.setPantry).toHaveBeenCalledWith('rice', null)
+  })
+
+  it('keeps the pantry on screen and puts back only what failed to save', async () => {
+    const api: PantryApi = {
+      pantry: vi.fn(async () => []),
+      pantryStaples: vi.fn(async () => [
+        { id: 'salt', name: 'salt' },
+        { id: 'oil', name: 'olive oil' },
+      ]),
+      setPantry: vi.fn(async (id: string) => {
+        if (id === 'salt') throw new Error('nope')
+      }),
+    }
+    render(<PantryPage api={api} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'olive oil' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'salt' }))
+    expect(
+      await screen.findByText("That didn't save. Try again."),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'salt' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Out of olive oil' }),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 })

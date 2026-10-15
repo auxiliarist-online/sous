@@ -3026,6 +3026,23 @@ describe('shopping list (TYL-18)', () => {
     ])
   })
 
+  it('keeps an item taken off off, even if the plan drops it and needs it again', async () => {
+    await sync([
+      item(eggs, 'eggs', '18', 'dairy_eggs'),
+      item(salt, 'salt', '26 oz', 'spices'),
+    ])
+    await sync([item(salt, 'salt', '26 oz', 'spices')])
+    await sync([
+      item(eggs, 'eggs', '6', 'dairy_eggs'),
+      item(salt, 'salt', '26 oz', 'spices'),
+    ])
+    const [eggRow] = await asGrace(
+      `select removed from shopping_list_items where ingredient_id = $1`,
+      [eggs],
+    )
+    assert.deepEqual(eggRow, { removed: true })
+  })
+
   it('is private, and only for Mondays', async () => {
     const seen = await as('authenticated', ALICE, async () => {
       const { rows } = await db.query(

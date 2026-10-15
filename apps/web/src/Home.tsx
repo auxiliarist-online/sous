@@ -10,7 +10,9 @@ import { plannedItems } from './list.ts'
 import { Link } from './router.tsx'
 
 export interface HomeApi {
+  /** The week's planned recipes. */
   plan(weekStart: string): Promise<PlanEntry[]>
+  /** The week's buy list and cost against the budget. */
   planCost(weekStart: string): Promise<PlanCost>
 }
 
@@ -30,6 +32,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   const week = weekOf(opened)
   const [entries, setEntries] = useState<PlanEntry[] | null>(null)
   const [cost, setCost] = useState<PlanCost | null>(null)
+  const [costFailed, setCostFailed] = useState(false)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -42,7 +45,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
         if (e.length)
           api.planCost(week).then(
             (c) => live && setCost(c),
-            () => {},
+            () => live && setCostFailed(true),
           )
       },
       () => live && setFailed(true),
@@ -134,7 +137,11 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
             {cost.budgetCents !== null && ` of ${dollars(cost.budgetCents)}`}
           </p>
         ) : (
-          <p className="muted small">Working out what to buy…</p>
+          <p className="muted small">
+            {costFailed
+              ? "We couldn't work out the cost just now; the list still works."
+              : 'Working out what to buy…'}
+          </p>
         )}
         <Link to="/list" className="button">
           Open the list

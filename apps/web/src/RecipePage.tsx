@@ -69,6 +69,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     }
   }
 
+  // Take the recipe out of the user's recipes, after asking.
   async function remove(r: RecipeDetail) {
     if (!confirm(`Remove “${r.title}” from your recipes?`)) return
     await api.remove(r.id)

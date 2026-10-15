@@ -24,9 +24,13 @@ export interface Place {
 }
 
 export interface ListApi {
+  /** The week's buy list and prices, from the plan. */
   planCost(weekStart: string): Promise<PlanCost>
+  /** Bring the week's list in line with the plan; returns the list's id. */
   syncList(weekStart: string, items: PlannedItem[]): Promise<string>
+  /** The week's list as stored, or null when there isn't one yet. */
   loadList(weekStart: string): Promise<ListState | null>
+  /** Send one change to the list. */
   sendListOp(op: ListOp): Promise<void>
   /** The user's stores and own places, for "where to buy". */
   places(): Promise<Place[]>
@@ -65,17 +69,19 @@ export function ListPage({
   const [showRemoved, setShowRemoved] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  // Bring the list up to date with the plan and the server, and send any
-  // changes made offline. Without a connection, the phone's copy stands.
+  // Send any changes made offline, then bring the list up to date with the
+  // plan, then reload it. Changes go first: otherwise the plan could drop an
+  // item checked off offline before the check-off arrives. Without a
+  // connection, the phone's copy stands.
   const refresh = useCallback(
     () =>
-      api
-        .planCost(week)
-        .catch(() => null)
-        .then(async (c) => {
+      flushOps(user, api.sendListOp)
+        .then(async (left) => {
+          setPending(left)
+          const c = await api.planCost(week).catch(() => null)
           setCost(c)
-          if (c) await api.syncList(week, plannedItems(c))
-          setPending(await flushOps(user, api.sendListOp))
+          // Only once everything's sent (see above).
+          if (c && left === 0) await api.syncList(week, plannedItems(c))
           const fresh = await api.loadList(week)
           if (fresh) {
             const shown = withPending(user, fresh)
@@ -173,6 +179,7 @@ export function ListPage({
     }
   }
 
+  // One item: its checkbox, amount, price, and the editor when open.
   const row = (i: ListItem) => {
     const price = i.ingredientId ? prices.get(i.ingredientId) : undefined
     return (

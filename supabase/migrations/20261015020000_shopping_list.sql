@@ -22,8 +22,9 @@ create unique index shopping_list_items_planned on public.shopping_list_items
 -- Bring the signed-in user's list for a week in line with the plan: p_items is
 -- the plan's buy list, [{ingredient_id, name, amount, aisle, position}]. New
 -- items are added and amounts updated, except on items the user edited or
--- checked off; items the plan no longer needs go, unless checked off or
--- edited. The user's own items are never touched. Returns the list's id.
+-- checked off; items the plan no longer needs go, unless checked off, edited
+-- or taken off (a taken-off item stays off if the plan needs it again). The
+-- user's own items are never touched. Returns the list's id.
 -- Runs as the user: row-level security applies.
 create function public.sync_shopping_list(p_week date, p_items jsonb) returns uuid
 language plpgsql as $$
@@ -65,6 +66,7 @@ begin
     and not i.is_manual
     and i.checked_at is null
     and not i.edited
+    and not i.removed
     and not exists (
       select 1 from jsonb_array_elements(p_items) as x
       where (x->>'ingredient_id')::uuid = i.ingredient_id
