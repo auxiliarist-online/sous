@@ -1,27 +1,52 @@
-ingredient,product_id,note
-beef brisket,,matcher picks corned beef brisket
-chili oil,,matcher picks tuna in olive oil
-coconut cream,,matcher picks sweetened cream of coconut
-crab meat,,matcher picks imitation crab
-figs,,only dried figs; we want fresh
-ginger,,matcher picks minced ginger in a jar; we want fresh root
-golden syrup,,matcher picks agave syrup
-gruyere,0004242105974,Boar's Head Gruyere; the matcher picked a gouda-gruyere blend
-jalapeno,,matcher picks hot honey jalapenos
-kimchi,,matcher picks kimchi noodle soup
-lobster,,matcher picks lobster mac and cheese
-macadamia nuts,,matcher picks a glazed nut mix
-meat,,too vague to match
-mexican crema,0007456200202,Kroger says Crema Mexicana
-mixed spice,,matcher picks pickling spice
-mushroom broth,,matcher picks mushroom chicken bone broth
-orange blossom water,,matcher picks sparkling water
-pecans,,matcher picks praline pecans
-pistachios,,matcher picks a nut mix
-rose water,,matcher picks sparkling water
-scallions,0000000004068,Kroger says green onions; sold by the bunch
-semolina,,matcher picks lasagne made with semolina
-sourdough bread,,matcher picks a focaccia
-turkey breast,,matcher picks ground turkey breast
-vanilla sugar,,matcher picks a canned latte
-wild rice,,matcher picks a rice mix
+ingredient,product_id,note,chain
+apricots,,matcher picks dried apricots at Kroger,kroger
+beef brisket,,matcher picks corned beef brisket,
+canned lentils,,matcher picks dried red lentils at Kroger,kroger
+canned pineapple,,matcher picks fresh-cut pineapple at Kroger,kroger
+canned white beans,,matcher picks white chili beans at Kroger,kroger
+chicken thighs,,matcher picks shawarma-seasoned thighs at Kroger,kroger
+chicken wings,,matcher picks frozen cooked buffalo wings at Kroger,kroger
+chili oil,,matcher picks tuna in olive oil,
+coconut cream,,matcher picks sweetened cream of coconut,
+coconut yogurt,,matcher picks a dairy yogurt at Kroger,kroger
+cornmeal,,matcher picks precooked arepa flour at Kroger,kroger
+crab meat,,matcher picks imitation crab,
+feta,,matcher picks tzatziki with feta at Kroger,kroger
+figs,,only dried figs; we want fresh,
+firm tofu,,matcher picks silken tofu at Kroger,kroger
+fish sauce,,matcher picks cocktail sauce at Kroger,kroger
+frozen green beans,,matcher picks garlic parmesan green beans at Kroger,kroger
+ginger,,matcher picks minced ginger in a jar; we want fresh root,
+golden syrup,,matcher picks agave syrup,
+gruyere,0004242105974,Boar's Head Gruyere; the matcher picked a gouda-gruyere blend,
+imitation crab,,matcher picks a crab dip at Kroger,kroger
+jalapeno,,matcher picks hot honey jalapenos,
+kimchi,,matcher picks kimchi noodle soup,
+kiwi,,matcher picks fresh-cut kiwi at Kroger,kroger
+lobster,,matcher picks lobster mac and cheese,
+macadamia nuts,,matcher picks a glazed nut mix,
+meat,,too vague to match,
+mexican crema,0007456200202,Kroger says Crema Mexicana,
+mixed spice,,matcher picks pickling spice,
+mushroom broth,,matcher picks mushroom chicken bone broth,
+orange blossom water,,matcher picks sparkling water,
+pecans,,matcher picks praline pecans,
+pistachios,,matcher picks a nut mix,
+pork,,matcher picks marinated Korean BBQ pork at Kroger,kroger
+potatoes,,matcher picks pre-sliced potatoes at Kroger,kroger
+provolone,,matcher picks a salami and provolone pack at Kroger,kroger
+ramen noodles,,matcher picks beef-flavored ramen at Kroger,kroger
+red wine,,matcher picks a $46 cabernet at Kroger,kroger
+rose water,,matcher picks sparkling water,
+scallions,0000000004068,Kroger says green onions; sold by the bunch,
+semolina,,matcher picks lasagne made with semolina,
+sourdough bread,,matcher picks a focaccia,
+strawberries,,matcher picks fresh-cut strawberries at Kroger,kroger
+turkey breast,,matcher picks ground turkey breast,
+vanilla extract,,matcher picks imitation vanilla at Kroger,kroger
+vanilla sugar,,matcher picks a canned latte,
+water,,matcher picks bottled water; water is free at Kroger,kroger
+white chocolate chips,,matcher picks a $9 specialty brand at Kroger,kroger
+white wine,,matcher picks a $25 sauvignon blanc at Kroger,kroger
+wild rice,,matcher picks a rice mix,
+wine,,matcher picks a strawberry moscato at Kroger,kroger
