@@ -36,19 +36,30 @@ export interface ListApi {
 
 /** A list with any changes still waiting to be sent applied, as the user
  *  last saw it. */
-function withPending(state: ListState): ListState {
-  return pendingOps().reduce(applyOp, state)
+function withPending(user: string, state: ListState): ListState {
+  return pendingOps(user).reduce(applyOp, state)
 }
 
 /** The week's shopping list (TYL-18): check things off in the store, add
  *  anything, edit or take off any item. Works offline: changes are kept on
  *  the phone and sent when there's a connection. */
-export function ListPage({ api, week }: { api: ListApi; week: string }) {
-  const [list, setList] = useState<ListState | null>(() => cachedList(week))
+export function ListPage({
+  api,
+  week,
+  user,
+}: {
+  api: ListApi
+  week: string
+  /** Whose list: what's kept on the phone is kept per account. */
+  user: string
+}) {
+  const [list, setList] = useState<ListState | null>(() =>
+    cachedList(user, week),
+  )
   const [cost, setCost] = useState<PlanCost | null>(null)
   const [places, setPlaces] = useState<Place[]>([])
   const [offline, setOffline] = useState(false)
-  const [pending, setPending] = useState(() => pendingOps().length)
+  const [pending, setPending] = useState(() => pendingOps(user).length)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<string | null>(null)
   const [showRemoved, setShowRemoved] = useState(false)
@@ -64,18 +75,18 @@ export function ListPage({ api, week }: { api: ListApi; week: string }) {
         .then(async (c) => {
           setCost(c)
           if (c) await api.syncList(week, plannedItems(c))
-          setPending(await flushOps(api.sendListOp))
+          setPending(await flushOps(user, api.sendListOp))
           const fresh = await api.loadList(week)
           if (fresh) {
-            const shown = withPending(fresh)
+            const shown = withPending(user, fresh)
             setList(shown)
-            cacheList(shown)
+            cacheList(user, shown)
           }
           setOffline(false)
         })
         .catch(() => setOffline(true))
         .finally(() => setLoading(false)),
-    [api, week],
+    [api, week, user],
   )
 
   useEffect(() => {
@@ -98,12 +109,12 @@ export function ListPage({ api, week }: { api: ListApi; week: string }) {
     setList((s) => {
       if (!s) return s
       const next = applyOp(s, op)
-      cacheList(next)
+      cacheList(user, next)
       return next
     })
-    queueOp(op)
-    setPending(pendingOps().length)
-    flushOps(api.sendListOp).then(
+    queueOp(user, op)
+    setPending(pendingOps(user).length)
+    flushOps(user, api.sendListOp).then(
       (left) => {
         setPending(left)
         if (left) setOffline(true)

@@ -213,8 +213,10 @@ export function applyOp(state: ListState, op: ListOp): ListState {
   }
 }
 
-const listKey = (week: string) => `sous:list:${week}`
-const QUEUE = 'sous:list-queue'
+// Kept per account, so on a shared phone nobody sees (or sends) another's.
+const PREFIX = 'sous:list'
+const listKey = (user: string, week: string) => `${PREFIX}:${user}:${week}`
+const queueKey = (user: string) => `${PREFIX}-queue:${user}`
 // A change that keeps failing while online is dropped after this many tries,
 // so one bad change can't hold up the rest for good.
 const MAX_TRIES = 5
@@ -246,12 +248,24 @@ function write(key: string, value: unknown): void {
 }
 
 /** The list as last seen on this phone. */
-export function cachedList(week: string): ListState | null {
-  return read<ListState>(listKey(week))
+export function cachedList(user: string, week: string): ListState | null {
+  return read<ListState>(listKey(user, week))
 }
 
-export function cacheList(state: ListState): void {
-  write(listKey(state.week), state)
+export function cacheList(user: string, state: ListState): void {
+  write(listKey(user, state.week), state)
+}
+
+/** Forget every list kept on this phone, and unsent changes (on sign-out). */
+export function clearListData(): void {
+  try {
+    const s = store()
+    if (!s) return
+    const keys = Array.from({ length: s.length }, (_, i) => s.key(i))
+    for (const k of keys) if (k?.startsWith(PREFIX)) s.removeItem(k)
+  } catch {
+    // Blocked storage: nothing was kept.
+  }
 }
 
 interface Queued {
@@ -260,21 +274,24 @@ interface Queued {
 }
 
 /** Changes not yet sent. */
-export function pendingOps(): ListOp[] {
-  return (read<Queued[]>(QUEUE) ?? []).map((q) => q.op)
+export function pendingOps(user: string): ListOp[] {
+  return (read<Queued[]>(queueKey(user)) ?? []).map((q) => q.op)
 }
 
 /** Keep a change to send later. */
-export function queueOp(op: ListOp): void {
-  write(QUEUE, [...(read<Queued[]>(QUEUE) ?? []), { op, tries: 0 }])
+export function queueOp(user: string, op: ListOp): void {
+  const key = queueKey(user)
+  write(key, [...(read<Queued[]>(key) ?? []), { op, tries: 0 }])
 }
 
 /** Send queued changes in order, stopping at the first that fails (it's kept
  *  for next time). Returns how many are left. */
 export async function flushOps(
+  user: string,
   send: (op: ListOp) => Promise<void>,
 ): Promise<number> {
-  let queue = read<Queued[]>(QUEUE) ?? []
+  const key = queueKey(user)
+  let queue = read<Queued[]>(key) ?? []
   while (queue.length) {
     const [first, ...rest] = queue
     try {
@@ -285,12 +302,12 @@ export async function flushOps(
       if (tries < MAX_TRIES || !navigator.onLine) {
         // Offline, or not failing for long: keep it, and try again later.
         queue = [{ ...first, tries }, ...rest]
-        write(QUEUE, queue)
+        write(key, queue)
         return queue.length
       }
       queue = rest // it keeps failing with a connection: give up on it
     }
-    write(QUEUE, queue)
+    write(key, queue)
   }
   return 0
 }

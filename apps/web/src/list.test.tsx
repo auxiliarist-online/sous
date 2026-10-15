@@ -6,6 +6,7 @@ import { Home, type HomeApi } from './Home.tsx'
 import {
   applyOp,
   cacheList,
+  clearListData,
   cachedList,
   flushOps,
   listText,
@@ -163,40 +164,54 @@ describe('list changes', () => {
 
 describe('offline queue', () => {
   it('keeps changes on the phone and sends them in order later', async () => {
-    cacheList(state(item('eggs')))
-    expect(cachedList(WEEK)?.items[0].name).toBe('eggs')
-    queueOp({ kind: 'check', id: 'eggs', checked: true })
-    queueOp({ kind: 'edit', id: 'eggs', patch: { amount: '18' } })
+    cacheList('u', state(item('eggs')))
+    expect(cachedList('u', WEEK)?.items[0].name).toBe('eggs')
+    queueOp('u', { kind: 'check', id: 'eggs', checked: true })
+    queueOp('u', { kind: 'edit', id: 'eggs', patch: { amount: '18' } })
     const offline = vi.fn(async () => {
       throw new Error('Failed to fetch')
     })
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
-    expect(await flushOps(offline)).toBe(2)
-    expect(pendingOps()).toHaveLength(2)
+    expect(await flushOps('u', offline)).toBe(2)
+    expect(pendingOps('u')).toHaveLength(2)
 
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
     const sent: string[] = []
     expect(
-      await flushOps(async (op) => {
+      await flushOps('u', async (op) => {
         sent.push(op.kind)
       }),
     ).toBe(0)
     expect(sent).toEqual(['check', 'edit'])
-    expect(pendingOps()).toEqual([])
+    expect(pendingOps('u')).toEqual([])
   })
 
   it('gives up on a change that keeps failing with a connection', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
-    queueOp({ kind: 'check', id: 'bad', checked: true })
-    queueOp({ kind: 'check', id: 'good', checked: true })
+    queueOp('u', { kind: 'check', id: 'bad', checked: true })
+    queueOp('u', { kind: 'check', id: 'good', checked: true })
     const sent: string[] = []
     const send = async (op: { kind: string; id?: string }) => {
       if (op.id === 'bad') throw new Error('nope')
       sent.push(op.id!)
     }
-    for (let i = 0; i < 4; i++) expect(await flushOps(send)).toBe(2)
-    expect(await flushOps(send)).toBe(0)
+    for (let i = 0; i < 4; i++) expect(await flushOps('u', send)).toBe(2)
+    expect(await flushOps('u', send)).toBe(0)
     expect(sent).toEqual(['good'])
+  })
+})
+
+describe('per account', () => {
+  it('keeps each account’s list and changes apart, and forgets them on sign-out', () => {
+    cacheList('a', state(item('eggs')))
+    queueOp('a', { kind: 'check', id: 'eggs', checked: true })
+    expect(cachedList('b', WEEK)).toBeNull()
+    expect(pendingOps('b')).toEqual([])
+    localStorage.setItem('other', 'kept')
+    clearListData()
+    expect(cachedList('a', WEEK)).toBeNull()
+    expect(pendingOps('a')).toEqual([])
+    expect(localStorage.getItem('other')).toBe('kept')
   })
 })
 
@@ -292,7 +307,7 @@ function listApi(
 describe('ListPage', () => {
   it('fills the list from the plan and checks things off', async () => {
     const api = listApi()
-    render(<ListPage api={api} week={WEEK} />)
+    render(<ListPage api={api} week={WEEK} user="u" />)
     const dairy = await screen.findByRole('list', { name: 'Dairy & eggs' })
     expect(within(dairy).getByText('eggs')).toBeInTheDocument()
     expect(within(dairy).getByText('$3.99')).toBeInTheDocument()
@@ -313,13 +328,14 @@ describe('ListPage', () => {
         checked: true,
       }),
     )
-    expect(cachedList(WEEK)?.items.find((i) => i.id === 'eggs')?.checked).toBe(
-      true,
-    )
+    expect(
+      cachedList('u', WEEK)?.items.find((i) => i.id === 'eggs')?.checked,
+    ).toBe(true)
   })
 
   it('works from the phone’s copy offline, and sends changes when back', async () => {
     cacheList(
+      'u',
       state(
         item('eggs', { aisle: 'dairy_eggs' }),
         item('rice', { position: 1 }),
@@ -330,10 +346,12 @@ describe('ListPage', () => {
     }
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     const api = listApi({ loadList: vi.fn(down), sendListOp: vi.fn(down) })
-    render(<ListPage api={api} week={WEEK} />)
+    render(<ListPage api={api} week={WEEK} user="u" />)
     expect(await screen.findByText(/You're offline/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('checkbox', { name: /rice/ }))
-    expect(pendingOps()).toEqual([{ kind: 'check', id: 'rice', checked: true }])
+    expect(pendingOps('u')).toEqual([
+      { kind: 'check', id: 'rice', checked: true },
+    ])
 
     // Back online: the queued check-off reaches the server, then the list
     // reloads from it.
@@ -347,7 +365,7 @@ describe('ListPage', () => {
     })
     vi.mocked(api.loadList).mockImplementation(async () => server)
     window.dispatchEvent(new Event('online'))
-    await waitFor(() => expect(pendingOps()).toEqual([]))
+    await waitFor(() => expect(pendingOps('u')).toEqual([]))
     expect(api.sendListOp).toHaveBeenLastCalledWith({
       kind: 'check',
       id: 'rice',
@@ -362,7 +380,7 @@ describe('ListPage', () => {
       '00000000-0000-4000-8000-000000000001',
     )
     const api = listApi()
-    render(<ListPage api={api} week={WEEK} />)
+    render(<ListPage api={api} week={WEEK} user="u" />)
     await screen.findByRole('list', { name: 'Dairy & eggs' })
 
     await userEvent.type(screen.getByLabelText('Add an item'), 'paper towels')
@@ -409,7 +427,7 @@ describe('ListPage', () => {
 
   it('adds a place of the user’s own to buy something at', async () => {
     const api = listApi()
-    render(<ListPage api={api} week={WEEK} />)
+    render(<ListPage api={api} week={WEEK} user="u" />)
     await screen.findByRole('list', { name: 'Dairy & eggs' })
     await userEvent.click(screen.getByRole('button', { name: 'Edit eggs' }))
     await userEvent.type(
@@ -428,7 +446,7 @@ describe('ListPage', () => {
       value: { writeText },
       configurable: true,
     })
-    render(<ListPage api={api} week={WEEK} />)
+    render(<ListPage api={api} week={WEEK} user="u" />)
     await screen.findByRole('list', { name: 'Dairy & eggs' })
     await userEvent.click(screen.getByRole('button', { name: 'Share list' }))
     expect(writeText).toHaveBeenCalledWith(
@@ -439,7 +457,7 @@ describe('ListPage', () => {
 
   it('says when there’s nothing yet', async () => {
     const api = listApi({ loadList: vi.fn(async () => null) })
-    render(<ListPage api={api} week={WEEK} />)
+    render(<ListPage api={api} week={WEEK} user="u" />)
     expect(await screen.findByText(/Nothing to buy yet/)).toBeInTheDocument()
   })
 })

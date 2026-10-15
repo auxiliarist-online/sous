@@ -238,6 +238,9 @@ export function Library({
 
       <section className="card">
         <h2>Your recipes</h2>
+        <Link to="/browse" className="small">
+          Find more recipes
+        </Link>
         {listError && (
           <p className="error" role="alert">
             We couldn't load your recipes.

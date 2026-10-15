@@ -39,7 +39,14 @@ import {
   updateEntry,
   weekOf,
 } from './plan.ts'
-import { addPlace, loadList, places, sendOp, syncList } from './list.ts'
+import {
+  addPlace,
+  clearListData,
+  loadList,
+  places,
+  sendOp,
+  syncList,
+} from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
 import { Privacy } from './Privacy.tsx'
@@ -286,7 +293,9 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
           )}
           {at.page === 'browse' && <Browse api={api} />}
           {at.page === 'plan' && <PlanPage key={week} api={api} week={week} />}
-          {at.page === 'list' && <ListPage key={week} api={api} week={week} />}
+          {at.page === 'list' && (
+            <ListPage key={week} api={api} week={week} user={session.user.id} />
+          )}
           {at.page === 'pantry' && <PantryPage api={api} />}
           {at.page === 'settings' && (
             <Settings
@@ -296,8 +305,12 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
                 clearBrowseCache() // Find's ranking depends on preferences
                 setPrefs(p)
               }}
-              onSignOut={() => void auth.signOut()}
+              onSignOut={() => {
+                clearListData() // someone else may sign in on this phone
+                void auth.signOut()
+              }}
               onDeleted={() => {
+                clearListData()
                 void auth.signOut()
                 navigate('/', true)
               }}
