@@ -124,20 +124,23 @@ class Kroger:
         return {"Authorization": f"Bearer {self._token}"}
 
     def _products(self, params: dict[str, Any]) -> list[Product]:
-        for wait in RETRY_WAITS:
-            resp = self.client.get(f"{BASE}/products", params=params, headers=self._auth())
-            if resp.status_code != 429 and resp.status_code < 500:
-                break
-            time.sleep(wait)  # Kroger has the odd brief outage
+        resp = self._get("products", params)
         if resp.status_code == 404:
             return []  # some searches that find nothing answer 404
         resp.raise_for_status()
         return [parse_product(p) for p in resp.json().get("data") or []]
 
     def _get(self, path: str, params: dict[str, Any]) -> httpx.Response:
-        """GET from the API, retrying the odd 429 or 5xx."""
-        for wait in RETRY_WAITS:
-            resp = self.client.get(f"{BASE}/{path}", params=params, headers=self._auth())
+        """GET from the API, retrying Kroger's odd brief outage: a 429, a 5xx,
+        or a dropped connection. The last try's answer (or error) stands."""
+        for n, wait in enumerate(RETRY_WAITS, 1):
+            try:
+                resp = self.client.get(f"{BASE}/{path}", params=params, headers=self._auth())
+            except httpx.TransportError:
+                if n == len(RETRY_WAITS):
+                    raise
+                time.sleep(wait)
+                continue
             if resp.status_code != 429 and resp.status_code < 500:
                 break
             time.sleep(wait)

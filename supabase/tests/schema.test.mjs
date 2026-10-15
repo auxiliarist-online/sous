@@ -2878,3 +2878,12 @@ describe('your store and your account (TYL-19, TYL-74)', () => {
     )
   })
 })
+
+describe('sweet corn by the cup', () => {
+  it('knows what a cup of corn kernels weighs', async () => {
+    const { rows } = await db.query(
+      `select grams_per_cup::float as g from ingredients where name = 'sweet corn kernels'`,
+    )
+    assert.deepEqual(rows, [{ g: 145 }])
+  })
+})
