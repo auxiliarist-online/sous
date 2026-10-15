@@ -240,6 +240,28 @@ class TestClient:
         # 03:59 UTC on the 14th is still the 13th in Asheville.
         assert p.promo_ends == date(2026, 10, 13)
 
+    def test_retries_a_dropped_connection(self) -> None:
+        # Matching at a Kroger once died on "Server disconnected" (TYL-19).
+        tries = []
+
+        def flaky(r: httpx.Request) -> httpx.Response:
+            tries.append(r)
+            if len(tries) < 3:
+                raise httpx.RemoteProtocolError("Server disconnected")
+            return httpx.Response(200, json={"data": [KROGER_EGGS]})
+
+        k, _ = self.client(flaky)
+        assert [p.product_id for p in k.search("eggs", "09700348")] == [KROGER_EGGS["productId"]]
+        assert len(tries) == 3
+
+    def test_gives_up_after_the_last_dropped_connection(self) -> None:
+        def down(r: httpx.Request) -> httpx.Response:
+            raise httpx.RemoteProtocolError("Server disconnected")
+
+        k, _ = self.client(down)
+        with pytest.raises(httpx.RemoteProtocolError):
+            k.search("eggs", "09700348")
+
     def test_gets_one_token_and_searches_the_store(self) -> None:
         k, seen = self.client(lambda r: httpx.Response(200, json={"data": [KROGER_EGGS]}))
         k.search("eggs", "09700348")

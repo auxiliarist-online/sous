@@ -12,7 +12,8 @@ in the database yet is looked up with Kroger and added.
 
 One product search per ingredient (Products allows 10,000 calls a day). The
 rules are in app/pricing/kroger_match.py; data/kroger_overrides.csv fixes the
-picks they get wrong (a blank product_id means "no match: price from estimates").
+picks they get wrong (a blank product_id means "no match: price from estimates";
+a chain column limits a row to that chain).
 Ingredients bought as another (egg yolks -> eggs) are skipped.
 
 Only product ids are saved, never Kroger's names, sizes or prices (their terms,
@@ -43,9 +44,15 @@ LOCATION = "09700348"  # Harris Teeter, Village at Chestnut Street, Asheville
 OVERRIDES = API / "data" / "kroger_overrides.csv"
 
 
-def overrides() -> dict[str, str]:
-    rows = csv.DictReader(OVERRIDES.open(encoding="utf-8"))
-    return {r["ingredient"].strip(): r["product_id"].strip() for r in rows}
+def overrides(chain: str) -> dict[str, str]:
+    """ingredient -> product id ("" for none) at this chain: rows with no
+    chain hold everywhere, and a row for this chain wins over them."""
+    rows = list(csv.DictReader(OVERRIDES.open(encoding="utf-8")))
+    out = {r["ingredient"].strip(): r["product_id"].strip() for r in rows if not r["chain"].strip()}
+    for r in rows:
+        if r["chain"].strip() == chain:
+            out[r["ingredient"].strip()] = r["product_id"].strip()
+    return out
 
 
 def package(i: dict[str, Any]) -> tuple[float, str] | None:
@@ -124,16 +131,17 @@ def main() -> None:
         },
     ).json()
     names = [i["name"] for i in ingredients]
-    # The overrides hold at every chain: the blank ones stop the matcher's
-    # known mistakes, and the products are national (a store that doesn't
-    # carry one prices it from estimates).
-    fixed = overrides()
+    # Overrides with no chain hold everywhere: the blank ones stop the
+    # matcher's known mistakes, and the products are national (a store that
+    # doesn't carry one prices it from estimates). A chain's own rows win.
+    fixed = overrides(chain)
     unknown = set(fixed) - set(names)
     if unknown:
         sys.exit(f"kroger_overrides.csv names unknown ingredients: {sorted(unknown)}")
 
     picks: list[dict[str, str]] = []
     missed: list[str] = []  # ingredient ids
+    blanked: list[str] = []  # ingredient ids an override says not to match
     with httpx.Client(timeout=30.0) as client:
         kroger = Kroger(client)
         for i in ingredients:
@@ -146,6 +154,9 @@ def main() -> None:
                         {"ingredient_id": i["id"], "product_id": fixed[name], "source": "manual"}
                     )
                     print(f"{name}: {fixed[name]} (override)")
+                else:
+                    blanked.append(i["id"])
+                    print(f"{name}: none (override)")
                 continue
             found = kroger.search(search_term(name), location)
             time.sleep(0.2)
@@ -180,6 +191,20 @@ def main() -> None:
     )
     resp.raise_for_status()
     print(f"saved {len(rows)} matches")
+    if blanked:
+        # An override says the chain's match is wrong: drop it at every store
+        # of the chain (live prices read any of them), whoever set it.
+        chain_stores = db.get(
+            "/stores",
+            params={"select": "id", "chain_slug": f"eq.{chain}", "created_by": "is.null"},
+        ).json()
+        db.delete(
+            "/kroger_product_matches",
+            params={
+                "store_id": f"in.({','.join(s['id'] for s in chain_stores)})",
+                "ingredient_id": f"in.({','.join(blanked)})",
+            },
+        ).raise_for_status()
     if missed and not args.only:
         # A product that's gone and has no replacement: price from estimates.
         db.delete(
