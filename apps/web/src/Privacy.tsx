@@ -54,6 +54,10 @@ export function Privacy({ signedIn }: { signedIn: boolean }) {
           are.
         </li>
         <li>
+          <strong>Google Cloud Vision</strong> reads the text of cookbook pages
+          you photograph to add a recipe. Sous doesn't keep the photos.
+        </li>
+        <li>
           <strong>Recipe websites</strong> are visited by Sous's server when you
           import a link, as "SousBot".
         </li>

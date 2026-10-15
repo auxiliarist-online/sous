@@ -1,15 +1,19 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { navigate } from './navigation.ts'
 import { Link } from './router.tsx'
+import { PhotoReader } from './PhotoReader.tsx'
 import {
   manualInput,
   type ManualRecipeInput,
+  type PhotoDraft,
   type RecipeDetail,
 } from './sous.ts'
 
 export interface RecipeFormApi {
   recipe(id: string): Promise<RecipeDetail | null>
   saveManual(input: ManualRecipeInput, recipeId?: string): Promise<string>
+  /** Read photos of a cookbook's pages into a draft (TYL-52). */
+  readPhotos(images: string[]): Promise<PhotoDraft>
 }
 
 const EMPTY: ManualRecipeInput = {
@@ -40,6 +44,8 @@ export function RecipeForm({
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // After reading photos: what to check, and what was left out.
+  const [review, setReview] = useState<PhotoDraft | null>(null)
 
   useEffect(() => {
     if (!recipeId) return
@@ -70,6 +76,19 @@ export function RecipeForm({
   const set = (patch: Partial<ManualRecipeInput>) =>
     setInput({ ...input, ...patch })
 
+  // Fill the form from photos; anything already typed is replaced.
+  function fromPhotos(d: PhotoDraft) {
+    setInput({
+      title: d.title,
+      ingredients: d.ingredients.join('\n'),
+      instructions: d.instructions.join('\n'),
+      servings: d.servings,
+      totalMinutes: d.totalMinutes,
+      sourceNote: input?.sourceNote ?? '',
+    })
+    setReview(d)
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!input?.title.trim()) return
@@ -91,6 +110,36 @@ export function RecipeForm({
       </Link>
       <h2>{recipeId ? 'Edit your recipe' : 'Type in a recipe'}</h2>
       <p className="muted small">Only you can see recipes you type in.</p>
+
+      {!recipeId && <PhotoReader read={api.readPhotos} onRead={fromPhotos} />}
+      {review && (
+        <section className="photo-review" role="status">
+          <p className="small">
+            Read from your photos. Check it over before saving, and add the
+            book's name under “Where it's from”.
+          </p>
+          {review.unsure.length > 0 && (
+            <>
+              <p className="small">Worth a check:</p>
+              <ul className="small" aria-label="Worth a check">
+                {review.unsure.map((u) => (
+                  <li key={u}>{u}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {review.skipped.length > 0 && (
+            <details className="small">
+              <summary>Left out ({review.skipped.length})</summary>
+              <ul aria-label="Left out">
+                {review.skipped.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
+      )}
 
       <label htmlFor="title">Title</label>
       <input

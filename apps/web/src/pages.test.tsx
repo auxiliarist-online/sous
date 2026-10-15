@@ -267,7 +267,11 @@ describe('RecipePage', () => {
 
 describe('RecipeForm', () => {
   it('saves a new recipe and opens it', async () => {
-    const api = { recipe: vi.fn(), saveManual: vi.fn(async () => SOUP.id) }
+    const api = {
+      recipe: vi.fn(),
+      saveManual: vi.fn(async () => SOUP.id),
+      readPhotos: vi.fn(),
+    }
     render(<RecipeForm api={api} />)
     const save = screen.getByRole('button', { name: 'Save recipe' })
     expect(save).toBeDisabled()
@@ -294,6 +298,7 @@ describe('RecipeForm', () => {
   it('edits the user’s own recipe, starting from what they typed', async () => {
     const api = {
       recipe: vi.fn(async () => SOUP),
+      readPhotos: vi.fn(),
       saveManual: vi.fn(
         async (_input: ManualRecipeInput, _id?: string) => SOUP.id,
       ),
@@ -311,7 +316,11 @@ describe('RecipeForm', () => {
   })
 
   it('refuses to edit an imported recipe', async () => {
-    const api = { recipe: vi.fn(async () => BURRITOS), saveManual: vi.fn() }
+    const api = {
+      recipe: vi.fn(async () => BURRITOS),
+      saveManual: vi.fn(),
+      readPhotos: vi.fn(),
+    }
     render(<RecipeForm api={api} recipeId={BURRITOS.id} />)
     expect(await screen.findByRole('alert')).toHaveTextContent(
       "can't be edited",
@@ -321,6 +330,7 @@ describe('RecipeForm', () => {
   it('shows why a save failed', async () => {
     const api = {
       recipe: vi.fn(),
+      readPhotos: vi.fn(),
       saveManual: vi.fn(async () => {
         throw new Error("We couldn't save the recipe. Try again.")
       }),

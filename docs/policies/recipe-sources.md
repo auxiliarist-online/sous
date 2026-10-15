@@ -90,6 +90,7 @@ A user pasting a URL (TYL-8) follows the same storage rules as the crawler. The 
 - Otherwise it's saved as `private` to that user. It only becomes public after its source has been reviewed and approved.
 - Imports from an opted-out site still work for the user's own private use, as a saved link: title, URL and ingredients, but no image. Imported recipes are never shown publicly.
 - Recipes a user types in by hand are their own content; we store everything they enter, including instructions, and keep it private.
+- **Recipes read from photos of the user's own cookbook (TYL-52)** are treated like hand-typed ones: the user checks the text in the manual-entry form before anything is saved, everything is stored, and it stays private to them, never in the shared catalog or shown to anyone else. The book's title (and page) goes in the source note. The photos are sent to Google Cloud Vision to read the text and aren't kept by Sous; Google's Cloud terms don't train on customer data. Pages read are counted to stay within Vision's free tier.
 
 ### Import from the user's browser
 
@@ -131,6 +132,7 @@ This policy is a careful starting point, not legal advice. Before Sous takes pay
 4. **DMCA safe harbor:** register a designated agent with the US Copyright Office and publish the takedown process.
 5. **Affiliate or partnership revenue** tied to recipe traffic (for example Instacart, TYL-31), which can change how a court sees our use of third-party recipes.
 6. **Terms of service and privacy policy** for Sous itself, covering user-imported recipes.
+7. **Recipes read from photos of cookbooks** (TYL-52): storing a user's private copy of a page from a book they own, and whether any sharing feature (households, TYL-73) changes that.
 
 ## Effects on the backlog
 

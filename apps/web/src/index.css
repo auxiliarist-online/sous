@@ -381,7 +381,8 @@ button.chip[aria-pressed='true'] {
 }
 
 a.button.secondary,
-button.secondary {
+button.secondary,
+label.button.secondary {
   background: none;
   color: var(--color-accent);
   border: 1px solid var(--color-accent);
@@ -921,4 +922,73 @@ button.danger:not(.link) {
   .list-check {
     min-height: auto;
   }
+}
+
+/* Reading a recipe from cookbook photos (TYL-52). */
+.photo-reader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--color-secondary) 40%, transparent);
+  border-radius: 12px;
+}
+
+.photo-reader h3 {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: 1rem;
+}
+
+.photo-pages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.photo-pages li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  width: 6rem;
+}
+
+.photo-pages img {
+  width: 6rem;
+  height: 8rem;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.photo-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+label.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 1rem;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0;
+}
+
+.photo-review {
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.photo-review ul {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
 }

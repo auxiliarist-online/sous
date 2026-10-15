@@ -217,6 +217,69 @@ export async function saveManual(
   return ((await resp.json()) as { recipe_id: string }).recipe_id
 }
 
+/** A recipe read from photos of cookbook pages (TYL-52), for the form. */
+export interface PhotoDraft {
+  title: string
+  servings: number | null
+  /** Total, or prep plus cook when the page gives those. */
+  totalMinutes: number | null
+  /** One per line; a line ending in ":" starts a section. */
+  ingredients: string[]
+  instructions: string[]
+  /** Lines read with low confidence, or hard to place: worth a check. */
+  unsure: string[]
+  /** Text left out: the author's introduction, notes. */
+  skipped: string[]
+}
+
+/** Read photos of one recipe's pages (base64 JPEG, in order) into a draft.
+ *  Nothing is saved, and the photos aren't kept. */
+export async function readPhotos(
+  session: Session,
+  images: string[],
+  send: typeof apiFetch = apiFetch,
+): Promise<PhotoDraft> {
+  const resp = await send(session, '/recipes/read-photos', {
+    method: 'POST',
+    body: JSON.stringify({ images }),
+  })
+  if (!resp.ok) {
+    const detail = (
+      (await resp.json().catch(() => null)) as { detail?: unknown } | null
+    )?.detail
+    throw new Error(
+      typeof detail === 'string' && resp.status === 429
+        ? detail
+        : resp.status === 401
+          ? 'Your session has expired. Sign in again.'
+          : resp.status === 413
+            ? 'A photo is too large. Try again with fewer or smaller pages.'
+            : "We couldn't read the photos. Try again, or type the recipe in.",
+    )
+  }
+  const d = (await resp.json()) as {
+    title: string
+    servings: number | null
+    prep_minutes: number | null
+    cook_minutes: number | null
+    total_minutes: number | null
+    ingredients: string[]
+    instructions: string[]
+    unsure: string[]
+    skipped: string[]
+  }
+  const parts = (d.prep_minutes ?? 0) + (d.cook_minutes ?? 0)
+  return {
+    title: d.title,
+    servings: d.servings,
+    totalMinutes: d.total_minutes ?? (parts > 0 ? parts : null),
+    ingredients: d.ingredients,
+    instructions: d.instructions,
+    unsure: d.unsure,
+    skipped: d.skipped,
+  }
+}
+
 // ---------- preferences ----------
 
 export interface Option {
