@@ -251,6 +251,7 @@ class PhotoPages(BaseModel):
 
 
 def _photo(data: str) -> bytes:
+    """One page's photo from base64, checked to be a small JPEG, PNG or WebP."""
     try:
         raw = base64.b64decode(data, validate=True)
     except (binascii.Error, ValueError) as exc:

@@ -31,6 +31,8 @@ class PhotoError(Exception):
 
 @dataclass
 class Line:
+    """One line of text on a page, as Vision read it."""
+
     text: str
     # Average word height on the page, in pixels: bigger text is a title.
     height: float = 0.0
@@ -52,6 +54,8 @@ class Block:
 
 @dataclass
 class Draft:
+    """A recipe read from photos, for the manual-entry form to show."""
+
     title: str = ""
     servings: float | None = None
     prep_minutes: int | None = None
@@ -123,6 +127,7 @@ async def read_pages(images: list[bytes]) -> list[list[Block]]:
 
 
 def _box(poly: dict[str, Any]) -> tuple[float, float, float, float]:
+    """A Vision bounding polygon as (left, top, right, bottom)."""
     xs = [v.get("x", 0) for v in poly.get("vertices") or []] or [0]
     ys = [v.get("y", 0) for v in poly.get("vertices") or []] or [0]
     return min(xs), min(ys), max(xs), max(ys)
@@ -166,6 +171,7 @@ def blocks_of(annotation: dict[str, Any]) -> list[Block]:
 
 
 def _line(text: str, heights: list[float], confs: list[float]) -> Line:
+    """A line from its text and its words' heights and confidences."""
     return Line(
         text=re.sub(r"\s+", " ", text).strip(),
         height=sum(heights) / len(heights) if heights else 0.0,
@@ -187,6 +193,7 @@ def reading_order(blocks: list[Block]) -> list[Block]:
     columns: tuple[list[Block], list[Block]] = ([], [])
 
     def flush() -> None:
+        """Put out the columns gathered so far: left, then right."""
         for col in columns:
             out.extend(sorted(col, key=lambda b: b.top))
             col.clear()
@@ -224,11 +231,13 @@ SECTION = re.compile(r"^(?:for the|for)\b.{1,40}$", re.I)
 
 
 def _minutes(m: re.Match[str]) -> int:
+    """Minutes from a time match: "1 hour" is 60."""
     n = int(m.group(1))
     return n * 60 if m.group(2).lower().startswith("h") else n
 
 
 def _is_heading(text: str) -> bool:
+    """A short line that names a part: "For the sauce:", "TO SERVE"."""
     words = text.split()
     if not words or len(words) > 6:
         return False
@@ -236,7 +245,8 @@ def _is_heading(text: str) -> bool:
 
 
 def _ingredientish(text: str) -> bool:
-    # "3. Add the lentils" is a step, though it starts with a number.
+    """A short line that starts with an amount: "2 tbsp olive oil". ("3. Add
+    the lentils" is a step, though it starts with a number.)"""
     return (
         bool(QUANTITY.match(text))
         and not STEP_NUMBER.match(text)
@@ -246,6 +256,7 @@ def _ingredientish(text: str) -> bool:
 
 
 def _stepish(lines: list[Line]) -> bool:
+    """A paragraph that reads as a step: numbered, or a sentence or longer."""
     text = " ".join(ln.text for ln in lines)
     return (
         bool(STEP_NUMBER.match(text))
@@ -332,6 +343,8 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
 
 
 def _add_ingredient(draft: Draft, line: Line, unsure: bool = False) -> None:
+    """Add a line to the ingredients (a heading as a section), noting it to
+    check when it was read poorly or placed by guess."""
     text = re.sub(r"^\s*[-–•*▢☐□]\s*", "", line.text).strip()
     if not text:
         return
