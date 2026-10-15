@@ -141,6 +141,7 @@ def main() -> None:
 
     picks: list[dict[str, str]] = []
     missed: list[str] = []  # ingredient ids
+    blanked: list[str] = []  # ingredient ids an override says not to match
     with httpx.Client(timeout=30.0) as client:
         kroger = Kroger(client)
         for i in ingredients:
@@ -153,6 +154,9 @@ def main() -> None:
                         {"ingredient_id": i["id"], "product_id": fixed[name], "source": "manual"}
                     )
                     print(f"{name}: {fixed[name]} (override)")
+                else:
+                    blanked.append(i["id"])
+                    print(f"{name}: none (override)")
                 continue
             found = kroger.search(search_term(name), location)
             time.sleep(0.2)
@@ -187,6 +191,15 @@ def main() -> None:
     )
     resp.raise_for_status()
     print(f"saved {len(rows)} matches")
+    if blanked:
+        # An override says this store's match is wrong: drop it, whoever set it.
+        db.delete(
+            "/kroger_product_matches",
+            params={
+                "store_id": f"eq.{store_id}",
+                "ingredient_id": f"in.({','.join(blanked)})",
+            },
+        ).raise_for_status()
     if missed and not args.only:
         # A product that's gone and has no replacement: price from estimates.
         db.delete(

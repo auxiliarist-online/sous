@@ -124,6 +124,7 @@ class Kroger:
         return {"Authorization": f"Bearer {self._token}"}
 
     def _products(self, params: dict[str, Any]) -> list[Product]:
+        """Products from a /products query; none when Kroger answers 404."""
         resp = self._get("products", params)
         if resp.status_code == 404:
             return []  # some searches that find nothing answer 404

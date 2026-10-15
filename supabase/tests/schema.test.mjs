@@ -2885,5 +2885,12 @@ describe('sweet corn by the cup', () => {
       `select grams_per_cup::float as g from ingredients where name = 'sweet corn kernels'`,
     )
     assert.deepEqual(rows, [{ g: 145 }])
+    const [{ grams }] = (
+      await db.query(
+        `select public.line_grams(i.id, 2, 'cup')::float as grams
+         from ingredients i where i.name = 'sweet corn kernels'`,
+      )
+    ).rows
+    assert.equal(grams, 290)
   })
 })
