@@ -21,3 +21,4 @@ def test_sends_no_personal_data_or_bodies(monkeypatch: pytest.MonkeyPatch) -> No
     assert errors.start_error_reporting("https://k@o1.ingest.sentry.io/1") is True
     assert calls[0]["send_default_pii"] is False
     assert calls[0]["max_request_body_size"] == "never"
+    assert calls[0]["include_local_variables"] is False

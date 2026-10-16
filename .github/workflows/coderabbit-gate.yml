@@ -60,9 +60,12 @@ jobs:
           if [ "$state" = "APPROVED" ]; then
             # Approved earlier: pass if CodeRabbit finished reviewing this commit
             # and left no review on it (findings come as a review).
-            done=$(gh api "repos/$REPO/commits/$head/status" \
-              --jq '[.statuses[] | select(.context == "CodeRabbit"
-                      and .state == "success" and .description == "Review completed")] | length')
+            # Only CodeRabbit's own status counts (anyone who can post statuses
+            # could name one "CodeRabbit"), and only its latest, newest first.
+            done=$(gh api "repos/$REPO/commits/$head/statuses?per_page=100" \
+              --jq '[.[] | select(.context == "CodeRabbit" and .creator.login == "coderabbitai[bot]")]
+                    | first // {} | select(.state == "success" and .description == "Review completed")
+                    | 1' | wc -l | tr -d ' ')
             left=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
               --jq ".[] | select(.user.login == \"coderabbitai[bot]\")
                         | select(.commit_id == \"$head\") | .state" | wc -l | tr -d ' ')

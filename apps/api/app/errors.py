@@ -11,8 +11,9 @@ from app.config import settings
 def start_error_reporting(dsn: str | None = None) -> bool:
     """Start Sentry if a DSN is configured; returns whether it started.
 
-    No personal data: no IP addresses, cookies or headers, and no request
-    bodies (they can hold photos of cookbook pages and the user's recipes).
+    No personal data: no IP addresses, cookies or headers, no request bodies
+    (they can hold photos of cookbook pages and the user's recipes), and no
+    local variables in stack traces (they can hold tokens and recipe text).
     """
     dsn = settings.sentry_dsn if dsn is None else dsn
     if not dsn:
@@ -22,6 +23,7 @@ def start_error_reporting(dsn: str | None = None) -> bool:
         environment=os.environ.get("VERCEL_ENV", "development"),
         send_default_pii=False,
         max_request_body_size="never",
+        include_local_variables=False,
         traces_sample_rate=0,
     )
     return True
