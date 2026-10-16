@@ -26,7 +26,8 @@ from tests.unit.conftest import Install
 def word(text: str, x: int, y: int, h: int, last: bool, conf: float) -> dict[str, Any]:
     symbols: list[dict[str, Any]] = [{"text": c} for c in text]
     symbols[-1]["property"] = {"detectedBreak": {"type": "EOL_SURE_SPACE" if last else "SPACE"}}
-    box = [{"x": x, "y": y}, {"x": x + 10 * len(text), "y": y + h}]
+    right = x + 10 * len(text)
+    box = [{"x": x, "y": y}, {"x": right, "y": y}, {"x": right, "y": y + h}, {"x": x, "y": y + h}]
     return {"boundingBox": {"vertices": box}, "symbols": symbols, "confidence": conf}
 
 
@@ -34,24 +35,57 @@ def block(
     x: int, y: int, width: int, paragraphs: list[list[str]], h: int = 20, conf: float = 0.99
 ) -> dict[str, Any]:
     """A block whose paragraphs' lines are given as text; each line's words
-    sit on one row, `h` pixels tall. A line starting with "?" reads unsure."""
+    sit on one row, `h` pixels tall, set like print (10 px a letter, a space
+    between words). A line starting with "?" reads unsure; one starting with
+    ">" is indented."""
     out, top = [], y
     for lines in paragraphs:
         words = []
         for line in lines:
+            indent = 30 if line.startswith(">") else 0
+            line = line.lstrip(">")
             sure = conf if not line.startswith("?") else 0.5
             parts = line.lstrip("?").split()
+            left = x + indent
             for i, w in enumerate(parts):
-                words.append(word(w, x + 60 * i, top, h, i == len(parts) - 1, sure))
+                words.append(word(w, left, top, h, i == len(parts) - 1, sure))
+                left += 10 * len(w) + 10
             top += h + 6
         out.append({"words": words})
         top += 10
-    box = [{"x": x, "y": y}, {"x": x + width, "y": top}]
+    box = [
+        {"x": x, "y": y},
+        {"x": x + width, "y": y},
+        {"x": x + width, "y": top},
+        {"x": x, "y": top},
+    ]
     return {"blockType": "TEXT", "boundingBox": {"vertices": box}, "paragraphs": out}
 
 
 def page(*blocks: dict[str, Any]) -> dict[str, Any]:
     return {"pages": [{"width": 1000, "height": 1400, "blocks": list(blocks)}]}
+
+
+def sideways(annotation: dict[str, Any]) -> dict[str, Any]:
+    """The same page photographed turned a quarter clockwise: every point
+    moves, the text runs down the photo."""
+    pg = annotation["pages"][0]
+    height = pg["height"]
+
+    def turn(node: Any) -> None:
+        if isinstance(node, dict):
+            if "vertices" in node:
+                node["vertices"] = [{"x": height - v["y"], "y": v["x"]} for v in node["vertices"]]
+            for v in node.values():
+                turn(v)
+        elif isinstance(node, list):
+            for v in node:
+                turn(v)
+
+    turned: dict[str, Any] = json.loads(json.dumps(annotation))
+    turn(turned["pages"][0]["blocks"])
+    turned["pages"][0]["width"], turned["pages"][0]["height"] = height, pg["width"]
+    return turned
 
 
 # A typical cookbook spread: title and introduction across the top, then
@@ -232,6 +266,112 @@ def test_a_step_without_a_method_heading_stays_a_step() -> None:
     assert draft.instructions == [
         "2 cups of flour go into the bowl 1 tbsp oil goes in next Stir until smooth"
     ]
+
+
+# A page laid out like many cookbooks: the end of the recipe before (a
+# variation), the title in two lines with a label, servings among a yield,
+# ingredients with wrapped lines on a hanging indent, the steps, serving
+# ideas after them, a running footer, and the facing page's edge.
+FRITTATA_PAGE = page(
+    block(60, 30, 880, [["Variation"], ["To make it with ham, add a cup of diced ham in step 2."]]),
+    block(60, 130, 500, [["Weeknight: Spinach", "and Feta Frittata"]], h=40),
+    block(60, 240, 880, [["A quick supper from whatever is in the fridge."]]),
+    block(
+        60, 290, 400, [["Yields one 10-inch frittata", "Serves 4", "Bake time: 15 to 20 minutes"]]
+    ),
+    block(
+        60,
+        390,
+        400,
+        [
+            [
+                "8 large eggs",
+                "1 cup crumbled feta or goat",
+                ">cheese (4 ounces)",
+                "Salt",
+                "Freshly ground black pepper",
+                "2 cups baby spinach, roughly",
+                ">chopped",
+            ]
+        ],
+    ),
+    block(
+        60,
+        620,
+        880,
+        [
+            ["Heat the oven to 375F. Whisk the eggs with the cheese and a good pinch", "of salt."],
+            ["Stir in the spinach, pour into an oiled pan, and bake until set."],
+        ],
+    ),
+    block(60, 760, 400, [["SERVING IDEAS"]]),
+    block(60, 800, 880, [["Good with a green salad and crusty bread for a weekend brunch."]]),
+    block(60, 1340, 300, [["212 Eggs and Brunch"]]),
+    block(975, 300, 25, [["th"], ["ole,"], ["nd"], ["oks"], ["as"]]),
+)
+
+
+def test_reads_a_cookbook_page_from_its_layout() -> None:
+    draft = recipe_from_pages([blocks_of(FRITTATA_PAGE)])
+    assert draft.title == "Spinach and Feta Frittata"
+    assert (draft.servings, draft.cook_minutes) == (4.0, 20)
+    assert draft.ingredients == [
+        "8 large eggs",
+        "1 cup crumbled feta or goat cheese (4 ounces)",
+        "Salt",
+        "Freshly ground black pepper",
+        "2 cups baby spinach, roughly chopped",
+    ]
+    assert draft.instructions == [
+        "Heat the oven to 375F. Whisk the eggs with the cheese and a good pinch of salt.",
+        "Stir in the spinach, pour into an oiled pan, and bake until set.",
+    ]
+    # Not part of the recipe: what came before the title, the introduction,
+    # the serving ideas, the footer and the facing page's edge.
+    every = " ".join(draft.ingredients + draft.instructions)
+    for gone in ("ham", "fridge", "salad", "212", "oks"):
+        assert gone not in every
+    assert "Good with a green salad and crusty bread for a weekend brunch." in draft.skipped
+
+
+def test_reads_a_page_photographed_sideways() -> None:
+    draft = recipe_from_pages([blocks_of(sideways(FRITTATA_PAGE))])
+    assert draft.title == "Spinach and Feta Frittata"
+    assert draft.ingredients[1] == "1 cup crumbled feta or goat cheese (4 ounces)"
+    assert len(draft.instructions) == 2
+
+
+def test_a_word_set_apart_rejoins_its_line() -> None:
+    # Vision can return a line's last word as a block of its own.
+    split = page(
+        block(60, 40, 880, [["Rice"]], h=48),
+        block(60, 120, 400, [["Ingredients"], ["1 cup white rice", "1/8 teaspoon ground black"]]),
+        block(320, 182, 60, [["pepper"]]),
+        block(60, 260, 880, [["Rinse the rice and simmer it for 18 minutes."]]),
+    )
+    draft = recipe_from_pages([blocks_of(split)])
+    assert draft.ingredients == ["1 cup white rice", "1/8 teaspoon ground black pepper"]
+
+
+def test_a_line_starting_cook_is_a_step_unless_it_gives_a_time() -> None:
+    steps = page(
+        block(60, 40, 880, [["Stew"]], h=48),
+        block(60, 120, 880, [["Cook time: 1 hour 15 minutes"]]),
+        block(60, 160, 400, [["2 pounds beef", "1 onion, sliced"]]),
+        block(60, 260, 880, [["Cook and stir the beef until browned, about 10 minutes."]]),
+    )
+    draft = recipe_from_pages([blocks_of(steps)])
+    assert draft.cook_minutes == 75
+    assert draft.instructions == ["Cook and stir the beef until browned, about 10 minutes."]
+
+
+def test_makes_a_quantity_isnt_servings() -> None:
+    sauce = page(
+        block(60, 40, 880, [["Tomato Sauce"]], h=48),
+        block(60, 120, 880, [["Makes about 8 cups"]]),
+        block(60, 160, 400, [["4 pounds tomatoes"]]),
+    )
+    assert recipe_from_pages([blocks_of(sauce)]).servings is None
 
 
 def test_reads_a_recipe_across_two_pages() -> None:

@@ -311,7 +311,9 @@ export function sourceLabel(
   note: string | null = null,
 ): string {
   if (url) return name || new URL(url).hostname.replace(/^www\./, '')
-  return note ? `Your recipe · ${note}` : 'Your recipe'
+  // The book it's from, when the user said ("From Moosewood Restaurant
+  // Favorites"): what they'll look for on the shelf.
+  return note ? `From ${note}` : 'Your recipe'
 }
 
 export interface RecipeFilter {
