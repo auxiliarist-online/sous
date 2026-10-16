@@ -255,13 +255,26 @@ def _ingredientish(text: str) -> bool:
     )
 
 
+# How steps start ("Stir until smooth"); a line in an ingredient list without
+# an amount names a food instead ("Salt and pepper").
+STEP_VERB = re.compile(
+    r"^(?:add|bake|beat|blend|boil|bring|chop|combine|cook|cover|cut|drain|fold|fry|"
+    r"heat|let|mix|place|pour|preheat|put|reduce|remove|roast|saut[eé]|season|serve|"
+    r"set|simmer|sprinkle|spread|stir|toss|transfer|turn|whisk)\b",
+    re.I,
+)
+
+
 def _listish(lines: list[Line]) -> bool:
     """A paragraph that reads as a list of ingredients: more than half its
-    lines (headings aside) start with an amount. A step that wraps rarely
-    starts more than one line with a number."""
+    lines (headings aside) start with an amount, and none of the others reads
+    as a step. A step that wraps rarely starts more than one line with a
+    number."""
+    others = [ln for ln in lines if not _ingredientish(ln.text) and not _is_heading(ln.text)]
     amounts = sum(_ingredientish(ln.text) for ln in lines)
-    others = sum(not _ingredientish(ln.text) and not _is_heading(ln.text) for ln in lines)
-    return amounts > 0 and amounts > others
+    return (
+        amounts > 0 and amounts > len(others) and not any(STEP_VERB.match(ln.text) for ln in others)
+    )
 
 
 def _stepish(lines: list[Line]) -> bool:
