@@ -27,7 +27,11 @@ export function Privacy({ signedIn }: { signedIn: boolean }) {
         </li>
         <li>
           Recipes you save (and your tags on them), recipes you type in, your
-          meal plans, your pantry, and prices you enter.
+          meal plans, shopping lists, your pantry, and prices you enter.
+        </li>
+        <li>
+          Feedback you send from the app, with the page you sent it from. The
+          team reads it to fix and improve Sous.
         </li>
       </ul>
 
@@ -56,6 +60,11 @@ export function Privacy({ signedIn }: { signedIn: boolean }) {
         <li>
           <strong>Google Cloud Vision</strong> reads the text of cookbook pages
           you photograph to add a recipe. Sous doesn't keep the photos.
+        </li>
+        <li>
+          <strong>Sentry</strong> receives a report when something in Sous
+          breaks: what went wrong and where, without your name, email, IP
+          address or what you typed.
         </li>
         <li>
           <strong>Recipe websites</strong> are visited by Sous's server when you

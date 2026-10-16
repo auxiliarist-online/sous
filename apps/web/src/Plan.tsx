@@ -41,6 +41,8 @@ export interface PlanApi {
     patch: { scale?: Scale; day?: string | null },
   ): Promise<void>
   removeEntry(id: string): Promise<void>
+  /** Take several recipes out at once (clearing the week). */
+  removeEntries(ids: string[]): Promise<void>
   copyPlan(from: string, to: string): Promise<number>
   planCost(weekStart: string): Promise<PlanCost>
   /** What adding each recipe would add to the week (TYL-30). */
@@ -68,6 +70,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const [failed, setFailed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [clearing, setClearing] = useState(false)
 
   const [version, setVersion] = useState(0)
   const reload = () => setVersion((v) => v + 1)
@@ -227,6 +230,50 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
             )
           })}
 
+          {entries.length > 0 &&
+            (clearing ? (
+              <div
+                className="clear-week"
+                role="group"
+                aria-label="Clear the week"
+              >
+                <p className="small">
+                  Take all {entries.length} recipe
+                  {entries.length === 1 ? '' : 's'} off this week?
+                </p>
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={busy}
+                  onClick={() => {
+                    setClearing(false)
+                    void change(
+                      () => api.removeEntries(entries.map((e) => e.id)),
+                      "We couldn't clear the week. Try again.",
+                    )
+                  }}
+                >
+                  Clear the week
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setClearing(false)}
+                >
+                  Keep them
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="link small"
+                disabled={busy}
+                onClick={() => setClearing(true)}
+              >
+                Clear this week
+              </button>
+            ))}
+
           {message && (
             <p role="status" className="muted">
               {message}
@@ -263,7 +310,7 @@ function Budget({
   cost: PlanCost | 'error' | null
   empty: boolean
   busy: boolean
-  onPantry: (item: BuyItem, status: PantryStatus) => void
+  onPantry: (item: BuyItem, status: PantryStatus | null) => void
   /** Save the user's price for one item (null clears it). */
   onPrice: (item: BuyItem, cents: number | null) => void
 }) {
@@ -316,10 +363,7 @@ function Budget({
         </p>
       )}
       <details className="buying">
-        <summary className="small">
-          What you'll buy ({toBuy.length})
-          {onHand.length > 0 && `, and ${onHand.length} on hand`}
-        </summary>
+        <summary className="small">What you'll buy ({toBuy.length})</summary>
         <ul className="buy-list" aria-label="To buy">
           {toBuy.map((i, n) => (
             <BuyRow
@@ -332,28 +376,28 @@ function Budget({
             />
           ))}
         </ul>
-        {onHand.length > 0 && (
-          <>
-            <h4>On hand</h4>
-            <p className="muted small">
-              Not counted. Staples like salt and oil are assumed on hand until
-              you say you're out.
-            </p>
-            <ul className="buy-list" aria-label="On hand">
-              {onHand.map((i) => (
-                <BuyRow
-                  key={i.ingredientId}
-                  item={i}
-                  busy={busy}
-                  storeName={cost.storeName}
-                  onPantry={onPantry}
-                  onPrice={onPrice}
-                />
-              ))}
-            </ul>
-          </>
-        )}
       </details>
+      {onHand.length > 0 && (
+        <section className="on-hand" aria-labelledby="on-hand-title">
+          <h4 id="on-hand-title">On hand, not on your list</h4>
+          <p className="muted small">
+            You said you have these, so they aren't counted. Tap "Need it" to
+            put one back on the list.
+          </p>
+          <ul className="buy-list" aria-label="On hand">
+            {onHand.map((i) => (
+              <BuyRow
+                key={i.ingredientId}
+                item={i}
+                busy={busy}
+                storeName={cost.storeName}
+                onPantry={onPantry}
+                onPrice={onPrice}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   )
 }
@@ -372,7 +416,7 @@ function BuyRow({
   item: BuyItem
   busy: boolean
   storeName: string | null
-  onPantry: (item: BuyItem, status: PantryStatus) => void
+  onPantry: (item: BuyItem, status: PantryStatus | null) => void
   onPrice: (item: BuyItem, cents: number | null) => void
 }) {
   const [editing, setEditing] = useState(false)
@@ -444,12 +488,14 @@ function BuyRow({
           type="button"
           className="chip"
           disabled={busy}
-          onClick={() => onPantry(item, item.buy ? 'have' : 'out')}
+          onClick={() => onPantry(item, item.buy ? 'have' : null)}
           aria-label={
-            item.buy ? `I have ${item.name} already` : `I'm out of ${item.name}`
+            item.buy
+              ? `I have ${item.name} already`
+              : `I need ${item.name}, put it on the list`
           }
         >
-          {item.buy ? 'Have it' : "I'm out"}
+          {item.buy ? 'Have it' : 'Need it'}
         </button>
       )}
     </li>

@@ -274,13 +274,20 @@ def test_a_planned_week_is_priced_from_the_database(
         "insert into meal_plan_entries (meal_plan_id, recipe_id, scale) values (%s, %s, 2)",
         [plan[0], row[0]["recipe_id"]],
     )
+    # The user has salt (TYL-88: nothing is assumed on hand, staples included).
+    db.execute(
+        "insert into user_pantry (user_id, ingredient_id, status)"
+        " select %s, ingredient_id, 'have' from recipe_ingredients"
+        " where recipe_id = %s and raw_text = 'salt'",
+        [user, row[0]["recipe_id"]],
+    )
     inputs = db.execute("select plan_cost_inputs(%s, '2026-10-12')", [user]).fetchone()
     assert inputs is not None
     cost = plan_cost(inputs[0], on=date(2026, 10, 12))
     by_name = {i.name: i for i in cost.items}
     # Doubled, 2 cups of lentils still fit in one 16 oz bag, at the user's price.
     assert (by_name["lentils"].packages, by_name["lentils"].cents) == (1, 300)
-    # Salt is a staple: on hand, so not bought.
+    # Salt is marked on hand, so not bought.
     assert by_name["salt"].buy is False
     assert (cost.total_cents, cost.budget_cents, cost.estimated) == (300, 6000, False)
 

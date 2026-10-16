@@ -1,5 +1,7 @@
-# Re-runs the push-time "CodeRabbit approved" check after a review, so it
-# re-reads CodeRabbit's verdict (see coderabbit-gate.yml).
+# Re-runs the push-time "CodeRabbit approved" check after a review, or after
+# CodeRabbit marks a commit "Review completed" (a re-review that found nothing
+# new posts no review), so it re-reads CodeRabbit's verdict (see
+# coderabbit-gate.yml).
 #
 # workflow_run runs in this repository with a write token even when the pull
 # request comes from a fork, and it only makes API calls: no code from the pull
@@ -11,6 +13,9 @@ on:
   workflow_run:
     workflows: ['CodeRabbit gate']
     types: [completed]
+  # Commit statuses (CodeRabbit's "Review completed"); also run from the
+  # default branch.
+  status:
 
 permissions:
   actions: write
@@ -19,13 +24,16 @@ permissions:
 jobs:
   rerun:
     name: Re-run the gate after a review
-    if: github.event.workflow_run.event == 'pull_request_review'
+    if: >-
+      github.event.workflow_run.event == 'pull_request_review' ||
+      (github.event_name == 'status' && github.event.context == 'CodeRabbit' &&
+       github.event.state == 'success')
     runs-on: ubuntu-latest
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD: ${{ github.event.workflow_run.head_sha }}
+          HEAD: ${{ github.event.workflow_run.head_sha || github.event.sha }}
         run: |
           if ! [[ "$HEAD" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Unexpected head SHA: $HEAD"

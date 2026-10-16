@@ -9,6 +9,8 @@ dependencies = [
     "ingredient-parser-nlp>=2.8,<3",
     "pydantic-settings>=2.6",
     "recipe-scrapers>=15.12,<16",
+    # Error reporting (TYL-74), off unless SENTRY_DSN is set.
+    "sentry-sdk>=2.71,<3",
     # Time zones for zoneinfo (sale end dates), where the OS has none.
     "tzdata>=2025.2",
 ]

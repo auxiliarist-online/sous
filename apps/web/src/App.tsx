@@ -35,6 +35,7 @@ import {
   setMyPrice,
   recipeFits,
   removeEntry,
+  removeEntries,
   setPantry,
   updateEntry,
   weekOf,
@@ -49,6 +50,8 @@ import {
 } from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
+import { Feedback, type FeedbackApi } from './Feedback.tsx'
+import { sendFeedback } from './feedback.ts'
 import { Privacy } from './Privacy.tsx'
 import { Link } from './router.tsx'
 import { Settings } from './Settings.tsx'
@@ -86,7 +89,8 @@ export type SousApi = LibraryApi &
   ListApi &
   PantryApi &
   PlanApi &
-  BrowseApi
+  BrowseApi &
+  FeedbackApi
 
 /** The real API for a signed-in session: Supabase under the user's
  *  row-level security, and the Sous API for what needs the server. */
@@ -109,6 +113,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     addToPlan: (week, id, scale, day) => addToPlan(db, week, id, scale, day),
     updateEntry: (id, patch) => updateEntry(db, id, patch),
     removeEntry: (id) => removeEntry(db, id),
+    removeEntries: (ids) => removeEntries(db, ids),
     copyPlan: (from, to) => copyPlan(db, from, to),
     planCost: (week) => planCost(session, week),
     addedCosts: (week, ids) => addedCosts(session, week, ids),
@@ -135,6 +140,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     places: () => places(db, userId),
     addPlace: (name) => addPlace(db, userId, name),
     pantry: () => loadPantry(db),
+    sendFeedback: (message, page) => sendFeedback(db, message, page),
   }
 }
 
@@ -332,6 +338,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
               }}
             />
           )}
+          {at.page !== 'welcome' && <Feedback api={api} page={path} />}
         </>
       )}
     </main>

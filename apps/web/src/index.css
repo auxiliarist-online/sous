@@ -590,7 +590,8 @@ select {
   padding: 0.25rem 0;
 }
 
-.buying h4 {
+.buying h4,
+.on-hand h4 {
   margin: 0.75rem 0 0;
   font-size: 0.9375rem;
   color: var(--color-secondary);
@@ -991,4 +992,32 @@ label.button {
 .photo-review ul {
   margin: 0.25rem 0;
   padding-left: 1.25rem;
+}
+
+/* Clearing the week asks first (TYL-86). */
+.clear-week {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.clear-week p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* "Send feedback", at the foot of each page. */
+.feedback {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.feedback form {
+  text-align: left;
+}
+
+.feedback textarea {
+  width: 100%;
 }

@@ -203,9 +203,10 @@ describe('Welcome', () => {
     await next() // pantry
     expect(screen.getByText('Step 7 of 7')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'olive oil' }))
-    expect(
-      screen.getByRole('button', { name: 'Out of olive oil' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'olive oil' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
 
     await waitFor(() => expect(onDone).toHaveBeenCalled())
@@ -218,7 +219,7 @@ describe('Welcome', () => {
         homeZip: '23451',
       }),
     )
-    expect(api.setPantry).toHaveBeenCalledWith('oil', 'out')
+    expect(api.setPantry).toHaveBeenCalledWith('oil', 'have')
     expect(api.setPantry).toHaveBeenCalledTimes(1)
     expect(api.chooseStore).toHaveBeenCalledWith('09700181')
   })
