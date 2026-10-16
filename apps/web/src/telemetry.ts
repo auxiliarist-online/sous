@@ -5,9 +5,9 @@ import type { PostHog } from 'posthog-js'
 
 let client: PostHog | null = null
 
-/** Start PostHog if a project key is configured. Replays hide everything
- *  typed; requests' addresses and bodies aren't recorded; people are known
- *  by their account id, never their email. */
+/** Start PostHog if a project key is configured. Replays hide all text,
+ *  typed or shown; requests' headers and bodies aren't recorded; people are
+ *  known by their account id, never their email. */
 export async function startTelemetry(
   key: string | undefined = import.meta.env.VITE_POSTHOG_KEY,
 ): Promise<boolean> {
@@ -19,8 +19,14 @@ export async function startTelemetry(
     capture_pageview: 'history_change',
     capture_exceptions: true,
     person_profiles: 'identified_only',
+    // What's on screen is the user's own (their email, recipes, plans):
+    // replays show the layout and every tap, with all text hidden, and
+    // clicks are recorded without the text or attributes of what was tapped.
+    mask_all_text: true,
+    mask_all_element_attributes: true,
     session_recording: {
       maskAllInputs: true,
+      maskTextSelector: '*',
       recordHeaders: false,
       recordBody: false,
     },

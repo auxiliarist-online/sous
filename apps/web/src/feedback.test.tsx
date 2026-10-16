@@ -14,7 +14,7 @@ describe('Feedback', () => {
     )
     const send = screen.getByRole('button', { name: 'Send' })
     expect(send).toBeDisabled()
-    expect(screen.getByText(/a replay of what happened/)).toBeInTheDocument()
+    expect(screen.getByText(/a replay of where you tapped/)).toBeInTheDocument()
     await userEvent.type(
       screen.getByLabelText(/What went wrong/),
       'The salt is on my list twice',

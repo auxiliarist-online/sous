@@ -64,9 +64,9 @@ export function Privacy({ signedIn }: { signedIn: boolean }) {
         </li>
         <li>
           <strong>PostHog</strong> records how Sous is used, errors, and replays
-          of what's on screen, so problems can be found and fixed. Anything you
-          type is hidden in replays, and you're known by your account number,
-          not your name or email.
+          of what's on screen, so problems can be found and fixed. Replays show
+          where you tapped with all text hidden, and you're known by your
+          account number, not your name or email.
         </li>
         <li>
           <strong>Linear</strong> is where the team tracks problems you report,

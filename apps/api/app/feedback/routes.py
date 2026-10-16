@@ -25,6 +25,15 @@ mutation File($input: IssueCreateInput!) {
 """
 
 
+# Marks a report one request is filing right now.
+FILING = "filing"
+
+
+def _filed(url: str) -> dict[str, Any]:
+    """The answer for a report filed (or being filed) already."""
+    return {"filed": True, "url": None if url == FILING else url}
+
+
 def _headers() -> dict[str, str]:
     """The service role's headers for Supabase's REST API."""
     key = settings.supabase_service_role_key
@@ -83,9 +92,22 @@ async def file(report_id: int, user_id: Annotated[str, Depends(current_user_id)]
         if report["kind"] != "problem":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only problems are filed.")
         if report["linear_url"]:
-            return {"filed": True, "url": report["linear_url"]}
+            return _filed(report["linear_url"])
         if not settings.linear_api_key:
             return {"filed": False}
+
+        # Claim it first, in one step: of two requests at once (a double tap,
+        # a retry), only one gets the report, so it's filed once.
+        claim = await client.patch(
+            f"{settings.supabase_url}/rest/v1/feedback",
+            params={"id": f"eq.{report_id}", "linear_url": "is.null", "select": "id"},
+            json={"linear_url": FILING},
+            headers={**_headers(), "Prefer": "return=representation"},
+        )
+        if claim.status_code != 200:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "We couldn't file the report.")
+        if not claim.json():
+            return {"filed": True, "url": None}  # another request is filing it
 
         resp = await client.post(
             LINEAR_URL,
@@ -96,6 +118,13 @@ async def file(report_id: int, user_id: Annotated[str, Depends(current_user_id)]
         body = resp.json() if resp.status_code == 200 else {}
         created = (body.get("data") or {}).get("issueCreate") or {}
         if not created.get("success"):
+            # Let it go back, so a later try can file it.
+            await client.patch(
+                f"{settings.supabase_url}/rest/v1/feedback",
+                params={"id": f"eq.{report_id}", "linear_url": f"eq.{FILING}"},
+                json={"linear_url": None},
+                headers=_headers(),
+            )
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, "We couldn't file the report.")
         url = created["issue"]["url"]
         await client.patch(

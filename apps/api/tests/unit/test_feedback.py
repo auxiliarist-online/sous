@@ -35,7 +35,7 @@ def client() -> Iterator[TestClient]:
     app.dependency_overrides.clear()
 
 
-def routes(report: dict[str, Any], linear_ok: bool = True) -> Any:
+def routes(report: dict[str, Any], linear_ok: bool = True, claimed: bool = True) -> Any:
     def handle(r: httpx.Request) -> httpx.Response:
         if r.url.host == "api.linear.app":
             if not linear_ok:
@@ -53,6 +53,8 @@ def routes(report: dict[str, Any], linear_ok: bool = True) -> Any:
             )
         if r.method == "GET":
             return httpx.Response(200, json=[report])
+        if r.headers.get("prefer") == "return=representation":
+            return httpx.Response(200, json=[{"id": 7}] if claimed else [])
         return httpx.Response(204)
 
     return handle
@@ -73,8 +75,22 @@ def test_files_a_problem_in_linear_with_its_replay(
     assert "(https://us.posthog.com/replay/abc)" in issue["description"]
     assert "iPhone Safari 18" in issue["description"]
     assert issue["labelIds"] == [settings.linear_bug_label_id]
-    patch = next(r for r in seen if r.method == "PATCH")
-    assert json.loads(patch.content) == {"linear_url": "https://linear.app/t/TYL-99"}
+    claim, done = [r for r in seen if r.method == "PATCH"]
+    assert claim.url.params["linear_url"] == "is.null"
+    assert json.loads(claim.content) == {"linear_url": "filing"}
+    assert json.loads(done.content) == {"linear_url": "https://linear.app/t/TYL-99"}
+
+
+def test_two_requests_at_once_file_it_once(
+    supabase: Install, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "linear_api_key", "lin_api_key")
+    seen = supabase(routes(REPORT, claimed=False))
+    assert client.post("/feedback/7/file").json() == {"filed": True, "url": None}
+    assert not any(r.url.host == "api.linear.app" for r in seen)
+    seen = supabase(routes({**REPORT, "linear_url": "filing"}))
+    assert client.post("/feedback/7/file").json() == {"filed": True, "url": None}
+    assert not any(r.url.host == "api.linear.app" for r in seen)
 
 
 def test_only_the_reporters_own_problem_once(
@@ -97,8 +113,12 @@ def test_without_a_key_or_when_linear_fails(
     supabase(routes(REPORT))
     assert client.post("/feedback/7/file").json() == {"filed": False}
     monkeypatch.setattr(settings, "linear_api_key", "lin_api_key")
-    supabase(routes(REPORT, linear_ok=False))
+    seen = supabase(routes(REPORT, linear_ok=False))
     assert client.post("/feedback/7/file").status_code == 502
+    # The claim is let go, so a later try can file it.
+    release = [r for r in seen if r.method == "PATCH"][-1]
+    assert release.url.params["linear_url"] == "eq.filing"
+    assert json.loads(release.content) == {"linear_url": None}
 
 
 def test_needs_sign_in() -> None:

@@ -96,7 +96,7 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
         />
         <p className="muted small">
           {open === 'problem'
-            ? "Sent with the page you're on, your phone and browser, and a replay of what happened on screen (with anything you typed hidden). "
+            ? "Sent with the page you're on, your phone and browser, and a replay of where you tapped (with all text hidden). "
             : "Sent with the page you're on. "}
           We can see it's from you, so we can write back.
         </p>
