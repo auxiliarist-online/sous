@@ -322,10 +322,14 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
             mode = "steps"
             continue
 
-        if _listish(para):
+        all_amounts = all(_ingredientish(ln.text) or _is_heading(ln.text) for ln in para) and any(
+            _ingredientish(ln.text) for ln in para
+        )
+        if all_amounts or (mode != "steps" and _listish(para)):
             # A list of amounts: ingredients, wherever they turn up (a second
-            # column can be read after the steps). A line without an amount
-            # among them ("Salt and pepper") is kept, to check.
+            # column can be read after the steps). Before the steps, a line
+            # without an amount among them ("Salt and pepper") is kept, to
+            # check; among the steps, every line needs one, or it's a step.
             if mode == "start":
                 mode = "ingredients"
             for ln in para:

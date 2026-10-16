@@ -197,6 +197,25 @@ def test_a_wrapped_step_that_starts_with_an_amount_stays_a_step() -> None:
     assert len(draft.instructions) == 1
 
 
+def test_a_step_with_amounts_on_two_lines_stays_a_step() -> None:
+    steps = page(
+        block(60, 40, 880, [["Pancakes"]], h=48),
+        block(60, 120, 880, [["Ingredients"], ["2 cups flour", "1 tbsp oil"]]),
+        block(60, 260, 880, [["Method"]]),
+        block(
+            60,
+            300,
+            880,
+            [["2 cups of flour go into the bowl", "1 tbsp oil goes in next", "Stir until smooth"]],
+        ),
+    )
+    draft = recipe_from_pages([blocks_of(steps)])
+    assert draft.ingredients == ["2 cups flour", "1 tbsp oil"]
+    assert draft.instructions == [
+        "2 cups of flour go into the bowl 1 tbsp oil goes in next Stir until smooth"
+    ]
+
+
 def test_reads_a_recipe_across_two_pages() -> None:
     first = page(
         block(60, 40, 880, [["Apple Crumble"]], h=48),
