@@ -365,6 +365,59 @@ def test_a_line_starting_cook_is_a_step_unless_it_gives_a_time() -> None:
     assert draft.instructions == ["Cook and stir the beef until browned, about 10 minutes."]
 
 
+def test_a_step_that_starts_with_a_time_stays_a_step() -> None:
+    bake = page(
+        block(60, 40, 880, [["Custard"]], h=48),
+        block(60, 120, 400, [["4 eggs", "2 cups milk"]]),
+        block(
+            60,
+            200,
+            880,
+            [["Whisk the eggs and milk and pour into cups. Set them in a roasting pan and"]],
+        ),
+        block(
+            60,
+            230,
+            880,
+            [["cook 5 minutes more on the stove."], ["Bake 25 to 30 minutes, until set."]],
+        ),
+    )
+    draft = recipe_from_pages([blocks_of(bake)])
+    assert draft.cook_minutes is None
+    assert draft.instructions == [
+        "Whisk the eggs and milk and pour into cups. Set them in a roasting pan and cook 5 "
+        "minutes more on the stove.",
+        "Bake 25 to 30 minutes, until set.",
+    ]
+
+
+def test_a_heading_across_the_gutter_isnt_a_stray_word() -> None:
+    columns = page(
+        block(60, 40, 880, [["Dal"]], h=48),
+        block(60, 120, 400, [["1 onion, diced", "1 cup lentils"]]),
+        block(240, 120, 120, [["Method"]]),
+        block(240, 160, 600, [["Fry the onion, add the lentils and simmer for 25 minutes."]]),
+    )
+    draft = recipe_from_pages([blocks_of(columns)])
+    assert draft.ingredients == ["1 onion, diced", "1 cup lentils"]
+
+
+def test_an_ingredient_at_the_frame_edge_is_kept_and_a_footer_shown() -> None:
+    framed = page(
+        block(60, 40, 880, [["Toast"]], h=48),
+        block(60, 1200, 400, [["1 slice bread", "2 tbsp butter"]]),
+        block(60, 1370, 300, [["88 Breakfast"]]),
+    )
+    draft = recipe_from_pages([blocks_of(framed)])
+    assert draft.ingredients == ["1 slice bread", "2 tbsp butter"]
+    assert "88 Breakfast" in draft.skipped
+    tight = page(
+        block(60, 40, 880, [["Toast"]], h=48),
+        block(60, 1320, 400, [["1 slice bread", "2 tbsp butter"]]),
+    )
+    assert recipe_from_pages([blocks_of(tight)]).ingredients == ["1 slice bread", "2 tbsp butter"]
+
+
 def test_makes_a_quantity_isnt_servings() -> None:
     sauce = page(
         block(60, 40, 880, [["Tomato Sauce"]], h=48),

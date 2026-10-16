@@ -182,6 +182,9 @@ def _upright(page: dict[str, Any]) -> tuple[Callable[[Point], Point], float, flo
 
 @dataclass
 class _Word:
+    """One Vision word in upright page coordinates, with its text, height,
+    confidence and how it breaks (space or hyphen), for building lines."""
+
     text: str
     left: float
     top: float
@@ -453,7 +456,11 @@ def _clean(blocks: list[Block]) -> list[Block]:
             for ln in lines:
                 if (
                     ln is not stray
-                    and 0 <= stray.left - ln.right < 3 * size
+                    and not _is_heading(stray.text)
+                    and not INGREDIENTS_HEAD.match(stray.text)
+                    and not STEPS_HEAD.match(stray.text)
+                    # Word spacing, well under a column gutter.
+                    and 0 <= stray.left - ln.right < size
                     and abs((ln.top + ln.bottom) / 2 - (stray.top + stray.bottom) / 2) < 0.6 * size
                 ):
                     ln.text = f"{ln.text} {stray.text}"
@@ -466,16 +473,29 @@ def _clean(blocks: list[Block]) -> list[Block]:
     return kept
 
 
-def _furniture_line(ln: Line, b: Block) -> bool:
+def _furniture_line(ln: Line, b: Block, page: list[Line]) -> bool:
     """A page number, a running head or footer ("155 Frittatas", "Pâte à
-    Choux | 47"), or a rule of dots: not part of the recipe."""
+    Choux | 47"), or a rule of dots: not part of the recipe. A short line with
+    a number counts only at the very top or bottom of the page, with no other
+    text between it and the edge, set apart from the text by a gap (a tightly
+    framed photo's last ingredient isn't a footer)."""
     text = ln.text
     if not re.search(r"[A-Za-z0-9]", text) or re.fullmatch(r"\W*\d{1,4}\W*", text):
         return True
     if not b.page_height or len(text.split()) > 6 or not re.search(r"\d", text):
         return False
-    margin = 0.07 * b.page_height
-    return ln.bottom < margin or ln.top > b.page_height - margin
+    margin, gap = 0.07 * b.page_height, 1.5 * max(ln.height, 1.0)
+    others = [o for o in page if o is not ln]
+    if ln.bottom < margin:
+        # Nothing above it, and set apart from the text below.
+        return not any(o.bottom < ln.top for o in others) and not any(
+            ln.bottom <= o.top < ln.bottom + gap for o in others
+        )
+    if ln.top > b.page_height - margin:
+        return not any(o.top > ln.bottom for o in others) and not any(
+            ln.top - gap < o.bottom <= ln.top for o in others
+        )
+    return False
 
 
 def _continues(prev: Line, ln: Line, margin: float) -> bool:
@@ -528,7 +548,14 @@ def _ingredient_like(text: str) -> bool:
 
 def _meta(text: str, draft: Draft) -> bool:
     """Take servings and times from a line like "Serves 6" or "Prep time:
-    about 1 hour"; True when the line is only that."""
+    about 1 hour"; True when the line is only that. A step can start with a
+    time ("Bake 25 to 30 minutes, until set."): "Cook" and "Bake" count only
+    as "Cook time" or "Bake:", and a line in lower case is part of a step."""
+    if text[:1].islower() or (
+        re.match(r"^\W*(?:cook|cooking|bake|baking)\b", text, re.I)
+        and not re.match(r"^\W*(?:cook|cooking|bake|baking)\b\s*(?:time\b|:)", text, re.I)
+    ):
+        return False
     found = False
     for pattern in SERVES:
         if m := pattern.search(text):
@@ -620,15 +647,18 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
     mode = "start"  # then "ingredients", "steps", and "notes"
     section: str | None = None  # a heading waiting for its list
     for blocks in ordered:
+        page_lines = [ln for b in blocks for p in b.paragraphs for ln in p]
         for b in blocks:
             for para in b.paragraphs:
-                lines = [
-                    ln
-                    for ln in para
-                    if ln not in title_lines
-                    and not _furniture_line(ln, b)
-                    and not _meta(ln.text, draft)
-                ]
+                lines = []
+                for ln in para:
+                    if ln in title_lines or _meta(ln.text, draft):
+                        continue
+                    if _furniture_line(ln, b, page_lines):
+                        if re.search(r"[A-Za-z]{2}", ln.text):
+                            draft.skipped.append(ln.text)  # to see, in "Left out"
+                        continue
+                    lines.append(ln)
                 if not lines:
                     continue
                 text = _join(lines)
