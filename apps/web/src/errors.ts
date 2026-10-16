@@ -15,6 +15,13 @@ export async function startErrorReporting(
     environment: import.meta.env.MODE,
     tracesSampleRate: 0,
     beforeBreadcrumb: keepBreadcrumb,
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+    },
   })
   return true
 }

@@ -19,6 +19,10 @@ describe('startErrorReporting', () => {
         dsn: 'https://k@o1.ingest.sentry.io/1',
         tracesSampleRate: 0,
         beforeBreadcrumb: keepBreadcrumb,
+        dataCollection: expect.objectContaining({
+          userInfo: false,
+          urlQueryParams: false,
+        }),
       }),
     )
   })

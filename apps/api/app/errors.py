@@ -2,10 +2,24 @@
 the team during the beta. Off unless SENTRY_DSN is set."""
 
 import os
+from typing import Any
 
 import sentry_sdk
 
 from app.config import settings
+
+
+def scrub(event: Any, hint: Any) -> Any:
+    """Strip what a request can carry about the user before an event is sent:
+    the query string (search terms), body, cookies and headers, and any query
+    left on the URL."""
+    request = event.get("request")
+    if isinstance(request, dict):
+        for key in ("query_string", "data", "cookies", "headers"):
+            request.pop(key, None)
+        if isinstance(request.get("url"), str):
+            request["url"] = request["url"].split("?", 1)[0]
+    return event
 
 
 def start_error_reporting(dsn: str | None = None) -> bool:
@@ -24,6 +38,7 @@ def start_error_reporting(dsn: str | None = None) -> bool:
         send_default_pii=False,
         max_request_body_size="never",
         include_local_variables=False,
+        before_send=scrub,
         traces_sample_rate=0,
     )
     return True

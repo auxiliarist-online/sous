@@ -22,3 +22,23 @@ def test_sends_no_personal_data_or_bodies(monkeypatch: pytest.MonkeyPatch) -> No
     assert calls[0]["send_default_pii"] is False
     assert calls[0]["max_request_body_size"] == "never"
     assert calls[0]["include_local_variables"] is False
+    assert calls[0]["before_send"] is errors.scrub
+
+
+def test_scrubs_what_a_request_carries() -> None:
+    event = {
+        "request": {
+            "url": "https://sous/api/recipes?q=tofu",
+            "method": "GET",
+            "query_string": "q=tofu",
+            "data": {"images": ["..."]},
+            "cookies": {"a": "b"},
+            "headers": {"Authorization": "Bearer t"},
+        },
+        "exception": {},
+    }
+    assert errors.scrub(event, {}) == {
+        "request": {"url": "https://sous/api/recipes", "method": "GET"},
+        "exception": {},
+    }
+    assert errors.scrub({"message": "no request"}, {}) == {"message": "no request"}

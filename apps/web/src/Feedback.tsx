@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FeedbackLimitError } from './feedback.ts'
 
 export interface FeedbackApi {
   /** Send a message to the team, with the page it was sent from. */
@@ -15,6 +16,7 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>(
     'idle',
   )
+  const [error, setError] = useState('')
 
   async function send() {
     setStatus('sending')
@@ -23,7 +25,12 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
       setMessage('')
       setOpen(false)
       setStatus('sent')
-    } catch {
+    } catch (err) {
+      setError(
+        err instanceof FeedbackLimitError
+          ? err.message
+          : "That didn't send. Try again.",
+      )
       setStatus('error')
     }
   }
@@ -67,7 +74,10 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
           rows={4}
           maxLength={MAX}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => {
+            setMessage(e.target.value)
+            if (status === 'error') setStatus('idle')
+          }}
         />
         <p className="muted small">
           Sent with the page you're on. We can see it's from you, so we can
@@ -75,7 +85,7 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
         </p>
         {status === 'error' && (
           <p role="alert" className="error small">
-            That didn't send. Try again.
+            {error}
           </p>
         )}
         <div className="actions">

@@ -31,6 +31,30 @@ def emails(auth: httpx.Client, user_ids: set[str]) -> dict[str, str]:
     return out
 
 
+PAGE = 1000  # Supabase returns at most this many rows per request.
+
+
+def fetch_all(db: httpx.Client, since: str) -> list[dict[str, Any]]:
+    """Every message since `since`, newest first, a page at a time."""
+    rows: list[dict[str, Any]] = []
+    while True:
+        r = db.get(
+            "/feedback",
+            params={
+                "select": "user_id,message,page,created_at",
+                "created_at": f"gte.{since}",
+                "order": "created_at.desc,id.desc",
+                "limit": PAGE,
+                "offset": len(rows),
+            },
+        )
+        r.raise_for_status()
+        page: list[dict[str, Any]] = r.json()
+        rows += page
+        if len(page) < PAGE:
+            return rows
+
+
 def describe(row: dict[str, Any], who: str) -> str:
     """One message as printed: a header line, then the message indented."""
     sent = datetime.fromisoformat(row["created_at"]).astimezone().strftime("%Y-%m-%d %H:%M")
@@ -51,16 +75,7 @@ def main() -> None:
         httpx.Client(base_url=f"{settings.supabase_url}/rest/v1", headers=headers) as db,
         httpx.Client(base_url=f"{settings.supabase_url}/auth/v1", headers=headers) as auth,
     ):
-        r = db.get(
-            "/feedback",
-            params={
-                "select": "user_id,message,page,created_at",
-                "created_at": f"gte.{since}",
-                "order": "created_at.desc",
-            },
-        )
-        r.raise_for_status()
-        rows: list[dict[str, Any]] = r.json()
+        rows = fetch_all(db, since)
         who = emails(auth, {row["user_id"] for row in rows})
     if not rows:
         print(f"No feedback in the last {args.days} days.")
