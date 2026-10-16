@@ -3164,3 +3164,45 @@ describe('feedback', () => {
     await assert.rejects(send(KAI, 'the 21st'), /too much feedback today/)
   })
 })
+
+describe('bug reports', () => {
+  const LEE = '00000000-0000-0000-0000-0000000000c3'
+  before(async () => {
+    await db.query(
+      'insert into auth.users (id) values ($1) on conflict do nothing',
+      [LEE],
+    )
+  })
+
+  it('takes a problem with its device and replay, but not a Linear link', async () => {
+    const [row] = await as('authenticated', LEE, async () => {
+      const { rows } = await db.query(
+        `insert into feedback (message, kind, device, replay_url, linear_url)
+         values ('List is blank', 'problem', 'iPhone Safari 18',
+                 'https://us.posthog.com/replay/abc', 'https://linear.app/fake')
+         returning kind, device, replay_url, linear_url`,
+      )
+      return rows
+    })
+    assert.deepEqual(row, {
+      kind: 'problem',
+      device: 'iPhone Safari 18',
+      replay_url: 'https://us.posthog.com/replay/abc',
+      linear_url: null,
+    })
+    await assert.rejects(
+      as('authenticated', LEE, () =>
+        db.query(`insert into feedback (message, kind) values ('x', 'rant')`),
+      ),
+      /check constraint/,
+    )
+    await assert.rejects(
+      as('authenticated', LEE, () =>
+        db.query(
+          `insert into feedback (message, replay_url) values ('x', 'https://evil.example/')`,
+        ),
+      ),
+      /check constraint/,
+    )
+  })
+})

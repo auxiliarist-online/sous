@@ -1,44 +1,45 @@
-"""Error reporting with Sentry (TYL-74): unhandled errors in the API reach
-the team during the beta. Off unless SENTRY_DSN is set."""
+"""Error reporting with PostHog (TYL-74): unhandled errors in the API reach
+the team during the beta, next to the web app's. Off unless POSTHOG_KEY is
+set. Only the error, the route and the method are sent: never a request's
+query, body, headers or cookies (they can hold the user's recipes, photos
+and tokens)."""
 
-import os
-from typing import Any
+from collections.abc import Awaitable, Callable
 
-import sentry_sdk
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response
+from posthog import Posthog
 
 from app.config import settings
 
-
-def scrub(event: Any, hint: Any) -> Any:
-    """Strip what a request can carry about the user before an event is sent:
-    the query string (search terms), body, cookies and headers, and any query
-    left on the URL."""
-    request = event.get("request")
-    if isinstance(request, dict):
-        for key in ("query_string", "data", "cookies", "headers"):
-            request.pop(key, None)
-        if isinstance(request.get("url"), str):
-            request["url"] = request["url"].split("?", 1)[0]
-    return event
+HOST = "https://us.i.posthog.com"
 
 
-def start_error_reporting(dsn: str | None = None) -> bool:
-    """Start Sentry if a DSN is configured; returns whether it started.
+def reporter(key: str | None = None) -> Posthog | None:
+    """A PostHog client if a key is configured. It sends each error before
+    the request ends: a serverless function may stop right after."""
+    key = settings.posthog_key if key is None else key
+    if not key:
+        return None
+    return Posthog(key, host=HOST, sync_mode=True)
 
-    No personal data: no IP addresses, cookies or headers, no request bodies
-    (they can hold photos of cookbook pages and the user's recipes), and no
-    local variables in stack traces (they can hold tokens and recipe text).
-    """
-    dsn = settings.sentry_dsn if dsn is None else dsn
-    if not dsn:
-        return False
-    sentry_sdk.init(
-        dsn=dsn,
-        environment=os.environ.get("VERCEL_ENV", "development"),
-        send_default_pii=False,
-        max_request_body_size="never",
-        include_local_variables=False,
-        before_send=scrub,
-        traces_sample_rate=0,
-    )
-    return True
+
+def report_errors(app: FastAPI, client: Posthog | None) -> None:
+    """Report the API's unhandled errors (a plain 500 still goes back)."""
+    if client is None:
+        return
+
+    @app.middleware("http")
+    async def capture(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Pass the request on; report an error that escapes it."""
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            client.capture_exception(
+                exc,
+                distinct_id="sous-api",
+                properties={"route": request.url.path, "method": request.method},
+            )
+            return JSONResponse({"detail": "Internal Server Error"}, status_code=500)

@@ -1,17 +1,28 @@
 import { useState } from 'react'
-import { FeedbackLimitError } from './feedback.ts'
+import { FeedbackLimitError, type FeedbackKind } from './feedback.ts'
 
 export interface FeedbackApi {
-  /** Send a message to the team, with the page it was sent from. */
-  sendFeedback(message: string, page: string): Promise<void>
+  /** Send a problem or an idea to the team, with the page it was sent from
+   *  (a problem is filed as a bug, with the session's replay). */
+  sendFeedback(
+    message: string,
+    page: string,
+    kind: FeedbackKind,
+  ): Promise<unknown>
+}
+
+const PROMPTS: Record<FeedbackKind, string> = {
+  problem: 'What went wrong? What did you expect to happen?',
+  idea: "What's missing, or what would make Sous better?",
 }
 
 const MAX = 2000
 
-/** "Send feedback", at the foot of every signed-in page: a short form for
- *  beta testers to say what's broken or missing, from where they are. */
+/** "Report a problem" and "Suggest something", at the foot of every
+ *  signed-in page: a short form for beta testers to say what's broken or
+ *  missing, from where they are. */
 export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<FeedbackKind | null>(null)
   const [message, setMessage] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>(
     'idle',
@@ -22,9 +33,9 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
   async function send() {
     setStatus('sending')
     try {
-      await api.sendFeedback(message, page)
+      await api.sendFeedback(message, page, open ?? 'idea')
       setMessage('')
-      setOpen(false)
+      setOpen(null)
       setStatus('sent')
     } catch (err) {
       setError(
@@ -41,19 +52,24 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
       <footer className="feedback">
         {status === 'sent' && (
           <p role="status" className="muted small">
-            Thanks! We read every message.
+            Thanks! We read every one.
           </p>
         )}
-        <button
-          type="button"
-          className="link small"
-          onClick={() => {
-            setOpen(true)
-            setStatus('idle')
-          }}
-        >
-          Send feedback
-        </button>
+        {(['problem', 'idea'] as const).map((kind, i) => (
+          <span key={kind}>
+            {i > 0 && <span className="muted small"> · </span>}
+            <button
+              type="button"
+              className="link small"
+              onClick={() => {
+                setOpen(kind)
+                setStatus('idle')
+              }}
+            >
+              {kind === 'problem' ? 'Report a problem' : 'Suggest something'}
+            </button>
+          </span>
+        ))}
       </footer>
     )
   }
@@ -67,9 +83,7 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
           void send()
         }}
       >
-        <label htmlFor="feedback-message">
-          What's working, what's broken, what's missing?
-        </label>
+        <label htmlFor="feedback-message">{PROMPTS[open]}</label>
         <textarea
           id="feedback-message"
           rows={4}
@@ -81,8 +95,10 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
           }}
         />
         <p className="muted small">
-          Sent with the page you're on. We can see it's from you, so we can
-          write back.
+          {open === 'problem'
+            ? "Sent with the page you're on, your phone and browser, and a replay of what happened on screen (with anything you typed hidden). "
+            : "Sent with the page you're on. "}
+          We can see it's from you, so we can write back.
         </p>
         {status === 'error' && (
           <p role="alert" className="error small">
@@ -99,7 +115,7 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
           <button
             type="button"
             className="secondary"
-            onClick={() => setOpen(false)}
+            onClick={() => setOpen(null)}
           >
             Cancel
           </button>

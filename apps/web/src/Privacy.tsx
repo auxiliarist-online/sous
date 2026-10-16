@@ -30,8 +30,9 @@ export function Privacy({ signedIn }: { signedIn: boolean }) {
           meal plans, shopping lists, your pantry, and prices you enter.
         </li>
         <li>
-          Feedback you send from the app, with the page you sent it from. The
-          team reads it to fix and improve Sous.
+          Problems and ideas you send from the app, with the page you sent them
+          from (and for a problem, your phone and browser). The team reads them
+          to fix and improve Sous.
         </li>
       </ul>
 
@@ -62,9 +63,15 @@ export function Privacy({ signedIn }: { signedIn: boolean }) {
           you photograph to add a recipe. Sous doesn't keep the photos.
         </li>
         <li>
-          <strong>Sentry</strong> receives a report when something in Sous
-          breaks: what went wrong and where, without your name, email, IP
-          address or what you typed.
+          <strong>PostHog</strong> records how Sous is used, errors, and replays
+          of what's on screen, so problems can be found and fixed. Anything you
+          type is hidden in replays, and you're known by your account number,
+          not your name or email.
+        </li>
+        <li>
+          <strong>Linear</strong> is where the team tracks problems you report,
+          with your message, the page, your phone and browser, and a link to the
+          replay.
         </li>
         <li>
           <strong>Recipe websites</strong> are visited by Sous's server when you

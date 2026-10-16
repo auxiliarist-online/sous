@@ -24,8 +24,14 @@ class Settings(BaseSettings):
     # tier is 1,000), and a day per user.
     photo_pages_per_month: int = 900
     photo_pages_per_day: int = 40
-    # Sentry error reporting (TYL-74); off when empty.
-    sentry_dsn: str = ""
+    # PostHog error reporting (TYL-74); off when empty.
+    posthog_key: str = ""
+    # Filing beta testers' problem reports in Linear: a personal API key (off
+    # when empty), and where they go: the Sous project, labelled Bug.
+    linear_api_key: str = ""
+    linear_team_id: str = "1b5a5b93-5634-4708-85b1-a849bc9a8598"
+    linear_project_id: str = "a840f31f-21f4-4474-9dbd-a3031076fb67"
+    linear_bug_label_id: str = "2e0f1a4a-7cd0-4b78-8e00-88f6c20f8f3f"
 
 
 settings = Settings()
