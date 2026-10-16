@@ -52,6 +52,7 @@ import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
 import { Feedback, type FeedbackApi } from './Feedback.tsx'
 import { sendFeedback } from './feedback.ts'
+import { InstallOffer } from './InstallOffer.tsx'
 import { Privacy } from './Privacy.tsx'
 import { Link } from './router.tsx'
 import { Settings } from './Settings.tsx'
@@ -264,6 +265,9 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         </nav>
       )}
 
+      {at.page !== 'welcome' && at.page !== 'privacy' && (
+        <InstallOffer signedIn={signedIn} />
+      )}
       {!auth && (
         <p className="error" role="alert">
           Sign-in isn't set up: add VITE_SUPABASE_URL and
