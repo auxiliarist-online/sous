@@ -6,9 +6,14 @@ POST /recipes/import-page  from the page data the user's own browser sends,
 POST /recipes/import-text  a link plus ingredient lines the user copied from
                            a page that blocks Sous (TYL-59).
 POST /recipes/manual       a recipe the user types in; PUT /recipes/manual/{id} edits it.
+POST /recipes/read-photos  photos of a cookbook's pages, read into a draft for the
+                           manual-entry form (TYL-52); nothing is saved.
 """
 
+import base64
+import binascii
 import re
+from dataclasses import asdict
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -29,6 +34,7 @@ from app.recipes.extract import (
 )
 from app.recipes.fetch import FetchError, fetch_page
 from app.recipes.ingredients import parse_line
+from app.recipes.photos import PhotoError, read_pages, recipe_from_pages, record_read
 from app.recipes.store import NotYours, save_manual, save_recipe
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -230,3 +236,50 @@ async def edit_manual(
     except NotYours as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such recipe of yours.") from e
     return ManualResult(recipe_id=saved["recipe_id"], created=False)
+
+
+# Photos come from the phone already shrunk (about 1,600 px, JPEG); a request
+# must stay under Vercel's 4.5 MB body limit, so 4 pages of 1 MB at most.
+MAX_PHOTO_BYTES = 1_000_000
+PHOTO_KINDS = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n", b"RIFF")
+
+
+class PhotoPages(BaseModel):
+    """One recipe's pages, in order, as base64 JPEG, PNG or WebP."""
+
+    images: list[str] = Field(min_length=1, max_length=4)
+
+
+def _photo(data: str) -> bytes:
+    """One page's photo from base64, checked to be a small JPEG, PNG or WebP."""
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "That isn't a photo.") from exc
+    if len(raw) > MAX_PHOTO_BYTES:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "A photo is too large.")
+    if not raw.startswith(PHOTO_KINDS) or (raw.startswith(b"RIFF") and raw[8:12] != b"WEBP"):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "That isn't a photo.")
+    return raw
+
+
+@router.post("/read-photos")
+async def read_photos(
+    body: PhotoPages, user_id: Annotated[str, Depends(current_user_id)]
+) -> dict[str, Any]:
+    """Read photos of one recipe's pages into a draft: title, servings, times,
+    ingredients and steps, and the lines to check. Nothing is saved; the user
+    checks the draft in the manual-entry form, and the photos aren't kept."""
+    images = [_photo(i) for i in body.images]
+    try:
+        if not await record_read(user_id, len(images)):
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "That's a lot of pages for now. Try again tomorrow, or type the recipe in.",
+            )
+        pages = await read_pages(images)
+    except PhotoError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "We couldn't read the photos. Try again."
+        ) from exc
+    return asdict(recipe_from_pages(pages))

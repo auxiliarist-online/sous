@@ -197,7 +197,7 @@ export function Library({
           browser.
         </p>
         <Link to="/new" className="small">
-          Or type in a recipe of your own
+          Or type in a recipe, or read one from cookbook photos
         </Link>
       </form>
 
