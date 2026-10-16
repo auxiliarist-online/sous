@@ -18,6 +18,7 @@ export function Feedback({ api, page }: { api: FeedbackApi; page: string }) {
   )
   const [error, setError] = useState('')
 
+  // Send the message; on the daily limit, say so rather than "try again".
   async function send() {
     setStatus('sending')
     try {
