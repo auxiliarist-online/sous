@@ -418,6 +418,17 @@ def test_an_ingredient_at_the_frame_edge_is_kept_and_a_footer_shown() -> None:
     assert recipe_from_pages([blocks_of(tight)]).ingredients == ["1 slice bread", "2 tbsp butter"]
 
 
+def test_a_footer_doesnt_give_servings() -> None:
+    footed = page(
+        block(60, 40, 880, [["Toast"]], h=48),
+        block(60, 120, 400, [["1 slice bread", "2 tbsp butter"]]),
+        block(60, 1370, 300, [["Serves 8 or more"]]),
+    )
+    draft = recipe_from_pages([blocks_of(footed)])
+    assert draft.servings is None
+    assert "Serves 8 or more" in draft.skipped
+
+
 def test_makes_a_quantity_isnt_servings() -> None:
     sauce = page(
         block(60, 40, 880, [["Tomato Sauce"]], h=48),

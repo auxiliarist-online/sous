@@ -652,13 +652,15 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
             for para in b.paragraphs:
                 lines = []
                 for ln in para:
-                    if ln in title_lines or _meta(ln.text, draft):
+                    if ln in title_lines:
                         continue
+                    # Furniture first: a footer's numbers aren't the recipe's.
                     if _furniture_line(ln, b, page_lines):
                         if re.search(r"[A-Za-z]{2}", ln.text):
                             draft.skipped.append(ln.text)  # to see, in "Left out"
                         continue
-                    lines.append(ln)
+                    if not _meta(ln.text, draft):
+                        lines.append(ln)
                 if not lines:
                     continue
                 text = _join(lines)
