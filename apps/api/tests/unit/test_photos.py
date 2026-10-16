@@ -418,6 +418,25 @@ def test_an_ingredient_at_the_frame_edge_is_kept_and_a_footer_shown() -> None:
     assert recipe_from_pages([blocks_of(tight)]).ingredients == ["1 slice bread", "2 tbsp butter"]
 
 
+def test_a_time_in_a_step_isnt_the_recipes() -> None:
+    pasta = page(
+        block(60, 40, 880, [["Pasta"]], h=48),
+        block(60, 120, 880, [["Prep 10 min Cook 35 min"]]),
+        block(60, 160, 400, [["1 pound pasta"]]),
+        block(60, 240, 880, [["Add the pasta and cook 10 minutes, then drain it well."]]),
+    )
+    draft = recipe_from_pages([blocks_of(pasta)])
+    assert (draft.prep_minutes, draft.cook_minutes) == (10, 35)
+    bare = page(
+        block(60, 40, 880, [["Pasta"]], h=48),
+        block(60, 160, 400, [["1 pound pasta"]]),
+        block(60, 240, 880, [["Add the pasta and cook 10 minutes, then drain it well."]]),
+    )
+    draft = recipe_from_pages([blocks_of(bare)])
+    assert draft.cook_minutes is None
+    assert draft.instructions == ["Add the pasta and cook 10 minutes, then drain it well."]
+
+
 def test_a_footer_doesnt_give_servings() -> None:
     footed = page(
         block(60, 40, 880, [["Toast"]], h=48),

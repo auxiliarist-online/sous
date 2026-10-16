@@ -556,23 +556,23 @@ def _meta(text: str, draft: Draft) -> bool:
         and not re.match(r"^\W*(?:cook|cooking|bake|baking)\b\s*(?:time\b|:)", text, re.I)
     ):
         return False
-    found = False
-    for pattern in SERVES:
-        if m := pattern.search(text):
-            if draft.servings is None:
-                draft.servings = float(m.group(1))
-            found = True
-            break
-    for kind, pattern in TIMES.items():
-        if m := pattern.search(text):
-            if getattr(draft, f"{kind}_minutes") is None:
-                setattr(draft, f"{kind}_minutes", _minutes(m))
-            found = True
+    # Only a line that starts as one ("Serves", "Prep", "Cook time") gives
+    # servings or times: "Add the pasta and cook 10 minutes" is a step, and
+    # its 10 minutes aren't the recipe's.
     if not META.match(text) or len(text.split()) > 14:
         return False
+    servings = next((float(m.group(1)) for p in SERVES if (m := p.search(text))), None)
+    times = {kind: _minutes(m) for kind, p in TIMES.items() if (m := p.search(text))}
     # "Makes about 8 cups" is a yield line even without servings in it; a
     # line starting "Cook…" is only a time when it gives one.
-    return found or bool(YIELD.match(text))
+    if servings is None and not times and not YIELD.match(text):
+        return False
+    if draft.servings is None:
+        draft.servings = servings
+    for kind, minutes in times.items():
+        if getattr(draft, f"{kind}_minutes") is None:
+            setattr(draft, f"{kind}_minutes", minutes)
+    return True
 
 
 def _title(blocks: list[Block]) -> tuple[str, Line | None, list[Line]]:
