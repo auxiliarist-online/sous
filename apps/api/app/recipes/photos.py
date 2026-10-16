@@ -255,6 +255,15 @@ def _ingredientish(text: str) -> bool:
     )
 
 
+def _listish(lines: list[Line]) -> bool:
+    """A paragraph that reads as a list of ingredients: more than half its
+    lines (headings aside) start with an amount. A step that wraps rarely
+    starts more than one line with a number."""
+    amounts = sum(_ingredientish(ln.text) for ln in lines)
+    others = sum(not _ingredientish(ln.text) and not _is_heading(ln.text) for ln in lines)
+    return amounts > 0 and amounts > others
+
+
 def _stepish(lines: list[Line]) -> bool:
     """A paragraph that reads as a step: numbered, or a sentence or longer."""
     text = " ".join(ln.text for ln in lines)
@@ -313,15 +322,18 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
             mode = "steps"
             continue
 
-        if all(_ingredientish(ln.text) or _is_heading(ln.text) for ln in para) and any(
-            _ingredientish(ln.text) for ln in para
-        ):
+        if _listish(para):
             # A list of amounts: ingredients, wherever they turn up (a second
-            # column can be read after the steps).
+            # column can be read after the steps). A line without an amount
+            # among them ("Salt and pepper") is kept, to check.
             if mode == "start":
                 mode = "ingredients"
             for ln in para:
-                _add_ingredient(draft, ln)
+                _add_ingredient(
+                    draft,
+                    ln,
+                    unsure=not _ingredientish(ln.text) and not _is_heading(ln.text),
+                )
             continue
         if mode == "ingredients" and not _stepish(para):
             # Short lines among the ingredients: "Salt and pepper", "Olive

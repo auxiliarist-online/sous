@@ -140,6 +140,63 @@ def test_sorts_a_page_into_a_recipe() -> None:
     assert "½ tsp chili flakes" in draft.unsure
 
 
+def test_a_line_without_an_amount_doesnt_turn_a_list_into_a_step() -> None:
+    # As Vision grouped a real page: four lines in one paragraph, the last
+    # without an amount, then a section heading on its own.
+    soup = page(
+        block(60, 40, 880, [["Roasted Squash Soup"]], h=48),
+        block(60, 120, 400, [["Ingredients"]]),
+        block(
+            60,
+            160,
+            400,
+            [
+                ["1 butternut squash, peeled and cubed", "2 tbsp olive oil"],
+                [
+                    "3 garlic cloves, minced",
+                    "4 cups vegetable broth",
+                    "1/2 cup heavy cream",
+                    "Salt and pepper",
+                ],
+                ["For the topping:"],
+                ["1/4 cup pumpkin seeds", "1 tsp smoked paprika"],
+            ],
+        ),
+        block(540, 120, 400, [["Method"]]),
+        block(540, 160, 400, [["1. Heat the oven to 400F and roast the squash for 30 minutes."]]),
+    )
+    draft = recipe_from_pages([blocks_of(soup)])
+    assert draft.ingredients == [
+        "1 butternut squash, peeled and cubed",
+        "2 tbsp olive oil",
+        "3 garlic cloves, minced",
+        "4 cups vegetable broth",
+        "1/2 cup heavy cream",
+        "Salt and pepper",
+        "For the topping:",
+        "1/4 cup pumpkin seeds",
+        "1 tsp smoked paprika",
+    ]
+    assert draft.instructions == ["Heat the oven to 400F and roast the squash for 30 minutes."]
+    assert "Salt and pepper" in draft.unsure
+
+
+def test_a_wrapped_step_that_starts_with_an_amount_stays_a_step() -> None:
+    steps = page(
+        block(60, 40, 880, [["Pancakes"]], h=48),
+        block(60, 120, 880, [["Method"]]),
+        block(
+            60,
+            160,
+            880,
+            [["2 cups of flour go into the bowl first, then whisk in", "the milk until smooth."]],
+        ),
+    )
+    draft = recipe_from_pages([blocks_of(steps)])
+    assert draft.ingredients == []
+    assert len(draft.instructions) == 1
+
+
 def test_reads_a_recipe_across_two_pages() -> None:
     first = page(
         block(60, 40, 880, [["Apple Crumble"]], h=48),
