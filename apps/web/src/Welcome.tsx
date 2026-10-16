@@ -10,7 +10,7 @@ import { StorePicker } from './StorePicker.tsx'
 import { CATEGORIES, type Option, type Preferences } from './sous.ts'
 
 export interface WelcomeApi extends SettingsApi {
-  /** Staples assumed on hand until the pantry says otherwise. */
+  /** Common staples, offered as quick taps. */
   pantryStaples(): Promise<{ id: string; name: string }[]>
   setPantry(ingredientId: string, status: PantryStatus | null): Promise<void>
 }
@@ -29,7 +29,7 @@ const TITLES = [
   'Ingredients you love, and ones you’d skip',
   'Who are you cooking for?',
   'Where do you shop?',
-  'What’s in your pantry?',
+  'What do you have at home?',
 ]
 
 /** First-login setup (TYL-58): one question per screen, each skippable, then
@@ -52,7 +52,7 @@ export function Welcome({
   } | null>(null)
   const [optionsFailed, setOptionsFailed] = useState(false)
   const [staples, setStaples] = useState<{ id: string; name: string }[]>([])
-  const [out, setOut] = useState<string[]>([])
+  const [have, setHave] = useState<string[]>([])
   const [step, setStep] = useState(0)
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle')
 
@@ -84,11 +84,11 @@ export function Welcome({
   const last = TITLES.length - 1
 
   // Save what's been chosen (all of it, or the defaults when skipping).
-  async function finish(chosen: Preferences, pantryOut: string[]) {
+  async function finish(chosen: Preferences, pantryHave: string[]) {
     setStatus('saving')
     try {
       // The pantry first: saving preferences is what ends setup.
-      for (const id of pantryOut) await api.setPantry(id, 'out')
+      for (const id of pantryHave) await api.setPantry(id, 'have')
       const saved = { ...chosen, saved: true }
       await api.savePreferences(saved)
       onDone(saved)
@@ -191,8 +191,8 @@ export function Welcome({
         return (
           <>
             <p className="muted small">
-              Sous assumes you have these, so they aren't on your shopping list.
-              Tap any you're out of.
+              Tap the ones you have and they're left off your shopping list.
+              Anything else a recipe needs gets bought.
             </p>
             <div className="chips" aria-label="Pantry staples">
               {staples.map((s) => (
@@ -200,10 +200,11 @@ export function Welcome({
                   key={s.id}
                   type="button"
                   className="chip"
-                  aria-pressed={out.includes(s.id)}
-                  onClick={() => setOut(toggle(out, s.id))}
+                  aria-pressed={have.includes(s.id)}
+                  onClick={() => setHave(toggle(have, s.id))}
                 >
-                  {out.includes(s.id) ? `Out of ${s.name}` : s.name}
+                  {have.includes(s.id) && <span aria-hidden="true">✓ </span>}
+                  {s.name}
                 </button>
               ))}
             </div>
@@ -250,7 +251,7 @@ export function Welcome({
           <button
             type="button"
             disabled={status === 'saving'}
-            onClick={() => void finish(prefs, out)}
+            onClick={() => void finish(prefs, have)}
           >
             {status === 'saving' ? 'Saving…' : 'Finish'}
           </button>
@@ -260,7 +261,7 @@ export function Welcome({
         type="button"
         className="link small"
         disabled={status === 'saving'}
-        onClick={() => void finish(prefs, out)}
+        onClick={() => void finish(prefs, have)}
       >
         Skip the rest; you can change all of this in Preferences
       </button>

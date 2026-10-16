@@ -427,6 +427,9 @@ function fakeApi({
         void 0,
     ),
     removeEntry: vi.fn(async (_id: string) => void 0),
+    removeEntries: vi.fn(async (ids: string[]) => {
+      current = current.filter((e) => !ids.includes(e.id))
+    }),
     copyPlan: vi.fn(async (_from: string, _to: string) => copied),
     planCost: vi.fn(async () => cost),
     recipeFits: vi.fn(async () => fits),
@@ -488,8 +491,13 @@ describe('PlanPage', () => {
     expect(within(toBuy).getByText('mystery').closest('li')).toHaveTextContent(
       'amount not given',
     )
+  })
+
+  it('shows what’s on hand in plain view, off the list', async () => {
+    render(<PlanPage api={fakeApi({ entries: [entry('1')] })} week={WEEK} />)
+    expect(await screen.findByText('On hand, not on your list')).toBeVisible()
     const onHand = screen.getByRole('list', { name: 'On hand' })
-    expect(within(onHand).getByText('salt')).toBeInTheDocument()
+    expect(within(onHand).getByText('salt')).toBeVisible()
   })
 
   it('updates the pantry from the list', async () => {
@@ -497,9 +505,9 @@ describe('PlanPage', () => {
     render(<PlanPage api={api} week={WEEK} />)
     await userEvent.click(await screen.findByText(/What you'll buy/))
     await userEvent.click(
-      screen.getByRole('button', { name: "I'm out of salt" }),
+      screen.getByRole('button', { name: 'I need salt, put it on the list' }),
     )
-    expect(api.setPantry).toHaveBeenCalledWith('i-salt', 'out')
+    expect(api.setPantry).toHaveBeenCalledWith('i-salt', null)
     await userEvent.click(
       screen.getByRole('button', { name: 'I have white rice already' }),
     )
@@ -646,6 +654,30 @@ describe('PlanPage', () => {
       screen.getByRole('button', { name: 'Remove Recipe 1 from the plan' }),
     )
     expect(api.removeEntry).toHaveBeenCalledWith('1')
+  })
+
+  it('clears the week, but only after asking', async () => {
+    const api = fakeApi({ entries: [entry('1'), entry('2')] })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Clear this week' }),
+    )
+    expect(
+      screen.getByText('Take all 2 recipes off this week?'),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Keep them' }))
+    expect(api.removeEntries).not.toHaveBeenCalled()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Clear this week' }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Clear the week' }),
+    )
+    expect(api.removeEntries).toHaveBeenCalledWith(['1', '2'])
+    expect(
+      await screen.findByText('Nothing planned for this week yet.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear this week' })).toBeNull()
   })
 
   it('shows ingredients at the planned size', async () => {

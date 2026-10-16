@@ -7,8 +7,9 @@ double size), then bought the way it's sold:
   rice buy one 2 lb bag; "salt to taste" buys one container if needed);
 * loose: just the amount needed (carrots by the pound, meat from the counter).
 
-The user's pantry decides what's already on hand. Until it says otherwise,
-pantry staples (salt, oil, spices) are on hand and everything else is bought.
+The user's pantry decides what's already on hand: only what they've marked
+"have" is left off (TYL-88). Nothing is assumed, staples included, so the
+list never quietly skips something the user doesn't have.
 
 Each recipe's share of the week (TYL-30) splits every item's cost among the
 recipes that use it, by how much each uses, so the shares add up to the total.
@@ -283,7 +284,7 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
     estimated = False
     by_entry = {str(e.get("id")): 0 for e in planned}
     for item in items.values():
-        item.buy = item.pantry == "out" or (item.pantry is None and not item.staple)
+        item.buy = item.pantry != "have"
         if item.sold_by == "package" and item.package_quantity and item.package_unit:
             needed = (item.quantity or 0) / item.package_quantity
             item.packages = max(1, math.ceil(needed - PACKAGE_SLACK))

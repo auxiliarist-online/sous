@@ -62,10 +62,12 @@ const library = (
   places: vi.fn(async () => []),
   addPlace: vi.fn(async (name: string) => ({ id: 'p', name })),
   pantry: vi.fn(async () => []),
+  sendFeedback: vi.fn(async () => {}),
   plan: vi.fn(async () => []),
   addToPlan: vi.fn(async () => {}),
   updateEntry: vi.fn(async () => {}),
   removeEntry: vi.fn(async () => {}),
+  removeEntries: vi.fn(async () => {}),
   copyPlan: vi.fn(async () => 0),
   planCost: vi.fn(async () => ({
     budgetCents: null,

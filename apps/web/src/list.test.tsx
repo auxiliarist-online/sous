@@ -610,10 +610,10 @@ describe('Home', () => {
 })
 
 describe('PantryPage', () => {
-  it('marks staples out, and other things used up', async () => {
+  it('marks the staples you have, and other things used up', async () => {
     const api: PantryApi = {
       pantry: vi.fn(async () => [
-        { ingredientId: 'oil', name: 'olive oil', status: 'out' as const },
+        { ingredientId: 'oil', name: 'olive oil', status: 'have' as const },
         { ingredientId: 'rice', name: 'rice', status: 'have' as const },
       ]),
       pantryStaples: vi.fn(async () => [
@@ -624,13 +624,15 @@ describe('PantryPage', () => {
     }
     render(<PantryPage api={api} />)
     expect(
-      await screen.findByRole('button', { name: 'Out of olive oil' }),
+      await screen.findByRole('button', { name: 'olive oil' }),
     ).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(screen.getByRole('button', { name: 'salt' }))
-    expect(api.setPantry).toHaveBeenCalledWith('salt', 'out')
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Out of olive oil' }),
+    expect(screen.getByRole('button', { name: 'salt' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
     )
+    await userEvent.click(screen.getByRole('button', { name: 'salt' }))
+    expect(api.setPantry).toHaveBeenCalledWith('salt', 'have')
+    await userEvent.click(screen.getByRole('button', { name: 'olive oil' }))
     expect(api.setPantry).toHaveBeenCalledWith('oil', null)
     await userEvent.click(
       screen.getByRole('button', { name: "I'm out of rice" }),
@@ -647,10 +649,11 @@ describe('PantryPage', () => {
     }
     render(<PantryPage api={api} />)
     await userEvent.click(await screen.findByRole('button', { name: 'salt' }))
-    const out = screen.getByRole('button', { name: 'Out of salt' })
-    expect(out).toBeDisabled()
+    const salt = screen.getByRole('button', { name: 'salt' })
+    expect(salt).toHaveAttribute('aria-pressed', 'true')
+    expect(salt).toBeDisabled()
     finish()
-    await waitFor(() => expect(out).toBeEnabled())
+    await waitFor(() => expect(salt).toBeEnabled())
   })
 
   it('keeps the pantry on screen and puts back only what failed to save', async () => {
@@ -676,8 +679,9 @@ describe('PantryPage', () => {
       'aria-pressed',
       'false',
     )
-    expect(
-      screen.getByRole('button', { name: 'Out of olive oil' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'olive oil' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 })

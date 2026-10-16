@@ -150,6 +150,17 @@ export async function removeEntry(
   if (error) throw error
 }
 
+/** Take recipes out of the plan all at once (TYL-86, clearing the week).
+ *  By id, so only what the user saw on the page goes. */
+export async function removeEntries(
+  db: SupabaseClient,
+  ids: string[],
+): Promise<void> {
+  if (!ids.length) return
+  const { error } = await db.from('meal_plan_entries').delete().in('id', ids)
+  if (error) throw error
+}
+
 /** Copy one week's plan into another; returns how many recipes were copied. */
 export async function copyPlan(
   db: SupabaseClient,
@@ -212,8 +223,8 @@ export async function loadPantry(
 
 export type PantryStatus = 'have' | 'out'
 
-/** Record what the user has on hand; null forgets it (back to the default:
- *  staples on hand, everything else bought). */
+/** Record what the user has on hand; null forgets it, so it's bought
+ *  (TYL-88: nothing is assumed on hand). */
 export async function setPantry(
   db: SupabaseClient,
   userId: string,

@@ -136,16 +136,17 @@ class TestPlanCost:
         assert carrots.quantity == pytest.approx(1.5 + 128 / 453.592)
         assert carrots.cents == round(100 * (1.5 + 128 / 453.592))
 
-    def test_staples_are_on_hand_until_the_pantry_says_otherwise(self) -> None:
+    def test_only_what_the_pantry_says_is_on_hand_is_left_off(self) -> None:
+        # TYL-88: nothing is assumed on hand, staples included.
         salted = entry([line(SALT, 0.125, "tsp"), line(RICE, 1, "lb")])
         cost = cost_of(salted)
         salt = item(cost, "salt")
-        assert (salt.buy, salt.cents) == (False, None)
-        assert cost.total_cents == 200 * 2  # just the rice
-        out = cost_of(salted, pantry={SALT: "out"})
-        assert item(out, "salt").cents == 130  # a whole container, not ⅛ tsp
-        have = cost_of(salted, pantry={RICE: "have"})
-        assert have.total_cents == 0
+        assert (salt.buy, salt.cents, salt.staple) == (True, 130, True)  # a container
+        assert cost.total_cents == 130 + 200 * 2
+        have = cost_of(salted, pantry={SALT: "have"})
+        assert (item(have, "salt").buy, have.total_cents) == (False, 200 * 2)
+        # "out" is the default now: bought.
+        assert cost_of(salted, pantry={SALT: "out"}).total_cents == cost.total_cents
 
     def test_an_unknown_amount_still_buys_one_package(self) -> None:
         cost = cost_of(entry([line(BASIL, None, None)]))
@@ -298,8 +299,8 @@ class TestShares:
         shares = {e.entry_id: e.cents for e in cost.entries}
         assert shares == {"a": 120, "b": 120, "c": 120}
 
-    def test_staples_on_hand_cost_nothing(self) -> None:
-        cost = cost_of(entry([line(SALT, 1, "tsp")], id_="a"))
+    def test_whats_on_hand_costs_nothing(self) -> None:
+        cost = cost_of(entry([line(SALT, 1, "tsp")], id_="a"), pantry={SALT: "have"})
         assert [(e.entry_id, e.cents) for e in cost.entries] == [("a", 0)]
 
 

@@ -2,8 +2,11 @@
 #
 # With request_changes_workflow on (.coderabbit.yaml), CodeRabbit requests
 # changes when it has findings and approves once they're resolved and the
-# latest commit is reviewed. "CodeRabbit approved" passes only on that approval
-# of the PR's current head, so every push needs a fresh one.
+# latest commit is reviewed. "CodeRabbit approved" passes on that approval of
+# the PR's current head, so every push needs a fresh review. When CodeRabbit
+# re-reviews a push and finds nothing new, it doesn't approve again: it only
+# marks the commit "Review completed". That passes too, if its last verdict was
+# an approval and it left no review on the new commit.
 #
 # Sous has under 10 stars, so CodeRabbit doesn't review on its own: comment
 # "@coderabbitai review" (or tick "Trigger review" in its comment) after each
@@ -20,6 +23,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  statuses: read
 
 concurrency:
   group: coderabbit-gate-${{ github.event.pull_request.number }}-${{ github.event_name }}
@@ -52,6 +56,21 @@ jobs:
           if [ "$state" = "APPROVED" ] && [ "$commit" = "$head" ]; then
             echo "CodeRabbit approved this commit."
             exit 0
+          fi
+          if [ "$state" = "APPROVED" ]; then
+            # Approved earlier: pass if CodeRabbit finished reviewing this commit
+            # and left no review on it (findings come as a review).
+            done=$(gh api "repos/$REPO/commits/$head/status" \
+              --jq '[.statuses[] | select(.context == "CodeRabbit"
+                      and .state == "success" and .description == "Review completed")] | length')
+            left=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
+              --jq ".[] | select(.user.login == \"coderabbitai[bot]\")
+                        | select(.commit_id == \"$head\") | .state" | wc -l | tr -d ' ')
+            echo "Review of this commit completed: $done; reviews left on it: $left"
+            if [ "$done" -gt 0 ] && [ "$left" -eq 0 ]; then
+              echo "CodeRabbit approved an earlier commit and found nothing new in this one."
+              exit 0
+            fi
           fi
           if [ "$state" = "CHANGES_REQUESTED" ]; then
             echo "::error::CodeRabbit requested changes. Fix or resolve its comments, then push."

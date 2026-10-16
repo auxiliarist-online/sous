@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     # tier is 1,000), and a day per user.
     photo_pages_per_month: int = 900
     photo_pages_per_day: int = 40
+    # Sentry error reporting (TYL-74); off when empty.
+    sentry_dsn: str = ""
 
 
 settings = Settings()

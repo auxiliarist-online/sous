@@ -113,7 +113,8 @@ export async function deleteMyAccount(db: SupabaseClient): Promise<void> {
   if (error) throw error
 }
 
-/** Pantry staples Sous assumes are on hand (salt, oil, spices...), by name. */
+/** Common pantry staples (salt, oil, spices...), by name: quick taps for
+ *  "what do you have?". */
 export async function pantryStaples(
   db: SupabaseClient,
 ): Promise<{ id: string; name: string }[]> {

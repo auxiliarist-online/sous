@@ -3113,3 +3113,54 @@ describe('photo reads (TYL-52)', () => {
     assert.equal(seen.length, 0)
   })
 })
+
+describe('feedback', () => {
+  const JO = '00000000-0000-0000-0000-0000000000c1'
+  const KAI = '00000000-0000-0000-0000-0000000000c2'
+  before(async () => {
+    await db.query(
+      'insert into auth.users (id) values ($1), ($2) on conflict do nothing',
+      [JO, KAI],
+    )
+  })
+  const send = (user, message, owner = user) =>
+    as('authenticated', user, () =>
+      db.query(
+        'insert into feedback (user_id, message, page) values ($1, $2, $3)',
+        [owner, message, '/plan'],
+      ),
+    )
+  const mine = (user) =>
+    as('authenticated', user, async () => {
+      const { rows } = await db.query('select message from feedback')
+      return rows.map((r) => r.message)
+    })
+
+  it('takes a message from the signed-in user, private to them', async () => {
+    await send(JO, 'The list is great')
+    assert.deepEqual(await mine(JO), ['The list is great'])
+    assert.deepEqual(await mine(KAI), [])
+    const [{ data }] = await as('authenticated', JO, async () => {
+      const { rows } = await db.query('select export_my_data() as data')
+      return rows
+    })
+    assert.deepEqual(
+      data.feedback.map((f) => [f.message, f.page]),
+      [['The list is great', '/plan']],
+    )
+    assert.deepEqual(data.shopping_lists, [])
+    await assert.rejects(send(KAI, 'As Jo', JO), /row-level security/)
+    await assert.rejects(send(KAI, '   '), /check constraint/)
+  })
+
+  it('can’t be changed or deleted, and stops at 20 a day', async () => {
+    await as('authenticated', JO, async () => {
+      await db.query(`update feedback set message = 'changed'`)
+      await db.query('delete from feedback')
+    })
+    assert.deepEqual(await mine(JO), ['The list is great'])
+    for (let i = 0; i < 19; i++) await send(KAI, `note ${i}`)
+    await send(KAI, 'the 20th')
+    await assert.rejects(send(KAI, 'the 21st'), /too much feedback today/)
+  })
+})
