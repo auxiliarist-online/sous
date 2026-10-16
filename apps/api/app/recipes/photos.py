@@ -255,6 +255,28 @@ def _ingredientish(text: str) -> bool:
     )
 
 
+# How steps start ("Stir until smooth"); a line in an ingredient list without
+# an amount names a food instead ("Salt and pepper").
+STEP_VERB = re.compile(
+    r"^(?:add|bake|beat|blend|boil|bring|chop|combine|cook|cover|cut|drain|fold|fry|"
+    r"heat|let|mix|place|pour|preheat|put|reduce|remove|roast|saut[eé]|season|serve|"
+    r"set|simmer|sprinkle|spread|stir|toss|transfer|turn|whisk)\b",
+    re.I,
+)
+
+
+def _listish(lines: list[Line]) -> bool:
+    """A paragraph that reads as a list of ingredients: more than half its
+    lines (headings aside) start with an amount, and none of the others reads
+    as a step. A step that wraps rarely starts more than one line with a
+    number."""
+    others = [ln for ln in lines if not _ingredientish(ln.text) and not _is_heading(ln.text)]
+    amounts = sum(_ingredientish(ln.text) for ln in lines)
+    return (
+        amounts > 0 and amounts > len(others) and not any(STEP_VERB.match(ln.text) for ln in others)
+    )
+
+
 def _stepish(lines: list[Line]) -> bool:
     """A paragraph that reads as a step: numbered, or a sentence or longer."""
     text = " ".join(ln.text for ln in lines)
@@ -313,15 +335,22 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
             mode = "steps"
             continue
 
-        if all(_ingredientish(ln.text) or _is_heading(ln.text) for ln in para) and any(
+        all_amounts = all(_ingredientish(ln.text) or _is_heading(ln.text) for ln in para) and any(
             _ingredientish(ln.text) for ln in para
-        ):
+        )
+        if all_amounts or (mode != "steps" and _listish(para)):
             # A list of amounts: ingredients, wherever they turn up (a second
-            # column can be read after the steps).
+            # column can be read after the steps). Before the steps, a line
+            # without an amount among them ("Salt and pepper") is kept, to
+            # check; among the steps, every line needs one, or it's a step.
             if mode == "start":
                 mode = "ingredients"
             for ln in para:
-                _add_ingredient(draft, ln)
+                _add_ingredient(
+                    draft,
+                    ln,
+                    unsure=not _ingredientish(ln.text) and not _is_heading(ln.text),
+                )
             continue
         if mode == "ingredients" and not _stepish(para):
             # Short lines among the ingredients: "Salt and pepper", "Olive
