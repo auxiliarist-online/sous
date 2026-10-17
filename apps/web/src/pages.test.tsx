@@ -142,7 +142,7 @@ describe('RecipePage', () => {
   it('shows steps and Edit for the user’s own recipe', async () => {
     render(<RecipePage id={SOUP.id} api={api(SOUP)} />)
     expect(
-      await screen.findByText('Your recipe · Grandma · 25 min · serves 4'),
+      await screen.findByText('From Grandma · 25 min · serves 4'),
     ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Steps' })).toBeInTheDocument()
     expect(screen.getByText('Simmer.')).toBeInTheDocument()
