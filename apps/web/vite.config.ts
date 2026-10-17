@@ -43,10 +43,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
-        // The app shell answers navigations offline, except the API and the
-        // static SousBot page, which must always come from the server.
+        // The app shell answers navigations offline, except the API, the
+        // PostHog proxy and the static SousBot page, which must always come
+        // from the server.
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/sousbot/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/ingest\//, /^\/sousbot/],
       },
     }),
   ],
