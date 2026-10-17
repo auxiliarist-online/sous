@@ -341,6 +341,103 @@ def test_reads_a_page_photographed_sideways() -> None:
     assert len(draft.instructions) == 2
 
 
+def lines_block(
+    x: int, y: int, width: int, rows: list[tuple[str, int]], gap: int = 8
+) -> dict[str, Any]:
+    """One paragraph whose lines have their own heights: a title set in
+    several sizes, running straight into the introduction."""
+    words, top = [], y
+    for text, h in rows:
+        parts, left = text.split(), x
+        for i, w in enumerate(parts):
+            words.append(word(w, left, top, h, i == len(parts) - 1, 0.99))
+            left += 10 * len(w) + 10
+        top += h + gap
+    box = [
+        {"x": x, "y": y},
+        {"x": x + width, "y": y},
+        {"x": x + width, "y": top},
+        {"x": x, "y": top},
+    ]
+    return {"blockType": "TEXT", "boundingBox": {"vertices": box}, "paragraphs": [{"words": words}]}
+
+
+# A page like many modern cookbooks: a long title over four lines (its first
+# set smaller), sharing a paragraph with the introduction; two narrow columns
+# of ingredients where nearly every item wraps, one split by Vision into
+# paragraphs of its own; then the steps, and a tip in a box.
+SALAD_PAGE = page(
+    lines_block(
+        60,
+        40,
+        600,
+        [
+            ("Little Pears with", 38),
+            ("Honey Cream,", 52),
+            ("Fennel, Walnut,", 52),
+            ("and Mint", 52),
+            ("Little pears are sweet and crisp, and a half pear", 16),
+            ("makes a perfect portion for a starter.", 16),
+        ],
+    ),
+    block(60, 420, 200, [["Serves 4"]], h=16),
+    block(
+        60,
+        460,
+        210,
+        [
+            # The first line runs to the column's edge; the next starts with
+            # a capital, but carries the item on.
+            ["4 small or 2 large", "Bosc pears, cored", "and thinly sliced"],
+            ["About 1/3 cup roughly", "chopped walnuts, store-", "bought or homemade"],
+            ["1/2 cup fennel,"],
+            ["shaved thin, fronds"],
+            ["kept for serving"],
+        ],
+    ),
+    block(
+        330,
+        460,
+        250,
+        [
+            ["1 small handful fresh", "mint leaves"],
+            ["Kosher salt and freshly", "ground black pepper"],
+        ],
+    ),
+    block(
+        60,
+        760,
+        600,
+        [
+            ["Toss the pears, fennel and walnuts with the honey cream and season well."],
+            ["Scatter over the mint and serve right away."],
+        ],
+    ),
+    block(60, 980, 600, [["In the shop Pears ripen from the inside, so buy them firm and wait."]]),
+)
+
+
+def test_reads_a_long_title_and_narrow_columns() -> None:
+    draft = recipe_from_pages([blocks_of(SALAD_PAGE)])
+    assert draft.title == "Little Pears with Honey Cream, Fennel, Walnut, and Mint"
+    assert draft.servings == 4.0
+    assert draft.ingredients == [
+        "4 small or 2 large Bosc pears, cored and thinly sliced",
+        "About 1/3 cup roughly chopped walnuts, store-bought or homemade",
+        "1/2 cup fennel, shaved thin, fronds kept for serving",
+        "1 small handful fresh mint leaves",
+        "Kosher salt and freshly ground black pepper",
+    ]
+    assert draft.instructions[:2] == [
+        "Toss the pears, fennel and walnuts with the honey cream and season well.",
+        "Scatter over the mint and serve right away.",
+    ]
+    # The tip in a box, well below the steps, is kept but marked to check.
+    tip = "In the shop Pears ripen from the inside, so buy them firm and wait."
+    assert draft.instructions[2] == tip and tip in draft.unsure
+    assert draft.skipped[0].startswith("Little pears are sweet")
+
+
 def test_a_word_set_apart_rejoins_its_line() -> None:
     # Vision can return a line's last word as a block of its own.
     split = page(

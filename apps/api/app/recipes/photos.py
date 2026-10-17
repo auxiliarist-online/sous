@@ -359,6 +359,8 @@ def _split(blocks: list[Block], across: bool) -> list[list[Block]]:
 
 QUANTITY = re.compile(
     r"^\s*(?:[-–•*▢☐□]\s*)?"
+    # "About ½ bunch radishes", "Scant 1 cup": a hedge before a number.
+    r"(?:(?:about|approx\.?|approximately|roughly|scant|heaping|generous)\s+(?=[\d½⅓⅔¼¾⅛⅜⅝⅞]))?"
     r"(?:\d+(?:[.,/]\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞]"
     r"|(?:a|an|one|two|three|four|five|six|eight|twelve|half|a few|several|pinch|"
     r"dash|handful|large|small|medium|juice of|zest of)\b)",
@@ -498,40 +500,47 @@ def _furniture_line(ln: Line, b: Block, page: list[Line]) -> bool:
     return False
 
 
-def _continues(prev: Line, ln: Line, margin: float) -> bool:
+def _continues(prev: Line, ln: Line, margin: float, right: float = math.inf) -> bool:
     """Whether a line carries on the one before rather than starting a new
     item: indented (a hanging indent), starting in lower case or with a
-    bracket, or after a line that ends mid-phrase or with a bracket open."""
+    bracket, after a line that ends mid-phrase or with a bracket open, or
+    after one that runs to the column's edge (a narrow column wraps nearly
+    every item) when it doesn't start with an amount itself."""
     text = ln.text
-    if ln.left - margin > 0.8 * max(ln.height, 1.0):
+    size = max(ln.height, 1.0)
+    if ln.left - margin > 0.8 * size:
         return True
     if text[:1].islower() or text[:1] in "([":
         return True
-    return bool(OPEN_END.search(prev.text)) or prev.text.count("(") > prev.text.count(")")
+    if OPEN_END.search(prev.text) or prev.text.count("(") > prev.text.count(")"):
+        return True
+    return prev.right >= right - 1.5 * size and not QUANTITY.match(text)
 
 
-def _join(lines: list[Line]) -> str:
-    """Lines as one text, mending words broken with a hyphen."""
+def _join(lines: list[Line], keep_hyphens: bool = False) -> str:
+    """Lines as one text. A word broken with a hyphen at a line's end is
+    mended in prose ("rap-idly"); in an ingredient the hyphen is more likely
+    the word's own ("store-bought", "flat-leaf"), so it stays."""
     text = ""
     for ln in lines:
         if text.endswith("-") and ln.text[:1].islower():
-            text = text[:-1] + ln.text
+            text = (text if keep_hyphens else text[:-1]) + ln.text
         else:
             text = f"{text} {ln.text}".strip()
     return text
 
 
-def _items(lines: list[Line]) -> list[tuple[str, list[Line]]]:
+def _items(lines: list[Line], right: float = math.inf) -> list[tuple[str, list[Line]]]:
     """A paragraph split into items: a new one starts at each line that
-    doesn't carry on the one before."""
+    doesn't carry on the one before. `right` is the column's right edge."""
     margin = min(ln.left for ln in lines)
     groups: list[list[Line]] = []
     for ln in lines:
-        if groups and _continues(groups[-1][-1], ln, margin):
+        if groups and _continues(groups[-1][-1], ln, margin, right):
             groups[-1].append(ln)
         else:
             groups.append([ln])
-    return [(_join(g), g) for g in groups]
+    return [(_join(g, keep_hyphens=True), g) for g in groups]
 
 
 def _ingredient_like(text: str) -> bool:
@@ -543,7 +552,7 @@ def _ingredient_like(text: str) -> bool:
         return False
     if _ingredientish(text.split(",")[0]) or QUANTITY.match(text):
         return len(words) <= 40
-    return len(words) <= 12 and not STEP_VERB.match(text)
+    return len(words) <= 16 and not STEP_VERB.match(text)
 
 
 def _meta(text: str, draft: Draft) -> bool:
@@ -575,58 +584,70 @@ def _meta(text: str, draft: Draft) -> bool:
     return True
 
 
+def _run(lines: list[Line], i: int) -> list[Line]:
+    """The lines next to lines[i], in reading order within its block, set
+    about as large as it and close below one another: a title wrapped over
+    several lines ("Brussels Sprouts / with Pickled / Carrots, …")."""
+    size = lines[i].height
+    lo = i
+    while (
+        lo > 0
+        and lines[lo - 1].height >= 0.65 * size
+        and lines[lo].top - lines[lo - 1].bottom < size
+    ):
+        lo -= 1
+    hi = i
+    while (
+        hi + 1 < len(lines)
+        and lines[hi + 1].height >= 0.65 * size
+        and lines[hi + 1].top - lines[hi].bottom < size
+    ):
+        hi += 1
+    return lines[lo : hi + 1]
+
+
 def _title(blocks: list[Block]) -> tuple[str, Line | None, list[Line]]:
-    """The recipe's name: the line on the first page that stands out most in
-    size from the text around it (a photo taken at an angle makes the near
-    edge bigger, so size alone misleads), in a short paragraph, and not an
-    amount, a time or a heading like "Ingredients". The lines it wraps onto
-    come with it ("Caramelized / Onion Pie"); a label before a colon
-    ("Chunky: Tuscan Bean Soup") is left off."""
+    """The recipe's name: the run of large lines on the first page that
+    stands out most in size from the other text near it (a photo taken at an
+    angle makes the near edge bigger, so size alone misleads), short, and not
+    an amount, a time or a heading like "Ingredients". All its lines come
+    with it, however Vision grouped them; a label before a colon ("Chunky:
+    Tuscan Bean Soup") is left off."""
     every = [ln for b in blocks for p in b.paragraphs for ln in p]
     page_height = max((b.page_height for b in blocks), default=0.0) or max(
         (ln.bottom for ln in every), default=1.0
     )
     best: tuple[float, Line, list[Line]] | None = None
     for b in blocks:
-        for para in b.paragraphs:
-            if len(para) > 3 or sum(len(ln.text.split()) for ln in para) > 16:
+        lines = [ln for p in b.paragraphs for ln in p]
+        for i, ln in enumerate(lines):
+            text = ln.text
+            if (
+                _ingredientish(text)
+                or not re.match(r"[A-Z0-9]", text)
+                or META.match(text)
+                or INGREDIENTS_HEAD.match(text)
+                or STEPS_HEAD.match(text)
+                or not re.search(r"[A-Za-z]{2}", text)
+            ):
                 continue
-            for ln in para:
-                text = ln.text
-                if (
-                    _ingredientish(text)
-                    or text[:1].islower()
-                    or META.match(text)
-                    or INGREDIENTS_HEAD.match(text)
-                    or STEPS_HEAD.match(text)
-                    or not re.search(r"[A-Za-z]{2}", text)
-                ):
-                    continue
-                near = sorted(
-                    o.height
-                    for o in every
-                    if o is not ln and abs(o.top - ln.top) < 0.15 * page_height
-                )
-                around = near[len(near) // 2] if near else ln.height
-                score = ln.height / max(around, 1.0)
-                if best is None or score > best[0]:
-                    best = (score, ln, para)
+            run = _run(lines, i)
+            if len(run) > 6 or sum(len(r.text.split()) for r in run) > 20:
+                continue
+            near = sorted(
+                o.height for o in every if o not in run and abs(o.top - ln.top) < 0.15 * page_height
+            )
+            around = near[len(near) // 2] if near else ln.height
+            score = ln.height / max(around, 1.0)
+            if best is None or score > best[0]:
+                best = (score, ln, run)
     if best is None:
         return "", None, []
-    _, line, para = best
-    # The neighbouring lines of the same size are the rest of it.
-    i = para.index(line)
-    lo = i
-    while lo > 0 and para[lo - 1].height >= 0.85 * line.height:
-        lo -= 1
-    hi = i
-    while hi + 1 < len(para) and para[hi + 1].height >= 0.85 * line.height:
-        hi += 1
-    lines = para[lo : hi + 1]
-    text = _join(lines).rstrip(":")
+    _, line, run = best
+    text = _join(run).rstrip(":")
     if (m := re.match(r"^[\w'’-]+(?: [\w'’-]+)?: (.+)$", text)) and len(m.group(1).split()) >= 2:
         text = m.group(1)
-    return text, line, lines
+    return text, run[0], run
 
 
 def recipe_from_pages(pages: list[list[Block]]) -> Draft:
@@ -646,6 +667,8 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
 
     mode = "start"  # then "ingredients", "steps", and "notes"
     section: str | None = None  # a heading waiting for its list
+    last_item: list[Line] | None = None  # the lines of the last ingredient
+    step_lines: list[Line] = []  # the last line of each step so far
     for blocks in ordered:
         page_lines = [ln for b in blocks for p in b.paragraphs for ln in p]
         for b in blocks:
@@ -665,12 +688,13 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
                     continue
                 text = _join(lines)
                 if INGREDIENTS_HEAD.match(text):
-                    mode = "ingredients"
+                    mode, last_item = "ingredients", None
                     continue
                 if STEPS_HEAD.match(text):
-                    mode = "steps"
+                    mode, last_item = "steps", None
                     continue
                 if len(lines) == 1 and _is_heading(text) and not _ingredientish(text):
+                    last_item = None
                     if mode == "steps" and not SUBSTEP.match(text):
                         mode = "notes"  # "Serving ideas", "More ways"
                     if mode == "notes":
@@ -682,7 +706,20 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
                     continue
 
                 if (
-                    mode == "steps"
+                    last_item
+                    and _continues(last_item[-1], lines[0], min(ln.left for ln in last_item))
+                    and not QUANTITY.match(lines[0].text)
+                ):
+                    # The last ingredient carries on here: Vision put its
+                    # wrapped lines in a paragraph of their own.
+                    gone = draft.ingredients.pop()
+                    if draft.unsure and draft.unsure[-1] == gone:
+                        draft.unsure.pop()
+                    lines = last_item + lines
+                    text = _join(lines)
+                elif (
+                    last_item is None
+                    and mode == "steps"
                     and draft.instructions
                     and text[:1].islower()
                     and not draft.instructions[-1].endswith((".", "!"))
@@ -690,7 +727,7 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
                     # A step Vision split in two: it carries on mid-sentence.
                     draft.instructions[-1] = _join([Line(draft.instructions[-1]), Line(text)])
                     continue
-                items = _items(lines)
+                items = _items(lines, b.right)
                 if mode != "notes" and _is_list(items):
                     if mode == "start":
                         mode = "ingredients"
@@ -704,7 +741,9 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
                             min(ln.confidence for ln in item_lines),
                             unsure=not QUANTITY.match(item) and not _is_heading(item),
                         )
+                    last_item = items[-1][1]
                     continue
+                last_item = None
                 if mode == "notes" or (mode == "start" and not STEP_NUMBER.match(text)):
                     draft.skipped.append(text)  # the introduction, or notes
                     continue
@@ -712,9 +751,23 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
                 section = None
                 step = STEP_NUMBER.sub("", text).strip()
                 draft.instructions.append(step)
-                if any(ln.confidence < UNSURE_BELOW for ln in lines):
+                if any(ln.confidence < UNSURE_BELOW for ln in lines) or _set_apart(
+                    lines[0], step_lines
+                ):
                     draft.unsure.append(step)
+                step_lines.append(lines[-1])
     return draft
+
+
+def _set_apart(first: Line, step_lines: list[Line]) -> bool:
+    """Whether a step starts well below the step before it in the same
+    column: likely a tip in a box ("At the market…"), not a step. It's kept,
+    to check."""
+    if not step_lines:
+        return False
+    prev = step_lines[-1]
+    same_column = first.left < prev.right and prev.left < first.right
+    return same_column and first.top - prev.bottom > 3 * max(first.height, 1.0)
 
 
 def _is_list(items: list[tuple[str, list[Line]]]) -> bool:
