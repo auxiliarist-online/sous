@@ -438,6 +438,20 @@ def test_reads_a_long_title_and_narrow_columns() -> None:
     assert draft.skipped[0].startswith("Little pears are sweet")
 
 
+def test_an_item_doesnt_carry_on_into_another_column_or_page() -> None:
+    two = page(
+        block(60, 40, 880, [["Slaw"]], h=48),
+        block(60, 120, 250, [["1 cabbage, shredded,"]]),
+        # Lower case and after a comma, but in the next column.
+        block(400, 120, 300, [["mixed with the dressing until coated well and glossy."]]),
+    )
+    draft = recipe_from_pages([blocks_of(two)])
+    assert draft.ingredients == ["1 cabbage, shredded,"]
+    nxt = page(block(60, 40, 400, [["(see page 12) for the dressing to serve"]]))
+    draft = recipe_from_pages([blocks_of(two), blocks_of(nxt)])
+    assert draft.ingredients[0] == "1 cabbage, shredded,"
+
+
 def test_a_word_set_apart_rejoins_its_line() -> None:
     # Vision can return a line's last word as a block of its own.
     split = page(

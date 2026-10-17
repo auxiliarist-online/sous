@@ -670,6 +670,7 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
     last_item: list[Line] | None = None  # the lines of the last ingredient
     step_lines: list[Line] = []  # the last line of each step so far
     for blocks in ordered:
+        last_item = None  # an item doesn't carry on onto the next page
         page_lines = [ln for b in blocks for p in b.paragraphs for ln in p]
         for b in blocks:
             for para in b.paragraphs:
@@ -707,6 +708,7 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
 
                 if (
                     last_item
+                    and _right_below(last_item[-1], lines[0])
                     and _continues(last_item[-1], lines[0], min(ln.left for ln in last_item))
                     and not QUANTITY.match(lines[0].text)
                 ):
@@ -757,6 +759,13 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
                     draft.unsure.append(step)
                 step_lines.append(lines[-1])
     return draft
+
+
+def _right_below(prev: Line, ln: Line) -> bool:
+    """Whether a line sits in the same column as another and straight under
+    it: where an item's wrapped line can be (not in the next column)."""
+    overlap = ln.left < prev.right and prev.left < ln.right
+    return overlap and -0.5 * ln.height <= ln.top - prev.bottom < 1.5 * max(ln.height, 1.0)
 
 
 def _set_apart(first: Line, step_lines: list[Line]) -> bool:
