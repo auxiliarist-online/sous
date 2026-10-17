@@ -52,6 +52,8 @@ import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
 import { Feedback, type FeedbackApi } from './Feedback.tsx'
 import { sendFeedback } from './feedback.ts'
+import { InstallOffer } from './InstallOffer.tsx'
+import { identify, replayUrl } from './telemetry.ts'
 import { Privacy } from './Privacy.tsx'
 import { Link } from './router.tsx'
 import { Settings } from './Settings.tsx'
@@ -140,7 +142,14 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     places: () => places(db, userId),
     addPlace: (name) => addPlace(db, userId, name),
     pantry: () => loadPantry(db),
-    sendFeedback: (message, page) => sendFeedback(db, message, page),
+    sendFeedback: (message, page, kind) =>
+      sendFeedback(db, session, {
+        message,
+        page,
+        kind,
+        device: navigator.userAgent,
+        replayUrl: replayUrl(),
+      }),
   }
 }
 
@@ -175,6 +184,11 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
   }, [session, shared, sharedPage])
 
   const userId = session?.user.id ?? null
+  // Replays and errors are filed under the account's id (never its email).
+  useEffect(() => {
+    if (session !== undefined) identify(userId)
+  }, [session, userId])
+
   useEffect(() => {
     if (!api) return
     let live = true
@@ -264,6 +278,9 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         </nav>
       )}
 
+      {at.page !== 'welcome' && at.page !== 'privacy' && (
+        <InstallOffer signedIn={signedIn} />
+      )}
       {!auth && (
         <p className="error" role="alert">
           Sign-in isn't set up: add VITE_SUPABASE_URL and

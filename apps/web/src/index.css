@@ -1021,3 +1021,13 @@ label.button {
 .feedback textarea {
   width: 100%;
 }
+
+/* "Install Sous on your phone", until it's installed. */
+.install-offer ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.install-offer .share-icon {
+  vertical-align: -2px;
+}
