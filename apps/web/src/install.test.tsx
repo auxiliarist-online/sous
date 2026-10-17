@@ -2,13 +2,13 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { InstallOffer } from './InstallOffer.tsx'
-import { isIos, listenForInstall, promptInstall } from './install.ts'
+import { isAndroid, isIos, listenForInstall, promptInstall } from './install.ts'
 
 beforeEach(() => localStorage.clear())
 
 describe('InstallOffer', () => {
-  it('installs with the browser’s prompt where there is one', async () => {
-    listenForInstall()
+  it('installs with the browser’s prompt on Android', async () => {
+    listenForInstall(true)
     const prompt = vi.fn(async () => {})
     const event = Object.assign(new Event('beforeinstallprompt'), {
       prompt,
@@ -40,6 +40,21 @@ describe('InstallOffer', () => {
     localStorage.clear()
     render(<InstallOffer signedIn way={null} />)
     expect(screen.queryByLabelText('Install Sous')).toBeNull()
+  })
+})
+
+describe('on a desktop browser', () => {
+  it('leaves the browser’s own install prompt alone', () => {
+    const listen = vi.spyOn(window, 'addEventListener')
+    listenForInstall(false)
+    expect(listen).not.toHaveBeenCalled()
+    listen.mockRestore()
+    expect(
+      isAndroid('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140'),
+    ).toBe(false)
+    expect(
+      isAndroid('Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/140'),
+    ).toBe(true)
   })
 })
 

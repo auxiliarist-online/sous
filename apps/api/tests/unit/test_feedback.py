@@ -35,9 +35,13 @@ def client() -> Iterator[TestClient]:
     app.dependency_overrides.clear()
 
 
-def routes(report: dict[str, Any], linear_ok: bool = True, claimed: bool = True) -> Any:
+def routes(
+    report: dict[str, Any], linear_ok: bool = True, claimed: bool = True, linear_down: bool = False
+) -> Any:
     def handle(r: httpx.Request) -> httpx.Response:
         if r.url.host == "api.linear.app":
+            if linear_down:
+                raise httpx.ConnectTimeout("timed out", request=r)
             if not linear_ok:
                 return httpx.Response(200, json={"errors": [{"message": "nope"}]})
             return httpx.Response(
@@ -119,6 +123,10 @@ def test_without_a_key_or_when_linear_fails(
     release = [r for r in seen if r.method == "PATCH"][-1]
     assert release.url.params["linear_url"] == "eq.filing"
     assert json.loads(release.content) == {"linear_url": None}
+    # A timeout lets it go too.
+    seen = supabase(routes(REPORT, linear_down=True))
+    assert client.post("/feedback/7/file").status_code == 502
+    assert json.loads([r for r in seen if r.method == "PATCH"][-1].content) == {"linear_url": None}
 
 
 def test_needs_sign_in() -> None:

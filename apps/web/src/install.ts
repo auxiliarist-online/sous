@@ -13,9 +13,16 @@ interface InstallPromptEvent extends Event {
 let deferred: InstallPromptEvent | null = null
 const listeners = new Set<() => void>()
 
-/** Catch the browser's install prompt as the page loads (it fires once,
- *  early), so the app can offer it with its own button later. */
-export function listenForInstall(): void {
+/** Whether this is an Android phone or tablet: where Sous offers its own
+ *  install button. A desktop browser keeps its usual install icon. */
+export function isAndroid(ua = navigator.userAgent): boolean {
+  return /Android/i.test(ua)
+}
+
+/** Catch an Android browser's install prompt as the page loads (it fires
+ *  once, early), so the app can offer it with its own button later. */
+export function listenForInstall(android = isAndroid()): void {
+  if (!android) return
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault()
     deferred = e as InstallPromptEvent

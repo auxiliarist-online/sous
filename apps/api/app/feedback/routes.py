@@ -109,24 +109,22 @@ async def file(report_id: int, user_id: Annotated[str, Depends(current_user_id)]
         if not claim.json():
             return {"filed": True, "url": None}  # another request is filing it
 
-        resp = await client.post(
-            LINEAR_URL,
-            json={"query": CREATE_ISSUE, "variables": {"input": issue_for(report)}},
-            # Linear's personal keys go as they are, without "Bearer".
-            headers={"Authorization": settings.linear_api_key},
-        )
-        body = resp.json() if resp.status_code == 200 else {}
-        created = (body.get("data") or {}).get("issueCreate") or {}
-        if not created.get("success"):
-            # Let it go back, so a later try can file it.
+        try:
+            url = await _create_issue(client, report)
+        except Exception as exc:
+            # Whatever went wrong (Linear down, a timeout, an odd answer), let
+            # the report go back, so a later try can file it.
             await client.patch(
                 f"{settings.supabase_url}/rest/v1/feedback",
                 params={"id": f"eq.{report_id}", "linear_url": f"eq.{FILING}"},
                 json={"linear_url": None},
                 headers=_headers(),
             )
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "We couldn't file the report.")
-        url = created["issue"]["url"]
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, "We couldn't file the report."
+            ) from exc
+        # The issue exists now: if recording its link fails, the report stays
+        # marked as filing, and isn't filed twice.
         await client.patch(
             f"{settings.supabase_url}/rest/v1/feedback",
             params={"id": f"eq.{report_id}"},
@@ -134,3 +132,18 @@ async def file(report_id: int, user_id: Annotated[str, Depends(current_user_id)]
             headers=_headers(),
         )
     return {"filed": True, "url": url}
+
+
+async def _create_issue(client: httpx.AsyncClient, report: dict[str, Any]) -> str:
+    """Create the report's Linear issue; its link. Raises if Linear says no."""
+    resp = await client.post(
+        LINEAR_URL,
+        json={"query": CREATE_ISSUE, "variables": {"input": issue_for(report)}},
+        # Linear's personal keys go as they are, without "Bearer".
+        headers={"Authorization": settings.linear_api_key},
+    )
+    resp.raise_for_status()
+    created = (resp.json().get("data") or {}).get("issueCreate") or {}
+    if not created.get("success"):
+        raise RuntimeError("Linear didn't create the issue")
+    return str(created["issue"]["url"])
