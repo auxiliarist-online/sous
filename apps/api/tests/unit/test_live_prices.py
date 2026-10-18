@@ -329,3 +329,9 @@ def test_a_garbled_kroger_answer_is_no_answer(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(Kroger, "stores_near", garbled)
     assert live_prices._has_store_near("02139") is None
     assert "02139" not in live_prices._nearby  # asked again next time
+
+    def no_token(self: Any, zip_code: str, miles: int = 15, limit: int = 10) -> list[Any]:
+        raise KeyError("access_token")
+
+    monkeypatch.setattr(Kroger, "stores_near", no_token)
+    assert live_prices._has_store_near("02139") is None

@@ -72,8 +72,9 @@ def _has_store_near(zip_code: str) -> bool | None:
         try:
             with httpx.Client(timeout=10.0) as client:
                 found = bool(Kroger(client).stores_near(zip_code, miles=15, limit=1))
-        except (httpx.HTTPError, RuntimeError, ValueError) as exc:
-            # ValueError: Kroger answered with something that isn't JSON.
+        except (httpx.HTTPError, RuntimeError, ValueError, KeyError) as exc:
+            # ValueError: Kroger answered with something that isn't JSON;
+            # KeyError: JSON without what we expected (no access token).
             log.warning("couldn't check stores near %s: %s", zip_code, exc)
             return None
         _nearby[zip_code] = (found, time.monotonic())

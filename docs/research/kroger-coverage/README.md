@@ -9,7 +9,7 @@ Sous gets live shelf prices only from Kroger-family stores (Kroger, Harris Teete
 - **2,775 stores** in 36 states plus DC: 2,505 priced through Kroger's product matches, and 270 Harris Teeter priced through its own.
 - **40%** of people live within 5 miles of one, **47%** within 10, and **58%** within 25. These are straight-line distances; driving is longer.
 - **Strong:** Ohio Valley, Georgia and the Carolinas, Virginia (Virginia Beach is 96% within 10 miles), Colorado, Utah, Arizona, Nevada, Southern California and the Pacific Northwest, plus Dallas and Houston.
-- **No stores at all:** NY, MA, MN, OK, CT, IA, HI, NH, ME, RI, SD, ND, VT.
+- **No stores at all** (14 states): New York, New Jersey, Massachusetts, Minnesota, Oklahoma, Connecticut, Iowa, Hawaii, New Hampshire, Maine, Rhode Island, South Dakota, North Dakota, Vermont.
 
 Metros of a million or more with essentially no coverage:
 
