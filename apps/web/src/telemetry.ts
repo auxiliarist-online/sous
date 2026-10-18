@@ -14,7 +14,11 @@ export async function startTelemetry(
   if (!key) return false
   const { default: posthog } = await import('posthog-js')
   posthog.init(key, {
-    api_host: 'https://us.i.posthog.com',
+    // Through Sous's own address (vercel.json forwards /ingest to PostHog):
+    // ad blockers and tracking protection block posthog.com by name, which
+    // lost replays. Links to replays still go to PostHog's site.
+    api_host: '/ingest',
+    ui_host: 'https://us.posthog.com',
     // Sous moves between pages without reloading.
     capture_pageview: 'history_change',
     capture_exceptions: true,

@@ -18,6 +18,8 @@ describe('startTelemetry', () => {
     expect(init).toHaveBeenCalledWith(
       'phc_test',
       expect.objectContaining({
+        api_host: '/ingest',
+        ui_host: 'https://us.posthog.com',
         mask_all_text: true,
         mask_all_element_attributes: true,
         session_recording: expect.objectContaining({
