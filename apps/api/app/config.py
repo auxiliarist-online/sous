@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     linear_team_id: str = "1b5a5b93-5634-4708-85b1-a849bc9a8598"
     linear_project_id: str = "a840f31f-21f4-4474-9dbd-a3031076fb67"
     linear_bug_label_id: str = "2e0f1a4a-7cd0-4b78-8e00-88f6c20f8f3f"
+    # "Beta report": filed from the app, so they can be listed on their own.
+    linear_report_label_id: str = "68979110-22d9-4982-97fd-e78e7b5c1dca"
 
 
 settings = Settings()

@@ -78,7 +78,7 @@ def test_files_a_problem_in_linear_with_its_replay(
     assert "> It was fine yesterday." in issue["description"]
     assert "(https://us.posthog.com/replay/abc)" in issue["description"]
     assert "iPhone Safari 18" in issue["description"]
-    assert issue["labelIds"] == [settings.linear_bug_label_id]
+    assert issue["labelIds"] == [settings.linear_bug_label_id, settings.linear_report_label_id]
     claim, done = [r for r in seen if r.method == "PATCH"]
     assert claim.url.params["linear_url"] == "is.null"
     assert json.loads(claim.content) == {"linear_url": "filing"}
