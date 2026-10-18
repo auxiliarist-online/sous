@@ -2,6 +2,7 @@
 
 import asyncio
 import copy
+import time
 from datetime import date
 from typing import Any
 
@@ -279,3 +280,40 @@ class TestNoStore:
         # Kroger is asked once per zip code.
         asyncio.run(live_prices.no_store("u"))
         assert asked == ["23451", "02139"]
+
+    def test_a_failed_lookup_is_unknown(
+        self, supabase: Install, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def down(r: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("down", request=r)
+
+        supabase(down)
+        assert asyncio.run(live_prices.no_store("u"))["store_status"] == "unknown"
+        supabase(lambda r: httpx.Response(503))
+        assert asyncio.run(live_prices.no_store("u"))["store_status"] == "unknown"
+
+    def test_one_lookup_per_zip_at_a_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import threading as th
+
+        live_prices._nearby.clear()
+        monkeypatch.setattr(settings, "kroger_client_id", "id")
+        calls: list[str] = []
+        started = th.Event()
+
+        def stores_near(self: Any, zip_code: str, miles: int = 15, limit: int = 10) -> list[Any]:
+            calls.append(zip_code)
+            started.set()
+            time.sleep(0.05)
+            return []
+
+        monkeypatch.setattr(Kroger, "stores_near", stores_near)
+        results: list[bool | None] = []
+        threads = [
+            th.Thread(target=lambda: results.append(live_prices._has_store_near("02139")))
+            for _ in range(4)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert calls == ["02139"] and results == [False] * 4

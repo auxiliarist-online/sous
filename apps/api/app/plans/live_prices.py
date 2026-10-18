@@ -9,6 +9,7 @@ estimates: a plan never fails to price because Kroger is down.
 
 import asyncio
 import logging
+import threading
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -54,38 +55,56 @@ async def _store(client: httpx.AsyncClient, user_id: str) -> dict[str, Any] | No
 # when it was asked: Kroger is asked at most once a day per zip.
 _nearby: dict[str, tuple[bool, float]] = {}
 NEARBY_SECONDS = 24 * 3600
+# One lookup per zip at a time: a second request for it waits for the answer.
+_nearby_locks: dict[str, threading.Lock] = {}
+_locks_lock = threading.Lock()
 
 
 def _has_store_near(zip_code: str) -> bool | None:
     """Whether Kroger lists a store within 15 miles of the zip (None when it
     can't be asked)."""
-    hit = _nearby.get(zip_code)
-    if hit and time.monotonic() - hit[1] < NEARBY_SECONDS:
-        return hit[0]
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            found = bool(Kroger(client).stores_near(zip_code, miles=15, limit=1))
-    except (httpx.HTTPError, RuntimeError) as exc:
-        log.warning("couldn't check stores near %s: %s", zip_code, exc)
-        return None
-    _nearby[zip_code] = (found, time.monotonic())
-    return found
+    with _locks_lock:
+        lock = _nearby_locks.setdefault(zip_code, threading.Lock())
+    with lock:
+        hit = _nearby.get(zip_code)
+        if hit and time.monotonic() - hit[1] < NEARBY_SECONDS:
+            return hit[0]
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                found = bool(Kroger(client).stores_near(zip_code, miles=15, limit=1))
+        except (httpx.HTTPError, RuntimeError) as exc:
+            log.warning("couldn't check stores near %s: %s", zip_code, exc)
+            return None
+        _nearby[zip_code] = (found, time.monotonic())
+        return found
 
 
 async def no_store(user_id: str) -> dict[str, Any]:
     """Why the week isn't priced from a store, for the plan page to say:
     "unavailable" (the user's store didn't answer), "none_nearby" (no
-    Kroger-family store near their zip code), or "not_chosen"."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await _rest(
-            client,
-            "user_stores",
-            {"select": "store_id", "user_id": f"eq.{user_id}", "is_primary": "is.true"},
-        )
-        if resp.status_code == 200 and resp.json():
-            return {"store_status": "unavailable", "home_zip": None}
-        resp = await _rest(client, "profiles", {"select": "home_zip", "user_id": f"eq.{user_id}"})
-    rows = resp.json() if resp.status_code == 200 else []
+    Kroger-family store near their zip code), "not_chosen", or "unknown"
+    when it can't be told (the cost stands either way)."""
+    unknown = {"store_status": "unknown", "home_zip": None}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await _rest(
+                client,
+                "user_stores",
+                {"select": "store_id", "user_id": f"eq.{user_id}", "is_primary": "is.true"},
+            )
+            if resp.status_code != 200:
+                return unknown
+            if resp.json():
+                return {"store_status": "unavailable", "home_zip": None}
+            resp = await _rest(
+                client, "profiles", {"select": "home_zip", "user_id": f"eq.{user_id}"}
+            )
+    except httpx.HTTPError as exc:
+        log.warning("couldn't tell why there's no store: %s", exc)
+        return unknown
+    if resp.status_code != 200:
+        return unknown
+    rows = resp.json()
     zip_code = rows[0].get("home_zip") if rows else None
     if (
         zip_code

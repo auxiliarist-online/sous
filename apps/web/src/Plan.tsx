@@ -396,15 +396,16 @@ function Budget({
   )
 }
 
-/** Where the week's prices come from, and when they're estimates, why:
- *  no store chosen, none near the user's zip code (Kroger-family stores
- *  only), or the store's prices didn't load. */
+/** Where the week's prices come from. Without a store's prices it says
+ *  why (no store chosen, none near the user's zip code, or the store's
+ *  prices didn't load), and mentions estimates only when some prices are
+ *  (a user may have entered their own for everything). */
 function PriceSource({ cost }: { cost: PlanCost }) {
+  const estimates = cost.estimated ? ' Prices marked ~ are estimates.' : ''
   if (cost.storeName) {
     return (
       <>
-        Prices from {cost.storeName}, today.
-        {cost.estimated && ' Prices marked ~ are rough estimates.'}
+        Prices from {cost.storeName}, today.{estimates}
       </>
     )
   }
@@ -413,19 +414,19 @@ function PriceSource({ cost }: { cost: PlanCost }) {
       return (
         <>
           Store prices come from Kroger-family stores, and there isn't one near{' '}
-          {cost.homeZip ?? 'you'}, so these are estimates. Use{' '}
-          <strong>Edit price</strong> on anything to use what you pay.
+          {cost.homeZip ?? 'you'}.{estimates} Use <strong>Edit price</strong> to
+          use what you pay.
         </>
       )
     case 'unavailable':
-      return (
-        <>Your store's prices didn't load this time, so these are estimates.</>
-      )
+      return <>Your store's prices didn't load this time.{estimates}</>
+    case 'unknown':
+      return <>Store prices aren't available right now.{estimates}</>
     default:
       return (
         <>
-          Prices are estimates. <Link to="/settings">Choose your store</Link>{' '}
-          for today's shelf prices.
+          <Link to="/settings">Choose your store</Link> for today's shelf
+          prices.{estimates}
         </>
       )
   }

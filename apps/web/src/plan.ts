@@ -221,7 +221,8 @@ export async function loadPantry(
   )
 }
 
-export type StoreStatus = 'store' | 'not_chosen' | 'none_nearby' | 'unavailable'
+export type StoreStatus =
+  'store' | 'not_chosen' | 'none_nearby' | 'unavailable' | 'unknown'
 
 export type PantryStatus = 'have' | 'out'
 
