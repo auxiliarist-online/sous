@@ -72,7 +72,8 @@ def _has_store_near(zip_code: str) -> bool | None:
         try:
             with httpx.Client(timeout=10.0) as client:
                 found = bool(Kroger(client).stores_near(zip_code, miles=15, limit=1))
-        except (httpx.HTTPError, RuntimeError) as exc:
+        except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+            # ValueError: Kroger answered with something that isn't JSON.
             log.warning("couldn't check stores near %s: %s", zip_code, exc)
             return None
         _nearby[zip_code] = (found, time.monotonic())
@@ -99,7 +100,7 @@ async def no_store(user_id: str) -> dict[str, Any]:
             resp = await _rest(
                 client, "profiles", {"select": "home_zip", "user_id": f"eq.{user_id}"}
             )
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ValueError) as exc:
         log.warning("couldn't tell why there's no store: %s", exc)
         return unknown
     if resp.status_code != 200:

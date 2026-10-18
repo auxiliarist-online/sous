@@ -6,7 +6,7 @@ off search). Responses are cached in data/cache; stores go to data/stores.json.
     cd apps/api && set -a && . ../../.env && set +a   # KROGER_CLIENT_ID/SECRET
     .venv/bin/python ../../docs/research/kroger-coverage/harvest.py
 
-About 410 Locations calls (the API allows 1,600 a day). data/ is gitignored:
+About 420 Locations calls (the API allows 1,600 a day). data/ is gitignored:
 Kroger's store data isn't kept in the repo."""
 import json, math, os, sys, hashlib
 from pathlib import Path
@@ -67,6 +67,7 @@ def grid(lat0, lat1, lon0, lon1, spacing):
 
 points = list(grid(24.4, 49.5, -125.0, -66.8, 140))          # lower 48
 points += list(grid(55.0, 65.0, -165.0, -140.0, 140))        # Alaska
+points += list(grid(54.5, 60.5, -140.0, -129.5, 140))        # Alaska's panhandle (Juneau)
 points += [(21.4, -157.9), (20.8, -156.3), (19.6, -155.5)]   # Hawaii
 print("grid points:", len(points), file=sys.stderr)
 for i, (lat, lon) in enumerate(points):

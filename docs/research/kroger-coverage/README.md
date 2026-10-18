@@ -6,7 +6,7 @@ Sous gets live shelf prices only from Kroger-family stores (Kroger, Harris Teete
 
 ## Findings
 
-- **2,774 stores** in 36 states plus DC: 2,504 priced through Kroger's product matches, and 270 Harris Teeter priced through its own.
+- **2,775 stores** in 36 states plus DC: 2,505 priced through Kroger's product matches, and 270 Harris Teeter priced through its own.
 - **40%** of people live within 5 miles of one, **47%** within 10, and **58%** within 25. These are straight-line distances; driving is longer.
 - **Strong:** Ohio Valley, Georgia and the Carolinas, Virginia (Virginia Beach is 96% within 10 miles), Colorado, Utah, Arizona, Nevada, Southern California and the Pacific Northwest, plus Dallas and Houston.
 - **No stores at all:** NY, MA, MN, OK, CT, IA, HI, NH, ME, RI, SD, ND, VT.
@@ -59,7 +59,7 @@ Partly covered (ask testers there for their zip first):
 1. **Stores** (`harvest.py`):
    - sweep a hex grid of 100-mile searches over the US with the Locations API (`filter.latLong.near`, limit 200);
    - split any search that returns exactly 200. Kroger's reported total is capped at the limit too, so it can't show a cut-off search;
-   - about 410 calls (1,600 a day are allowed). Vitacost's online-only locations are left out.
+   - about 420 calls, including southeast Alaska (1,600 a day are allowed). Vitacost's online-only locations are left out.
 2. **People:** 2020 Census tract population-weighted centres ([CenPop2020_Mean_TR](https://www2.census.gov/geo/docs/reference/cenpop2020/tract/CenPop2020_Mean_TR.txt), about 84,000 tracts).
 3. **Distance** (`analyze.py`): great-circle miles from each tract centre to its nearest store. Shares are by population; metros are the 2023 metropolitan statistical areas ([delineation file](https://www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/2023/delineation-files/list1_2023.xlsx)).
 4. **Outputs** (to `data/out/`):
@@ -81,5 +81,6 @@ cd apps/api && .venv/bin/python ../../docs/research/kroger-coverage/harvest.py
 
 # 3. Analysis and map (a separate environment: geopandas, shapely, pyproj,
 #    scipy, matplotlib, openpyxl, pyogrio)
+cd ../../docs/research/kroger-coverage
 python analyze.py && python static_map.py
 ```

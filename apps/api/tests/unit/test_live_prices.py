@@ -317,3 +317,15 @@ class TestNoStore:
         for t in threads:
             t.join()
         assert calls == ["02139"] and results == [False] * 4
+
+
+def test_a_garbled_kroger_answer_is_no_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    live_prices._nearby.clear()
+    monkeypatch.setattr(settings, "kroger_client_id", "id")
+
+    def garbled(self: Any, zip_code: str, miles: int = 15, limit: int = 10) -> list[Any]:
+        raise ValueError("Expecting value: line 1 column 1")
+
+    monkeypatch.setattr(Kroger, "stores_near", garbled)
+    assert live_prices._has_store_near("02139") is None
+    assert "02139" not in live_prices._nearby  # asked again next time
