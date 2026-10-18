@@ -77,6 +77,8 @@ const library = (
     items: [],
     storeName: null,
     storeId: null,
+    storeStatus: 'not_chosen' as const,
+    homeZip: null,
     entryCents: {},
   })),
   addedCosts: vi.fn(async () => ({

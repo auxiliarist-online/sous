@@ -374,6 +374,8 @@ const COST: PlanCost = {
   unpriced: 1,
   storeName: null,
   storeId: null,
+  storeStatus: 'not_chosen' as const,
+  homeZip: null,
   entryCents: {},
   items: [
     item('white rice', {
@@ -475,6 +477,48 @@ describe('PlanPage', () => {
       'href',
       '/plan/2026-10-05',
     )
+  })
+
+  it('says where prices come from, and why they’re estimates', async () => {
+    const { unmount } = render(
+      <PlanPage api={fakeApi({ entries: [entry('1')] })} week={WEEK} />,
+    )
+    expect(await screen.findByText(/Prices are estimates/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Choose your store' }),
+    ).toHaveAttribute('href', '/settings')
+    unmount()
+    const far = {
+      ...COST,
+      storeStatus: 'none_nearby' as const,
+      homeZip: '02139',
+    }
+    const { unmount: unmount2 } = render(
+      <PlanPage
+        api={fakeApi({ entries: [entry('1')], cost: far })}
+        week={WEEK}
+      />,
+    )
+    expect(
+      await screen.findByText(
+        /there isn’t one near 02139|there isn't one near 02139/,
+      ),
+    ).toBeInTheDocument()
+    unmount2()
+    const live = {
+      ...COST,
+      storeName: 'Kroger - Holland Road',
+      storeStatus: 'store' as const,
+    }
+    render(
+      <PlanPage
+        api={fakeApi({ entries: [entry('1')], cost: live })}
+        week={WEEK}
+      />,
+    )
+    expect(
+      await screen.findByText(/Prices from Kroger - Holland Road, today/),
+    ).toBeInTheDocument()
   })
 
   it('lists what to buy, by the package or by the amount, and what’s on hand', async () => {

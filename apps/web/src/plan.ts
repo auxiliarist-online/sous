@@ -221,6 +221,8 @@ export async function loadPantry(
   )
 }
 
+export type StoreStatus = 'store' | 'not_chosen' | 'none_nearby' | 'unavailable'
+
 export type PantryStatus = 'have' | 'out'
 
 /** Record what the user has on hand; null forgets it, so it's bought
@@ -286,6 +288,11 @@ export interface PlanCost {
   items: BuyItem[]
   /** The store whose prices these are, when they're live from it. */
   storeName: string | null
+  /** Where the prices come from: the user's store, or why not (no store
+   *  chosen, none near their zip code, or their store didn't answer). */
+  storeStatus: StoreStatus
+  /** The user's zip code, when there's no store near it. */
+  homeZip: string | null
   /** Its id, where the user's own prices are saved (null: anywhere). */
   storeId: string | null
   /** Each planned recipe's share of the total, by plan entry id (TYL-30). */
@@ -332,6 +339,8 @@ export async function planCost(
     items: ItemBody[]
     store_name?: string | null
     store_id?: string | null
+    store_status?: StoreStatus
+    home_zip?: string | null
     entries?: { entry_id: string; cents: number }[]
   }
   return {
@@ -363,6 +372,9 @@ export async function planCost(
     })),
     storeName: body.store_name ?? null,
     storeId: body.store_id ?? null,
+    storeStatus:
+      body.store_status ?? (body.store_name ? 'store' : 'not_chosen'),
+    homeZip: body.home_zip ?? null,
     entryCents: Object.fromEntries(
       (body.entries ?? []).map((e) => [e.entry_id, e.cents]),
     ),

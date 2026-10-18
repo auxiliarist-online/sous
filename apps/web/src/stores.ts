@@ -18,8 +18,6 @@ export interface NearbyStore {
 export interface MyStore {
   name: string
   address: string | null
-  /** True when the user hasn't chosen one, so Sous uses its default. */
-  isDefault: boolean
 }
 
 interface NearbyBody {
@@ -62,7 +60,8 @@ export async function storesNear(
   }))
 }
 
-/** The user's store, or Sous's default when they haven't chosen one. */
+/** The user's store, or null before they choose one (prices are estimates
+ *  until then). */
 export async function myStore(
   session: Session,
   send: typeof apiFetch = apiFetch,
@@ -73,14 +72,9 @@ export async function myStore(
   )
   const body = (await resp.json()) as {
     store: { name: string; address: string | null } | null
-    default: boolean
   }
   return body.store
-    ? {
-        name: body.store.name,
-        address: body.store.address,
-        isDefault: body.default,
-      }
+    ? { name: body.store.name, address: body.store.address }
     : null
 }
 

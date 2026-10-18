@@ -70,7 +70,7 @@ export function StorePicker({
     setMessage(null)
     try {
       await api.chooseStore(s.locationId)
-      setCurrent({ name: s.name, address: s.address, isDefault: false })
+      setCurrent({ name: s.name, address: s.address })
       setFound(null)
     } catch (err) {
       setMessage(err instanceof Error ? err.message : String(err))
@@ -81,12 +81,13 @@ export function StorePicker({
 
   return (
     <div className="store-picker">
-      {current && (
+      {current ? (
         <p className="small">
           Prices from <strong>{current.name}</strong>
-          {current.isDefault && (
-            <span className="muted"> (Sous's default until you choose)</span>
-          )}
+        </p>
+      ) : (
+        <p className="small muted">
+          No store chosen yet, so prices are estimates. Find yours by zip code.
         </p>
       )}
       <div className="row" role="search">

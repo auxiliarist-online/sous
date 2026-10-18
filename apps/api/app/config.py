@@ -15,9 +15,6 @@ class Settings(BaseSettings):
     # Kroger API (Harris Teeter products and prices, TYL-80).
     kroger_client_id: str = ""
     kroger_client_secret: str = ""
-    # Whose prices to show users who haven't picked a store: during the beta,
-    # the Harris Teeter at Village at Chestnut Street, Asheville.
-    kroger_default_location_id: str = "09700348"
     # Google Cloud Vision: reading recipes from photos of cookbook pages (TYL-52).
     google_vision_api_key: str = ""
     # Pages read from photos, at most: a month for everyone (Vision's free

@@ -12,7 +12,7 @@ from app.config import settings
 from app.plans import live_prices
 from app.plans.cost import plan_cost
 from app.plans.live_prices import add_live_prices
-from app.pricing.kroger import Product
+from app.pricing.kroger import Kroger, Product
 from tests.unit.conftest import Install
 from tests.unit.test_plan_cost import CARROTS, EGGS, INGREDIENTS, MONDAY, PRICES, entry, line
 
@@ -62,9 +62,7 @@ def db(supabase: Install, monkeypatch: pytest.MonkeyPatch) -> list[httpx.Request
 
     def handle(r: httpx.Request) -> httpx.Response:
         if r.url.path.endswith("/user_stores"):
-            return httpx.Response(200, json=[])  # no store picked
-        if r.url.path.endswith("/stores"):
-            return httpx.Response(200, json=[STORE])
+            return httpx.Response(200, json=[{"stores": STORE}])  # the user's store
         return httpx.Response(200, json=MATCHES)
 
     return supabase(handle)
@@ -173,9 +171,7 @@ def test_a_bunch_sold_as_one_each_is_one_bunch(
 
     def handle(r: httpx.Request) -> httpx.Response:
         if r.url.path.endswith("/user_stores"):
-            return httpx.Response(200, json=[])
-        if r.url.path.endswith("/stores"):
-            return httpx.Response(200, json=[STORE])
+            return httpx.Response(200, json=[{"stores": STORE}])
         return httpx.Response(
             200, json=[{"ingredient_id": "scallions", "product_id": "4068", "store_id": "store-ht"}]
         )
@@ -224,9 +220,7 @@ def test_ingredients_sharing_a_product_each_get_its_price(
 
     def handle(r: httpx.Request) -> httpx.Response:
         if r.url.path.endswith("/user_stores"):
-            return httpx.Response(200, json=[])
-        if r.url.path.endswith("/stores"):
-            return httpx.Response(200, json=[STORE])
+            return httpx.Response(200, json=[{"stores": STORE}])
         return httpx.Response(200, json=both)
 
     supabase(handle)
@@ -235,3 +229,53 @@ def test_ingredients_sharing_a_product_each_get_its_price(
     asyncio.run(add_live_prices("user-1", given))
     live = {p["ingredient_id"] for p in given["prices"] if p["source"] == "store_api"}
     assert live == {EGGS, CARROTS}
+
+
+def test_without_a_store_theres_nothing_to_price_from(
+    supabase: Install, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "kroger_client_id", "id")
+    seen = supabase(lambda r: httpx.Response(200, json=[]))  # no store chosen
+    asked = fetched(monkeypatch)
+    assert asyncio.run(add_live_prices("user-1", inputs())) is None
+    assert asked == []
+    assert len(seen) == 1  # no default store looked up
+
+
+class TestNoStore:
+    def answers(self, store: bool, zip_code: str | None) -> Any:
+        def handle(r: httpx.Request) -> httpx.Response:
+            if r.url.path.endswith("/user_stores"):
+                return httpx.Response(200, json=[{"store_id": "s"}] if store else [])
+            return httpx.Response(200, json=[{"home_zip": zip_code}])
+
+        return handle
+
+    def test_says_why(self, supabase: Install, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(settings, "kroger_client_id", "id")
+        live_prices._nearby.clear()
+        near: dict[str, bool] = {"23451": True, "02139": False}
+        asked: list[str] = []
+
+        def stores_near(self: Any, zip_code: str, miles: int = 15, limit: int = 10) -> list[Any]:
+            asked.append(zip_code)
+            return [object()] if near[zip_code] else []
+
+        monkeypatch.setattr(Kroger, "stores_near", stores_near)
+        supabase(self.answers(store=True, zip_code=None))
+        assert asyncio.run(live_prices.no_store("u"))["store_status"] == "unavailable"
+        supabase(self.answers(store=False, zip_code=None))
+        assert asyncio.run(live_prices.no_store("u")) == {
+            "store_status": "not_chosen",
+            "home_zip": None,
+        }
+        supabase(self.answers(store=False, zip_code="23451"))
+        assert asyncio.run(live_prices.no_store("u"))["store_status"] == "not_chosen"
+        supabase(self.answers(store=False, zip_code="02139"))
+        assert asyncio.run(live_prices.no_store("u")) == {
+            "store_status": "none_nearby",
+            "home_zip": "02139",
+        }
+        # Kroger is asked once per zip code.
+        asyncio.run(live_prices.no_store("u"))
+        assert asked == ["23451", "02139"]
