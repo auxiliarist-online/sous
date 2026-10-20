@@ -452,6 +452,43 @@ def test_an_item_doesnt_carry_on_into_another_column_or_page() -> None:
     assert draft.ingredients[0] == "1 cabbage, shredded,"
 
 
+def test_a_time_line_lower_case_items_and_a_footer_above_the_table() -> None:
+    # Like a Moosewood page (TYL-101): "Time:" with no prep or cook, items that
+    # start in lower case, and the book's name and page number at the foot,
+    # with the photo running on below the book.
+    greens = page(
+        block(60, 40, 600, [["Quick Greens"]], h=48),
+        block(60, 120, 600, [["Serves 4 to 6", "Time: 15 minutes"]]),
+        block(
+            60,
+            200,
+            400,
+            [
+                [
+                    "about 8 cups chopped chard or",
+                    ">kale",
+                    "2 tablespoons olive oil",
+                    "a pinch of red pepper flakes",
+                    "1/2 teaspoon salt",
+                    "ground black pepper",
+                ]
+            ],
+        ),
+        block(60, 420, 600, [["Warm the oil, add the greens and cook until tender."]]),
+        block(60, 1000, 400, [["A Cookbook of Favorites 268"]]),
+    )
+    draft = recipe_from_pages([blocks_of(greens)])
+    assert (draft.servings, draft.total_minutes) == (4.0, 15)
+    assert draft.ingredients == [
+        "about 8 cups chopped chard or kale",
+        "2 tablespoons olive oil",
+        "a pinch of red pepper flakes",
+        "1/2 teaspoon salt",
+        "ground black pepper",
+    ]
+    assert "A Cookbook of Favorites 268" in draft.skipped
+
+
 def test_a_word_set_apart_rejoins_its_line() -> None:
     # Vision can return a line's last word as a block of its own.
     split = page(
