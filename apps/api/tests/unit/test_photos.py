@@ -497,7 +497,17 @@ def test_a_wrapped_preparation_joins_its_item_in_a_lower_case_list() -> None:
             60,
             120,
             400,
-            [["a pinch of salt", "1 cup rice", "2 tablespoons parsley", "finely chopped"]],
+            [
+                [
+                    "a pinch of salt",
+                    "1 cup rice",
+                    "2 tablespoons parsley",
+                    "finely chopped",
+                    "chopped tomatoes",
+                    "1 onion",
+                    "cut into wedges",
+                ]
+            ],
         ),
         block(60, 320, 600, [["Simmer the rice, then stir in the parsley."]]),
     )
@@ -506,6 +516,8 @@ def test_a_wrapped_preparation_joins_its_item_in_a_lower_case_list() -> None:
         "a pinch of salt",
         "1 cup rice",
         "2 tablespoons parsley finely chopped",
+        "chopped tomatoes",
+        "1 onion cut into wedges",
     ]
 
 

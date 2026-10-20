@@ -405,14 +405,30 @@ STEP_VERB = re.compile(
     r"set|simmer|sprinkle|spread|stir|toss|transfer|turn|whisk)\b",
     re.I,
 )
-# How a wrapped ingredient's second line starts: how to prepare it ("finely
-# chopped", "peeled and diced", "plus more for serving"), not a food.
-PREPARED = re.compile(
-    r"^(?:\w+ly|chopped|minced|diced|sliced|grated|shredded|peeled|seeded|halved|quartered|"
-    r"cubed|softened|melted|divided|drained|rinsed|trimmed|torn|cut|plus|at|to taste|"
-    r"for (?:serving|garnish))\b",
+# A wrapped ingredient's second line that only says how to prepare it
+# ("finely chopped", "peeled and diced", "cut into 1-inch pieces", "plus more
+# for serving"). "chopped tomatoes" names a food after it: an item of its own.
+PREP_WORD = re.compile(
+    r"^(?:\w{3,}ly|chopped|minced|diced|sliced|grated|shredded|peeled|seeded|halved|"
+    r"quartered|cubed|softened|melted|divided|drained|rinsed|trimmed|torn|cut|and|or)$",
     re.I,
 )
+# What can follow the preparation words and still be preparation.
+PREP_TAIL = re.compile(r"^(?:(?:into|for|to|at|until|in|if|as|about|plus)\b|\(|,|$)", re.I)
+
+
+def _only_preparation(text: str) -> bool:
+    """Whether a line is all preparation, with no food named: "finely
+    chopped", "plus more for serving", but not "chopped tomatoes"."""
+    if re.match(r"^(?:plus|to taste|for (?:serving|garnish))\b", text, re.I):
+        return True
+    words = re.findall(r"[\w-]+|[(,]", text)
+    n = 0
+    while n < len(words) and PREP_WORD.match(words[n]):
+        n += 1
+    return n > 0 and bool(PREP_TAIL.match(" ".join(words[n:])))
+
+
 # A line ending mid-phrase: the next line carries on.
 OPEN_END = re.compile(r"(?:[,(/\-–—]|\b(?:or|and|of|with|to|for|in|plus|a|the))$", re.I)
 
@@ -530,7 +546,7 @@ def _continues(
     # Lower case carries on, unless this list starts its items in lower case
     # ("a pinch of salt", "ground black pepper"); even then, a line that starts
     # by saying how to prepare it ("finely chopped") carries on.
-    if text[:1] in "([" or (text[:1].islower() and (not lower_items or PREPARED.match(text))):
+    if text[:1] in "([" or (text[:1].islower() and (not lower_items or _only_preparation(text))):
         return True
     if OPEN_END.search(prev.text) or prev.text.count("(") > prev.text.count(")"):
         return True
