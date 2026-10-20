@@ -991,8 +991,13 @@ describe('ingredient parsing', () => {
       'select count(*)::int as n from ingredient_aliases',
     )
     // Seed migration + more_ingredients + everyday_ingredients (TYL-60).
-    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6 + 9) // + ingredients_from_recipes + ponzu_powdered_milk + croutons_crostini_nondairy_milk
+    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6 + 9 + 3) // + ingredients_from_recipes + ponzu_powdered_milk + croutons_crostini_nondairy_milk + canned_legume_cups
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
+    // TYL-102: "3 cups cooked beans" is bought canned, not dried.
+    assert.equal(
+      await match(['canned beans', 'beans']),
+      await ingredientId('canned white beans'),
+    )
     assert.equal(await match(['green onions']), await ingredientId('scallions'))
     assert.equal(await match(['kosher salt']), await ingredientId('salt'))
   })

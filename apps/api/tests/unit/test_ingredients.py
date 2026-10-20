@@ -63,6 +63,30 @@ class TestAmounts:
         assert row.preparation == "drained and rinsed"
         assert row.candidates[0] == "canned black beans"
 
+    def test_cooked_beans_are_bought_canned(self) -> None:
+        (row,) = parse_line(0, "3 cups cooked beans")
+        assert row.candidates[0] == "canned beans"
+        (row,) = parse_line(0, "2 cups cooked chickpeas")
+        assert row.candidates.index("canned chickpeas") < row.candidates.index("chickpeas")
+
+    def test_cooked_rice_is_not_canned(self) -> None:
+        (row,) = parse_line(0, "2 cups cooked rice")
+        assert not any(c.startswith("canned") for c in row.candidates)
+
+    def test_an_example_narrows_a_generic_name(self) -> None:
+        (row,) = parse_line(0, "3 cups cooked beans, such as cannellini")
+        assert row.name == "cannellini beans"
+        assert row.candidates[:2] == ["canned cannellini beans", "cannellini beans"]
+        (row,) = parse_line(0, "1/4 cup oil, such as canola or grapeseed")
+        assert row.candidates[0] == "canola oil"
+
+    def test_in_their_juice_is_ignored_for_matching(self) -> None:
+        canned, fresh = parse_line(0, "2 cups crushed canned or fresh tomatoes in their juice")
+        assert canned.candidates[0] == "canned tomatoes"
+        assert "tomatoes" in fresh.candidates
+        (row,) = parse_line(0, "1 (28 oz) can crushed tomatoes in their juice")
+        assert row.candidates[0] == "canned crushed tomatoes"
+
     def test_pounds_and_ounces_add_up(self) -> None:
         (row,) = parse_line(0, "1 lb 4 oz pork chops")
         assert (row.quantity, row.quantity_max, row.unit, row.note) == (

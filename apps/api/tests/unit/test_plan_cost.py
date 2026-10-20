@@ -116,7 +116,6 @@ class TestPlanCost:
         assert "fresh basil" in names
         assert "white rice" in names
 
-
     def test_packages_round_up_across_the_week(self) -> None:
         # 1 cup + 1.5 cups of rice (185 g/cup) is about 1 lb: one 2 lb bag.
         cost = cost_of(entry([line(RICE, 1, "cup")]), entry([line(RICE, 1.5, "cups")]))
