@@ -1,5 +1,6 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
+import { sourceNotes } from './sous.ts'
 import {
   allTags,
   cleanTag,
@@ -230,5 +231,26 @@ describe('tags (TYL-81)', () => {
       ['Batch', 'for guests', 'Weeknight'],
     )
     expect(cleanTag('  For   guests  ')).toBe('For guests')
+  })
+})
+
+describe('sourceNotes', () => {
+  it('suggests the user’s own sources once each, most used first', async () => {
+    const rows = [
+      { source_note: 'Grandma' },
+      { source_note: 'Salt Fat Acid Heat' },
+      { source_note: 'salt fat acid heat ' },
+      { source_note: '  ' },
+    ]
+    const limit = vi.fn(async () => ({ data: rows, error: null }))
+    const not = vi.fn(() => ({ limit }))
+    const eq = vi.fn(() => ({ not }))
+    const select = vi.fn(() => ({ eq }))
+    const db = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient
+    expect(await sourceNotes(db, 'u1')).toEqual([
+      'Salt Fat Acid Heat',
+      'Grandma',
+    ])
+    expect(eq).toHaveBeenCalledWith('added_by', 'u1')
   })
 })

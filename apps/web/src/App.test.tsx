@@ -46,6 +46,7 @@ const library = (
   recipe: vi.fn(async () => null),
   saveManual: vi.fn(),
   readPhotos: vi.fn(),
+  sourceNotes: vi.fn(async () => []),
   preferences: vi.fn(async () => prefs),
   savePreferences: vi.fn(async () => {}),
   options: vi.fn(async () => ({ diets: [], cuisines: [] })),

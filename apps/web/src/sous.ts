@@ -187,6 +187,33 @@ export function manualInput(r: RecipeDetail): ManualRecipeInput {
   }
 }
 
+/** Where the user's own recipes say they're from ("Salt Fat Acid Heat",
+ *  "Grandma"), most used first, so the form can suggest them (TYL-100). */
+export async function sourceNotes(
+  db: SupabaseClient,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await db
+    .from('recipes')
+    .select('source_note')
+    .eq('added_by', userId)
+    .not('source_note', 'is', null)
+    .limit(500)
+  if (error) throw error
+  const counts = new Map<string, { note: string; n: number }>()
+  for (const { source_note } of data as { source_note: string }[]) {
+    const note = source_note.trim()
+    const key = note.toLowerCase()
+    if (!note) continue
+    const seen = counts.get(key)
+    if (seen) seen.n++
+    else counts.set(key, { note, n: 1 })
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.n - a.n || a.note.localeCompare(b.note))
+    .map((c) => c.note)
+}
+
 export async function saveManual(
   session: Session,
   input: ManualRecipeInput,
