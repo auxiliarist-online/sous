@@ -384,12 +384,12 @@ function AddItem({
         onChange={(e) => setName(e.target.value)}
       />
       <label htmlFor="list-add-amount" className="visually-hidden">
-        How much
+        Amount to buy
       </label>
       <input
         id="list-add-amount"
         className="list-amount"
-        placeholder="How much"
+        placeholder="Amount, like 2 lb"
         value={amount}
         maxLength={60}
         onChange={(e) => setAmount(e.target.value)}
@@ -465,7 +465,7 @@ function ItemEditor({
         maxLength={120}
         onChange={(e) => setName(e.target.value)}
       />
-      <label htmlFor={`${id}-amount`}>How much</label>
+      <label htmlFor={`${id}-amount`}>Amount to buy (like 2 lb)</label>
       <input
         id={`${id}-amount`}
         value={amount}

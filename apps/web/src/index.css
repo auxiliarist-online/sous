@@ -868,7 +868,23 @@ button.danger:not(.link) {
 }
 
 .list-add .list-amount {
-  flex: 0 1 7rem;
+  flex: 0 1 9rem;
+}
+
+/* On a phone the name gets its own row, so the amount isn't cut off and
+   doesn't read as a price (TYL-113). */
+@media (max-width: 480px) {
+  .list-add {
+    flex-wrap: wrap;
+  }
+
+  .list-add #list-add-name {
+    flex-basis: 100%;
+  }
+
+  .list-add .list-amount {
+    flex: 1 1 auto;
+  }
 }
 
 .list-edit {

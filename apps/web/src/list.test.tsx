@@ -443,7 +443,7 @@ describe('ListPage', () => {
     await screen.findByRole('list', { name: 'Dairy & eggs' })
 
     await userEvent.type(screen.getByLabelText('Add an item'), 'paper towels')
-    await userEvent.type(screen.getByLabelText('How much'), '1 pack')
+    await userEvent.type(screen.getByLabelText('Amount to buy'), '1 pack')
     await userEvent.click(screen.getByRole('button', { name: 'Add' }))
     expect(screen.getByText('paper towels')).toBeInTheDocument()
     expect(api.sendListOp).toHaveBeenCalledWith({
@@ -455,7 +455,7 @@ describe('ListPage', () => {
     })
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit rice' }))
-    const amount = screen.getAllByLabelText('How much')[1]
+    const amount = screen.getByLabelText('Amount to buy (like 2 lb)')
     await userEvent.clear(amount)
     await userEvent.type(amount, '5 lb')
     await userEvent.selectOptions(
