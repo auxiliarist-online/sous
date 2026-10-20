@@ -388,6 +388,9 @@ export interface AddedCost {
   /** It brings items with no price yet, so it would add more than this. */
   unpriced: boolean
   estimated: boolean
+  /** Of `cents`, staples not marked in the pantry, like salt and oil the
+   *  user may well have (TYL-96). */
+  staplesCents: number
 }
 
 export interface AddedCosts {
@@ -424,6 +427,7 @@ export async function addedCosts(
           cents: number
           unpriced: boolean
           estimated: boolean
+          staples_cents?: number
         }[]
       }
     }),
@@ -435,7 +439,12 @@ export async function addedCosts(
       bodies.flatMap((b) =>
         b.recipes.map((r) => [
           r.recipe_id,
-          { cents: r.cents, unpriced: r.unpriced, estimated: r.estimated },
+          {
+            cents: r.cents,
+            unpriced: r.unpriced,
+            estimated: r.estimated,
+            staplesCents: r.staples_cents ?? 0,
+          },
         ]),
       ),
     ),

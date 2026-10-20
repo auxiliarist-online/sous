@@ -109,6 +109,10 @@ class AddedCost:
     # True when it brings items with no price, so it would add more than this.
     unpriced: bool
     estimated: bool
+    # Of `cents`, what goes to staples the user hasn't marked in their pantry
+    # (TYL-96): salt and oil they may well have, priced because nothing is
+    # assumed. Marking them "have" takes it off.
+    staples_cents: int = 0
 
 
 SOURCES: dict[str, Literal["user", "store", "estimate"]] = {
@@ -376,6 +380,11 @@ def added_costs(
                 cents=withit.total_cents - base.total_cents,
                 unpriced=withit.unpriced > base.unpriced,
                 estimated=any(i.estimated for i in changed),
+                staples_cents=sum(
+                    (i.cents or 0) - (before.get(i.ingredient_id) or 0)
+                    for i in changed
+                    if i.staple and i.pantry is None
+                ),
             )
         )
     return out
