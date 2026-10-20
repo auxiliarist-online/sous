@@ -110,6 +110,13 @@ def item(cost: PlanCost, name: str) -> Item:
 
 
 class TestPlanCost:
+    def test_fresh_produce_with_a_dried_form_says_fresh(self) -> None:
+        cost = cost_of(entry([line(BASIL, 1, "bunch"), line(RICE, 1, "cup")]))
+        names = {i.name for i in cost.items}
+        assert "fresh basil" in names
+        assert "white rice" in names
+
+
     def test_packages_round_up_across_the_week(self) -> None:
         # 1 cup + 1.5 cups of rice (185 g/cup) is about 1 lb: one 2 lb bag.
         cost = cost_of(entry([line(RICE, 1, "cup")]), entry([line(RICE, 1.5, "cups")]))
@@ -150,7 +157,7 @@ class TestPlanCost:
 
     def test_an_unknown_amount_still_buys_one_package(self) -> None:
         cost = cost_of(entry([line(BASIL, None, None)]))
-        basil = item(cost, "basil")
+        basil = item(cost, "fresh basil")
         assert (basil.amount_unknown, basil.packages, basil.cents) == (True, 1, 250)
 
     def test_lists_what_it_cannot_price(self) -> None:
