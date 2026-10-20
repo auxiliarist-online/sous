@@ -88,25 +88,15 @@ def test_an_unknown_or_malformed_store_is_refused(client: TestClient, supabase: 
 
 def test_says_which_store_prices_come_from(client: TestClient, supabase: Install) -> None:
     store = {"name": "Kroger Marketplace - Holland Road", "chain_slug": "kroger"}
-    default = {"name": "Harris Teeter – Village at Chestnut Street"}
-
-    def mine(r: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=[{"stores": store}])
-
-    supabase(mine)
-    assert client.get("/stores/mine").json() == {"store": store, "default": False}
-
-    def none_chosen(r: httpx.Request) -> httpx.Response:
-        if r.url.path.endswith("/user_stores"):
-            return httpx.Response(200, json=[])
-        assert r.url.params["external_location_id"] == "eq.09700348"
-        return httpx.Response(200, json=[default])
-
-    supabase(none_chosen)
-    assert client.get("/stores/mine").json() == {"store": default, "default": True}
+    supabase(lambda r: httpx.Response(200, json=[{"stores": store}]))
+    assert client.get("/stores/mine").json() == {"store": store}
+    # Without a choice there's no store: prices are estimates.
+    seen = supabase(lambda r: httpx.Response(200, json=[]))
+    assert client.get("/stores/mine").json() == {"store": None}
+    assert len(seen) == 1
 
 
-def test_goes_back_to_the_default(client: TestClient, supabase: Install) -> None:
+def test_takes_the_store_away(client: TestClient, supabase: Install) -> None:
     seen = supabase(lambda r: httpx.Response(204))
     assert client.delete("/stores/mine").status_code == 204
     assert seen[0].method == "PATCH"

@@ -1,9 +1,9 @@
 """The user's grocery store (TYL-19).
 
 GET    /stores/nearby?zip=23451   Kroger-family stores near a zip code
-GET    /stores/mine               the user's store, or the default one
+GET    /stores/mine               the user's store, or none
 PUT    /stores/mine               choose a store by its Kroger location id
-DELETE /stores/mine               go back to the default store
+DELETE /stores/mine               no store: prices are estimates
 
 Live prices come from the user's store (app/plans/live_prices.py). Kroger's
 store details are looked up live; only the chosen store is kept, as the user's
@@ -70,7 +70,7 @@ async def nearby(
 
 @router.get("/mine")
 async def mine(user_id: Annotated[str, Depends(current_user_id)]) -> dict[str, Any]:
-    """The user's store, or the default one Sous prices from without a choice."""
+    """The user's store, or none: without one, Sous prices from estimates."""
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/user_stores",
@@ -81,21 +81,10 @@ async def mine(user_id: Annotated[str, Depends(current_user_id)]) -> dict[str, A
             },
             headers=_headers(),
         )
-        if resp.status_code != 200:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "We couldn't load your store.")
-        rows = resp.json()
-        if rows:
-            return {"store": rows[0]["stores"], "default": False}
-        resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/stores",
-            params={
-                "select": "name,address,zip,external_location_id,chain_slug",
-                "external_location_id": f"eq.{settings.kroger_default_location_id}",
-            },
-            headers=_headers(),
-        )
-    rows = resp.json() if resp.status_code == 200 else []
-    return {"store": rows[0] if rows else None, "default": True}
+    if resp.status_code != 200:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "We couldn't load your store.")
+    rows = resp.json()
+    return {"store": rows[0]["stores"] if rows else None}
 
 
 class Choice(BaseModel):
@@ -136,7 +125,7 @@ async def choose(body: Choice, user_id: Annotated[str, Depends(current_user_id)]
 
 @router.delete("/mine", status_code=status.HTTP_204_NO_CONTENT)
 async def forget(user_id: Annotated[str, Depends(current_user_id)]) -> None:
-    """Back to the default store."""
+    """No store any more: prices are estimates until the user chooses one."""
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.patch(
             f"{settings.supabase_url}/rest/v1/user_stores",

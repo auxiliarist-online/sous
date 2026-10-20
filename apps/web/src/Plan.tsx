@@ -351,17 +351,11 @@ function Budget({
           </Link>
         </p>
       )}
-      {(cost.storeName || cost.estimated || cost.unpriced > 0) && (
-        <p className="muted small">
-          {cost.storeName && `Prices from ${cost.storeName}, today. `}
-          {cost.estimated &&
-            (cost.storeName
-              ? 'Prices marked ~ are rough estimates. '
-              : 'Rough prices until store prices are in. ')}
-          {cost.unpriced > 0 &&
-            `${cost.unpriced} item${cost.unpriced === 1 ? '' : 's'} not priced yet.`}
-        </p>
-      )}
+      <p className="muted small price-note">
+        <PriceSource cost={cost} />
+        {cost.unpriced > 0 &&
+          ` ${cost.unpriced} item${cost.unpriced === 1 ? '' : 's'} not priced yet.`}
+      </p>
       <details className="buying">
         <summary className="small">What you'll buy ({toBuy.length})</summary>
         <ul className="buy-list" aria-label="To buy">
@@ -400,6 +394,42 @@ function Budget({
       )}
     </div>
   )
+}
+
+/** Where the week's prices come from. Without a store's prices it says
+ *  why (no store chosen, none near the user's zip code, or the store's
+ *  prices didn't load), and mentions estimates only when some prices are
+ *  (a user may have entered their own for everything). */
+function PriceSource({ cost }: { cost: PlanCost }) {
+  const estimates = cost.estimated ? ' Prices marked ~ are estimates.' : ''
+  if (cost.storeName) {
+    return (
+      <>
+        Prices from {cost.storeName}, today.{estimates}
+      </>
+    )
+  }
+  switch (cost.storeStatus) {
+    case 'none_nearby':
+      return (
+        <>
+          Store prices come from Kroger-family stores, and there isn't one near{' '}
+          {cost.homeZip ?? 'you'}.{estimates} Use <strong>Edit price</strong> to
+          use what you pay.
+        </>
+      )
+    case 'unavailable':
+      return <>Your store's prices didn't load this time.{estimates}</>
+    case 'unknown':
+      return <>Store prices aren't available right now.{estimates}</>
+    default:
+      return (
+        <>
+          <Link to="/settings">Choose your store</Link> for today's shelf
+          prices.{estimates}
+        </>
+      )
+  }
 }
 
 const SOURCE_LABELS = { user: 'your price', estimate: 'estimate' } as const

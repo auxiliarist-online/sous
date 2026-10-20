@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import current_user_id
 from app.plans.cost import added_costs, plan_cost
-from app.plans.live_prices import add_live_prices
+from app.plans.live_prices import add_live_prices, no_store
 from app.plans.store import cost_inputs
 from app.recipes.store import StoreError
 
@@ -48,7 +48,12 @@ async def week_cost(
 ) -> dict[str, Any]:
     """The week's buy list and cost, and each planned recipe's share."""
     inputs, store_id = await _inputs(user_id, week_start)
-    return asdict(plan_cost(inputs, on=week_start, store_id=store_id))
+    cost = asdict(plan_cost(inputs, on=week_start, store_id=store_id))
+    # Priced from a store, or not, and why (for the plan page to say so).
+    cost.update(
+        {"store_status": "store", "home_zip": None} if store_id else await no_store(user_id)
+    )
+    return cost
 
 
 class Candidates(BaseModel):

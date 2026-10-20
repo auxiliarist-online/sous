@@ -417,7 +417,11 @@ class TestRoute:
                 "prices": PRICES,
             }
 
+        async def no_store(user_id: str) -> dict[str, Any]:
+            return {"store_status": "none_nearby", "home_zip": "02139"}
+
         monkeypatch.setattr(routes, "cost_inputs", fake_inputs)
+        monkeypatch.setattr(routes, "no_store", no_store)
         app.dependency_overrides[current_user_id] = lambda: "user-1"
         test_client = TestClient(app)
         test_client.calls = calls  # type: ignore[attr-defined]
@@ -434,6 +438,8 @@ class TestRoute:
         assert body["items"][0]["price_source"] == "estimate"
         assert body["entries"] == [{"entry_id": "e-1", "cents": 360}]
         assert client.calls == [("user-1", MONDAY)]  # type: ignore[attr-defined]
+        # No store's prices were used, and the page is told why.
+        assert (body["store_status"], body["home_zip"]) == ("none_nearby", "02139")
 
     def test_says_what_each_recipe_would_add(self, client: TestClient) -> None:
         resp = client.post("/plans/2026-10-12/added", json={"recipe_ids": [R1, R1]})

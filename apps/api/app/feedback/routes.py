@@ -2,7 +2,7 @@
 
 The app saves a report itself (row-level security keeps it the user's own),
 then asks here for it to be filed: this reads it with the service role,
-creates a Linear issue in the Sous project, labelled Bug, with the device and
+creates a Linear issue in the Sous project, labelled Bug and Beta report, with the device and
 a link to the PostHog replay, and records the issue's link on the report. The
 reporter is named by their account id, never their email.
 """
@@ -66,7 +66,7 @@ def issue_for(report: dict[str, Any]) -> dict[str, Any]:
         "description": description,
         "teamId": settings.linear_team_id,
         "projectId": settings.linear_project_id,
-        "labelIds": [settings.linear_bug_label_id],
+        "labelIds": [settings.linear_bug_label_id, settings.linear_report_label_id],
     }
 
 

@@ -45,26 +45,22 @@ describe('store calls', () => {
     expect(send).toHaveBeenCalledWith({}, '/stores/nearby?zip=23451')
   })
 
-  it('reads the user’s store, or the default', async () => {
+  it('reads the user’s store, or none before they choose', async () => {
     const send = reply(200, {
       store: {
         name: 'Harris Teeter – Village at Chestnut Street',
         address: null,
       },
-      default: true,
     })
     expect(await myStore({} as Session, send)).toEqual({
       name: 'Harris Teeter – Village at Chestnut Street',
       address: null,
-      isDefault: true,
     })
-    expect(
-      await myStore({} as Session, reply(200, { store: null, default: true })),
-    ).toBeNull()
+    expect(await myStore({} as Session, reply(200, { store: null }))).toBeNull()
   })
 
   it('chooses a store, and passes on the API’s reason when it can’t', async () => {
-    const send = reply(200, { store: {}, default: false })
+    const send = reply(200, { store: {} })
     await chooseStore({} as Session, '09700181', send)
     expect(send).toHaveBeenCalledWith({}, '/stores/mine', {
       method: 'PUT',
@@ -100,11 +96,7 @@ function storeApi(over: Partial<StoreApi> = {}): StoreApi & {
 } {
   return {
     storesNear: vi.fn(async (_zip: string) => [ARCTIC]),
-    myStore: vi.fn(async () => ({
-      name: 'Harris Teeter – Village at Chestnut Street',
-      address: null,
-      isDefault: true,
-    })),
+    myStore: vi.fn(async () => null),
     chooseStore: vi.fn(async (_id: string) => {}),
     ...over,
   } as StoreApi & {
@@ -118,7 +110,7 @@ describe('StorePicker', () => {
     const api = storeApi()
     const onZip = vi.fn()
     render(<StorePicker api={api} zip={null} onZip={onZip} />)
-    expect(await screen.findByText(/Sous's default/)).toBeInTheDocument()
+    expect(await screen.findByText(/No store chosen yet/)).toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('Your zip code'), '23451{Enter}')
     expect(api.storesNear).toHaveBeenCalledWith('23451')
     expect(onZip).toHaveBeenCalledWith('23451')
@@ -132,7 +124,7 @@ describe('StorePicker', () => {
     expect(
       screen.getByText('Harris Teeter - Arctic Avenue'),
     ).toBeInTheDocument()
-    expect(screen.queryByText(/Sous's default/)).toBeNull()
+    expect(screen.queryByText(/No store chosen yet/)).toBeNull()
   })
 
   it('checks the zip code, and says when no store is near', async () => {
@@ -308,7 +300,7 @@ describe('Settings: store and account', () => {
         onDeleted={onDeleted}
       />,
     )
-    expect(await screen.findByText(/Sous's default/)).toBeInTheDocument()
+    expect(await screen.findByText(/No store chosen yet/)).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'What Sous keeps about you' }),
     ).toHaveAttribute('href', '/privacy')

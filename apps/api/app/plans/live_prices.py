@@ -9,6 +9,8 @@ estimates: a plan never fails to price because Kroger is down.
 
 import asyncio
 import logging
+import threading
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -31,7 +33,8 @@ def _rest(client: httpx.AsyncClient, path: str, params: dict[str, str]) -> Any:
 
 
 async def _store(client: httpx.AsyncClient, user_id: str) -> dict[str, Any] | None:
-    """The user's primary store if it has live prices, else the default one."""
+    """The user's primary store, if it has live prices. Without one there's
+    no store to price from: Sous uses estimates and says why (no_store)."""
     select = "id,name,external_location_id,chain_slug,store_chains!inner(price_source)"
     resp = await _rest(
         client,
@@ -45,19 +48,73 @@ async def _store(client: httpx.AsyncClient, user_id: str) -> dict[str, Any] | No
     )
     resp.raise_for_status()
     rows = resp.json()
-    if rows:
-        store: dict[str, Any] = rows[0]["stores"]
-        return store
-    if not settings.kroger_default_location_id:
-        return None
-    resp = await _rest(
-        client,
-        "stores",
-        {"select": select, "external_location_id": f"eq.{settings.kroger_default_location_id}"},
-    )
-    resp.raise_for_status()
+    return rows[0]["stores"] if rows else None
+
+
+# Whether a zip code has a Kroger-family store within 15 miles, by zip, with
+# when it was asked: Kroger is asked at most once a day per zip.
+_nearby: dict[str, tuple[bool, float]] = {}
+NEARBY_SECONDS = 24 * 3600
+# One lookup per zip at a time: a second request for it waits for the answer.
+_nearby_locks: dict[str, threading.Lock] = {}
+_locks_lock = threading.Lock()
+
+
+def _has_store_near(zip_code: str) -> bool | None:
+    """Whether Kroger lists a store within 15 miles of the zip (None when it
+    can't be asked)."""
+    with _locks_lock:
+        lock = _nearby_locks.setdefault(zip_code, threading.Lock())
+    with lock:
+        hit = _nearby.get(zip_code)
+        if hit and time.monotonic() - hit[1] < NEARBY_SECONDS:
+            return hit[0]
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                found = bool(Kroger(client).stores_near(zip_code, miles=15, limit=1))
+        except (httpx.HTTPError, RuntimeError, ValueError, KeyError) as exc:
+            # ValueError: Kroger answered with something that isn't JSON;
+            # KeyError: JSON without what we expected (no access token).
+            log.warning("couldn't check stores near %s: %s", zip_code, exc)
+            return None
+        _nearby[zip_code] = (found, time.monotonic())
+        return found
+
+
+async def no_store(user_id: str) -> dict[str, Any]:
+    """Why the week isn't priced from a store, for the plan page to say:
+    "unavailable" (the user's store didn't answer), "none_nearby" (no
+    Kroger-family store near their zip code), "not_chosen", or "unknown"
+    when it can't be told (the cost stands either way)."""
+    unknown = {"store_status": "unknown", "home_zip": None}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await _rest(
+                client,
+                "user_stores",
+                {"select": "store_id", "user_id": f"eq.{user_id}", "is_primary": "is.true"},
+            )
+            if resp.status_code != 200:
+                return unknown
+            if resp.json():
+                return {"store_status": "unavailable", "home_zip": None}
+            resp = await _rest(
+                client, "profiles", {"select": "home_zip", "user_id": f"eq.{user_id}"}
+            )
+    except (httpx.HTTPError, ValueError) as exc:
+        log.warning("couldn't tell why there's no store: %s", exc)
+        return unknown
+    if resp.status_code != 200:
+        return unknown
     rows = resp.json()
-    return rows[0] if rows else None
+    zip_code = rows[0].get("home_zip") if rows else None
+    if (
+        zip_code
+        and settings.kroger_client_id
+        and await asyncio.to_thread(_has_store_near, zip_code) is False
+    ):
+        return {"store_status": "none_nearby", "home_zip": zip_code}
+    return {"store_status": "not_chosen", "home_zip": zip_code}
 
 
 def _size(p: Product, info: dict[str, Any]) -> tuple[float, str, bool] | None:

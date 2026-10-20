@@ -15,9 +15,6 @@ class Settings(BaseSettings):
     # Kroger API (Harris Teeter products and prices, TYL-80).
     kroger_client_id: str = ""
     kroger_client_secret: str = ""
-    # Whose prices to show users who haven't picked a store: during the beta,
-    # the Harris Teeter at Village at Chestnut Street, Asheville.
-    kroger_default_location_id: str = "09700348"
     # Google Cloud Vision: reading recipes from photos of cookbook pages (TYL-52).
     google_vision_api_key: str = ""
     # Pages read from photos, at most: a month for everyone (Vision's free
@@ -32,6 +29,8 @@ class Settings(BaseSettings):
     linear_team_id: str = "1b5a5b93-5634-4708-85b1-a849bc9a8598"
     linear_project_id: str = "a840f31f-21f4-4474-9dbd-a3031076fb67"
     linear_bug_label_id: str = "2e0f1a4a-7cd0-4b78-8e00-88f6c20f8f3f"
+    # "Beta report": filed from the app, so they can be listed on their own.
+    linear_report_label_id: str = "c09122e0-1bc1-44ef-a0f3-6c479585e170"
 
 
 settings = Settings()

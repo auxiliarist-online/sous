@@ -373,7 +373,6 @@ describe('Settings', () => {
     myStore: vi.fn(async () => ({
       name: 'Harris Teeter – Village at Chestnut Street',
       address: null,
-      isDefault: true,
     })),
     chooseStore: vi.fn(async (_id: string) => {}),
     exportMyData: vi.fn(async () => '{"profile": null}'),
