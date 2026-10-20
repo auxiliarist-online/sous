@@ -405,6 +405,14 @@ STEP_VERB = re.compile(
     r"set|simmer|sprinkle|spread|stir|toss|transfer|turn|whisk)\b",
     re.I,
 )
+# How a wrapped ingredient's second line starts: how to prepare it ("finely
+# chopped", "peeled and diced", "plus more for serving"), not a food.
+PREPARED = re.compile(
+    r"^(?:\w+ly|chopped|minced|diced|sliced|grated|shredded|peeled|seeded|halved|quartered|"
+    r"cubed|softened|melted|divided|drained|rinsed|trimmed|torn|cut|plus|at|to taste|"
+    r"for (?:serving|garnish))\b",
+    re.I,
+)
 # A line ending mid-phrase: the next line carries on.
 OPEN_END = re.compile(r"(?:[,(/\-–—]|\b(?:or|and|of|with|to|for|in|plus|a|the))$", re.I)
 
@@ -487,6 +495,11 @@ def _furniture_line(ln: Line, b: Block, page: list[Line]) -> bool:
         return True
     if len(text.split()) > 6 or not re.search(r"\b\d{1,4}\b", text) or text.endswith("."):
         return False
+    # "1 cup olive oil", "2 eggs": an amount then a lower-case word is an
+    # ingredient, however far below the rest it sits. A folio's words are
+    # capitalized ("155 Frittatas").
+    if re.match(r"^\W*[\d½¼¾⅓⅔⅛/.\s–-]+\s*[a-z]", text):
+        return False
     gap = 1.5 * max(ln.height, 1.0)
     # Lines beside it on the same row (a folio split into two blocks) don't count.
     others = [o for o in page if o is not ln and not (o.top < ln.bottom and ln.top < o.bottom)]
@@ -505,7 +518,8 @@ def _continues(
 ) -> bool:
     """Whether a line carries on the one before rather than starting a new
     item: indented (a hanging indent), starting with a bracket, starting in
-    lower case (unless this list's items do: `lower_items`), after a line that
+    lower case (unless this list's items do, `lower_items`, and it doesn't
+    start with a preparation like "finely chopped"), after a line that
     ends mid-phrase or with a bracket open, or after one that runs to the
     column's edge (a narrow column wraps nearly
     every item) when it doesn't start with an amount itself."""
@@ -513,7 +527,10 @@ def _continues(
     size = max(ln.height, 1.0)
     if ln.left - margin > 0.8 * size:
         return True
-    if text[:1] in "([" or (text[:1].islower() and not lower_items):
+    # Lower case carries on, unless this list starts its items in lower case
+    # ("a pinch of salt", "ground black pepper"); even then, a line that starts
+    # by saying how to prepare it ("finely chopped") carries on.
+    if text[:1] in "([" or (text[:1].islower() and (not lower_items or PREPARED.match(text))):
         return True
     if OPEN_END.search(prev.text) or prev.text.count("(") > prev.text.count(")"):
         return True

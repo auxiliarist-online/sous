@@ -187,21 +187,31 @@ export function manualInput(r: RecipeDetail): ManualRecipeInput {
   }
 }
 
+// Supabase returns at most 1,000 rows a request.
+const SOURCE_NOTES_PAGE = 1000
+
 /** Where the user's own recipes say they're from ("Salt Fat Acid Heat",
  *  "Grandma"), most used first, so the form can suggest them (TYL-100). */
 export async function sourceNotes(
   db: SupabaseClient,
   userId: string,
 ): Promise<string[]> {
-  const { data, error } = await db
-    .from('recipes')
-    .select('source_note')
-    .eq('added_by', userId)
-    .not('source_note', 'is', null)
-    .limit(500)
-  if (error) throw error
+  // Every note counts toward the ranking, so read them a page at a time.
+  const rows: { source_note: string }[] = []
+  for (let from = 0; ; from += SOURCE_NOTES_PAGE) {
+    const { data, error } = await db
+      .from('recipes')
+      .select('source_note')
+      .eq('added_by', userId)
+      .not('source_note', 'is', null)
+      .order('id')
+      .range(from, from + SOURCE_NOTES_PAGE - 1)
+    if (error) throw error
+    rows.push(...(data as { source_note: string }[]))
+    if (data.length < SOURCE_NOTES_PAGE) break
+  }
   const counts = new Map<string, { note: string; n: number }>()
-  for (const { source_note } of data as { source_note: string }[]) {
+  for (const { source_note } of rows) {
     const note = source_note.trim()
     const key = note.toLowerCase()
     if (!note) continue

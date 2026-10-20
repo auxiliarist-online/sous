@@ -72,6 +72,9 @@ class TestAmounts:
     def test_cooked_rice_is_not_canned(self) -> None:
         (row,) = parse_line(0, "2 cups cooked rice")
         assert not any(c.startswith("canned") for c in row.candidates)
+        rice, chickpeas = parse_line(0, "2 cups cooked rice or chickpeas")
+        assert not any(c.startswith("canned") for c in rice.candidates)
+        assert chickpeas.candidates[0] == "canned chickpeas"
 
     def test_an_example_narrows_a_generic_name(self) -> None:
         (row,) = parse_line(0, "3 cups cooked beans, such as cannellini")
@@ -79,6 +82,8 @@ class TestAmounts:
         assert row.candidates[:2] == ["canned cannellini beans", "cannellini beans"]
         (row,) = parse_line(0, "1/4 cup oil, such as canola or grapeseed")
         assert row.candidates[0] == "canola oil"
+        (row,) = parse_line(0, "3 cups cooked beans, such as cannellini beans")
+        assert row.name == "cannellini beans"
 
     def test_in_their_juice_is_ignored_for_matching(self) -> None:
         canned, fresh = parse_line(0, "2 cups crushed canned or fresh tomatoes in their juice")

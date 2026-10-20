@@ -48,13 +48,19 @@ export function RecipeForm({
   const [error, setError] = useState<string | null>(null)
   // After reading photos: what to check, and what was left out.
   const [review, setReview] = useState<PhotoDraft | null>(null)
-  const [notes, setNotes] = useState<string[]>([])
+  // Suggestions, kept with the API they came from: another account's never
+  // show, even while its own are loading or if they fail to.
+  const [loaded, setLoaded] = useState<{
+    api: RecipeFormApi
+    notes: string[]
+  } | null>(null)
+  const notes = loaded?.api === api ? loaded.notes : []
 
   // Suggestions only: the field works the same without them.
   useEffect(() => {
     let live = true
     api.sourceNotes().then(
-      (n) => live && setNotes(n),
+      (n) => live && setLoaded({ api, notes: n }),
       () => {},
     )
     return () => {

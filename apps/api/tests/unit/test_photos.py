@@ -489,6 +489,37 @@ def test_a_time_line_lower_case_items_and_a_footer_above_the_table() -> None:
     assert "A Cookbook of Favorites 268" in draft.skipped
 
 
+def test_a_wrapped_preparation_joins_its_item_in_a_lower_case_list() -> None:
+    # A list that starts items in lower case still wraps "finely chopped".
+    herbs = page(
+        block(60, 40, 600, [["Herb Rice"]], h=48),
+        block(
+            60,
+            120,
+            400,
+            [["a pinch of salt", "1 cup rice", "2 tablespoons parsley", "finely chopped"]],
+        ),
+        block(60, 320, 600, [["Simmer the rice, then stir in the parsley."]]),
+    )
+    draft = recipe_from_pages([blocks_of(herbs)])
+    assert draft.ingredients == [
+        "a pinch of salt",
+        "1 cup rice",
+        "2 tablespoons parsley finely chopped",
+    ]
+
+
+def test_an_ingredient_set_apart_at_the_foot_is_not_a_footer() -> None:
+    # The last ingredient, well below the rest, is still an ingredient.
+    oil = page(
+        block(60, 40, 600, [["Dressing"]], h=48),
+        block(60, 120, 400, [["2 tablespoons vinegar", "1 teaspoon mustard"]]),
+        block(60, 400, 400, [["1 cup olive oil"]]),
+    )
+    draft = recipe_from_pages([blocks_of(oil)])
+    assert "1 cup olive oil" in draft.ingredients
+
+
 def test_a_word_set_apart_rejoins_its_line() -> None:
     # Vision can return a line's last word as a block of its own.
     split = page(

@@ -315,6 +315,33 @@ describe('RecipeForm', () => {
     )
   })
 
+  it('drops the last account’s suggestions when the API changes', async () => {
+    const first = {
+      recipe: vi.fn(),
+      saveManual: vi.fn(),
+      readPhotos: vi.fn(),
+      sourceNotes: vi.fn(async () => ['Old Book']),
+    }
+    const { container, rerender } = render(<RecipeForm api={first} />)
+    await waitFor(() =>
+      expect(container.querySelectorAll('#source-notes option')).toHaveLength(
+        1,
+      ),
+    )
+    const second = {
+      ...first,
+      sourceNotes: vi.fn(async () => {
+        throw new Error('down')
+      }),
+    }
+    rerender(<RecipeForm api={second} />)
+    await waitFor(() =>
+      expect(container.querySelectorAll('#source-notes option')).toHaveLength(
+        0,
+      ),
+    )
+  })
+
   it('edits the user’s own recipe, starting from what they typed', async () => {
     const api = {
       recipe: vi.fn(async () => SOUP),

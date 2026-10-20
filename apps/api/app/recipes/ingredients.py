@@ -132,10 +132,12 @@ DESCRIPTORS = (
 QUALIFIER = re.compile(
     r"\s*(\(|\b(preferably|ideally|such as|such a|e\.?\s?g\.?|like|cut into)\b).*$"
 )
-# "3 cups cooked beans": cooked legumes are bought canned, not dried.
-COOKED_LEGUME = re.compile(
-    r"\bcooked\b.*\b(beans?|chickpeas?|garbanzos?|lentils?|cannellini|black-eyed peas)\b", re.I
-)
+# "3 cups cooked beans": cooked legumes are bought canned, not dried. The
+# parser puts "cooked" in the preparation, so the line says it and the
+# option's own name says it's a legume ("cooked rice or chickpeas" is canned
+# only for the chickpeas).
+COOKED = re.compile(r"\bcooked\b", re.I)
+LEGUME = re.compile(r"\b(beans?|chickpeas?|garbanzos?|lentils?|cannellini|black-eyed peas)\b", re.I)
 # "oil, such as canola" -> "canola oil": an example narrows a generic name.
 EXAMPLE = re.compile(
     r"^\s*(?:such as|like|e\.?\s?g\.?,?)\s+([a-z][a-z -]*?)\s*(?:,|\bor\b|\band\b|$)", re.I
@@ -420,6 +422,9 @@ BULLET = re.compile(
 
 
 def parse_line(line_no: int, raw: str, section: str | None = None) -> list[ParsedLine]:
+    """Parse one recipe line into ParsedLine rows, one per alternative ("A or
+    B"), each with its amount, the names to match it by, and whether a person
+    should check it."""
     text = BULLET.sub("", raw).strip()
     if not text:
         return []
@@ -446,7 +451,10 @@ def parse_line(line_no: int, raw: str, section: str | None = None) -> list[Parse
         # "beans, such as cannellini" -> "cannellini beans"
         example = EXAMPLE.match(comment or "")
         if example and _plain(name) in GENERIC:
-            name = f"{_plain(example.group(1))} {_plain(name)}"
+            kind, generic = _plain(example.group(1)), _plain(name)
+            # "beans, such as cannellini beans" is already whole.
+            named = kind.split()[-1] in _forms(generic)
+            name = kind if named else f"{kind} {generic}"
         confidence = round(min(conf, amount_conf), 3)
         out.append(
             ParsedLine(
@@ -455,7 +463,9 @@ def parse_line(line_no: int, raw: str, section: str | None = None) -> list[Parse
                 section=section,
                 option_no=i,
                 name=name,
-                candidates=candidates(name, canned or bool(COOKED_LEGUME.search(text))),
+                candidates=candidates(
+                    name, canned or bool(COOKED.search(text) and LEGUME.search(name))
+                ),
                 quantity=qty,
                 quantity_max=qty_max,
                 unit=unit,

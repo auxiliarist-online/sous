@@ -242,8 +242,9 @@ describe('sourceNotes', () => {
       { source_note: 'salt fat acid heat ' },
       { source_note: '  ' },
     ]
-    const limit = vi.fn(async () => ({ data: rows, error: null }))
-    const not = vi.fn(() => ({ limit }))
+    const range = vi.fn(async () => ({ data: rows, error: null }))
+    const order = vi.fn(() => ({ range }))
+    const not = vi.fn(() => ({ order }))
     const eq = vi.fn(() => ({ not }))
     const select = vi.fn(() => ({ eq }))
     const db = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient
@@ -252,5 +253,27 @@ describe('sourceNotes', () => {
       'Grandma',
     ])
     expect(eq).toHaveBeenCalledWith('added_by', 'u1')
+  })
+
+  it('reads every page before ranking', async () => {
+    const page = (note: string, n: number) =>
+      Array.from({ length: n }, () => ({ source_note: note }))
+    // Page one is full of "Blog"; "Book" shows up more, mostly on page two.
+    const pages = [
+      [...page('Blog', 600), ...page('Book', 400)],
+      page('Book', 300),
+    ]
+    const range = vi.fn(async (from: number) => ({
+      data: pages[from / 1000] ?? [],
+      error: null,
+    }))
+    const order = vi.fn(() => ({ range }))
+    const not = vi.fn(() => ({ order }))
+    const eq = vi.fn(() => ({ not }))
+    const select = vi.fn(() => ({ eq }))
+    const db = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient
+    expect(await sourceNotes(db, 'u1')).toEqual(['Book', 'Blog'])
+    expect(range).toHaveBeenCalledTimes(2)
+    expect(range).toHaveBeenLastCalledWith(1000, 1999)
   })
 })
