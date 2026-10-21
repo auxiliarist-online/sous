@@ -65,6 +65,8 @@ export interface PlanApi extends CookedApi {
   ): Promise<void>
   /** Back to the usual price at a store (or anywhere, with null). */
   clearMyPrice(ingredientId: string, storeId: string | null): Promise<void>
+  /** Move a planned meal to another week, in one step (TYL-68). */
+  moveEntry(id: string, weekStart: string): Promise<void>
   /** Recipes planned or cooked lately, by how many weeks ago (TYL-66). */
   recentRecipes(weekStart: string, weeks: number): Promise<Recent>
   /** Which option of an "or" line to buy this week (TYL-98). */
@@ -83,6 +85,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   // What's been cooked, by plan entry (TYL-68); null until it's loaded, so a
   // cooked meal never shows "Cooked it" first.
   const [cooked, setCooked] = useState<Record<string, Cooked> | null>(null)
+  const [cookedFailed, setCookedFailed] = useState(false)
   const [failed, setFailed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -101,8 +104,13 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
         setFailed(false)
         // Extra: the plan works without knowing what was cooked.
         api.cookedEntries(planned.map((e) => e.id)).then(
-          (c) => live && setCooked(c),
-          () => live && setCooked({}),
+          (c) => {
+            if (!live) return
+            setCooked(c)
+            setCookedFailed(false)
+          },
+          // Unknown, not "none": a cooked meal mustn't look uncooked.
+          () => live && setCookedFailed(true),
         )
         // The cost comes from the API; the plan works without it.
         api.planCost(week).then(
@@ -216,6 +224,14 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
           />
 
           <VarietyNotes entries={entries} />
+          {cookedFailed && entries.length > 0 && (
+            <p className="small muted" role="status">
+              We couldn't check what's been cooked.{' '}
+              <button type="button" className="link" onClick={reload}>
+                Try again
+              </button>
+            </p>
+          )}
 
           {entries.length === 0 && (
             <div className="empty">
@@ -254,15 +270,10 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
                       onMoveOn={
                         week < thisWeek
                           ? () =>
-                              void change(async () => {
-                                await api.addToPlan(
-                                  thisWeek,
-                                  e.recipeId,
-                                  e.scale,
-                                  null,
-                                )
-                                await api.removeEntry(e.id)
-                              }, "We couldn't move that. Try again.")
+                              void change(
+                                () => api.moveEntry(e.id, thisWeek),
+                                "We couldn't move that. Try again.",
+                              )
                           : null
                       }
                       cost={cost && cost !== 'error' ? cost : null}

@@ -93,6 +93,7 @@ const library = (
   favoriteCuisines: vi.fn(async () => []),
   clearMyPrice: vi.fn(async () => {}),
   saveChoice: vi.fn(async () => {}),
+  moveEntry: vi.fn(async () => {}),
   ...fakeCookedApi(),
   recipeFits: vi.fn(async () => ({})),
   setPantry: vi.fn(async () => {}),

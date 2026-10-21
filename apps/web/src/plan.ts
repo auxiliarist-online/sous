@@ -103,6 +103,8 @@ interface EntryRow {
   } | null
 }
 
+/** The week's planned meals in order, each with its recipe's main proteins
+ *  and cuisines for the variety notes (TYL-66). */
 export async function loadPlan(
   db: SupabaseClient,
   weekStart: string,
@@ -137,6 +139,20 @@ export async function loadPlan(
       ),
     }))
     .sort((a, b) => a.position - b.position)
+}
+
+/** Move a planned meal to another week in one step (TYL-68): it's never in
+ *  both weeks, or neither, whatever fails. */
+export async function moveEntry(
+  db: SupabaseClient,
+  id: string,
+  weekStart: string,
+): Promise<void> {
+  const { error } = await db.rpc('move_plan_entry', {
+    p_entry: id,
+    p_week: weekStart,
+  })
+  if (error) throw error
 }
 
 export async function addToPlan(

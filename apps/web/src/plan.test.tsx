@@ -466,6 +466,7 @@ function fakeApi({
       ) => void 0,
     ),
     clearMyPrice: vi.fn(async (_id: string, _store: string | null) => void 0),
+    moveEntry: vi.fn(async (_id: string, _week: string) => void 0),
     saveChoice: vi.fn(
       async (_week: string, _key: string, _id: string) => void 0,
     ),
@@ -588,8 +589,26 @@ describe('a week that’s over (TYL-68)', () => {
     await userEvent.click(
       await screen.findByRole('button', { name: 'Move to this week' }),
     )
-    expect(api.addToPlan).toHaveBeenCalledWith(weekOf(), 'r-1', 1, null)
-    expect(api.removeEntry).toHaveBeenCalledWith('1')
+    expect(api.moveEntry).toHaveBeenCalledWith('1', weekOf())
+  })
+
+  it('offers nothing while it can’t tell what was cooked', async () => {
+    const cooked = fakeCookedApi()
+    cooked.cookedEntries.mockRejectedValueOnce(new Error('offline'))
+    const api = fakeApi({ entries: [entry('1', { day: null })], cooked })
+    render(<PlanPage api={api} week={addDays(weekOf(), -7)} />)
+    expect(
+      await screen.findByText(/We couldn't check what's been cooked/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Move to this week' }),
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Cooked / })).toBeNull()
+    // Trying again loads it.
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(
+      await screen.findByRole('button', { name: 'Move to this week' }),
+    ).toBeInTheDocument()
   })
 
   it('doesn’t offer it this week, or for a meal that was cooked', async () => {

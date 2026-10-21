@@ -41,6 +41,30 @@ create policy "Own rows" on public.cooked_meals for all to authenticated
 grant select on public.cooked_meals to anon;
 grant select, insert, update, delete on public.cooked_meals to authenticated, service_role;
 
+-- "Didn't make it? Move to this week": a planned meal moves to another week in
+-- one transaction, so it's never in both (or neither). Runs as the user: an
+-- entry that isn't theirs isn't found.
+create function public.move_plan_entry(p_entry uuid, p_week date) returns uuid
+language plpgsql security invoker as $$
+declare
+  v_recipe uuid;
+  v_scale numeric;
+  v_moved uuid;
+begin
+  select e.recipe_id, e.scale into v_recipe, v_scale
+  from public.meal_plan_entries e where e.id = p_entry;
+  if not found then
+    raise exception 'No such plan entry' using errcode = 'P0002';
+  end if;
+  v_moved := public.add_to_meal_plan(p_week, v_recipe, v_scale);
+  delete from public.meal_plan_entries where id = p_entry;
+  return v_moved;
+end
+$$;
+
+revoke execute on function public.move_plan_entry(uuid, date) from public, anon;
+grant execute on function public.move_plan_entry(uuid, date) to authenticated;
+
 -- The user's data export includes what they cooked.
 create or replace function public.export_my_data() returns jsonb
 language sql stable as $$

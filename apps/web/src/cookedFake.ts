@@ -12,6 +12,7 @@ export function fakeCookedApi(
   let rows = [...start]
   let next = rows.length
   return {
+    // The records for these entries, from what's been marked.
     cookedEntries: vi.fn(async (ids: string[]) =>
       Object.fromEntries(
         rows
@@ -19,6 +20,7 @@ export function fakeCookedApi(
           .map((r) => [r.planEntryId!, r]),
       ),
     ),
+    // Add a record, numbered cooked-1, cooked-2…
     markCooked: vi.fn(
       async (meal: Parameters<CookedApi['markCooked']>[0]): Promise<Cooked> => {
         const row: Cooked = {
@@ -34,14 +36,17 @@ export function fakeCookedApi(
         return row
       },
     ),
+    // Change a record's rating or note.
     rateCooked: vi.fn(
       async (id: string, patch: Parameters<CookedApi['rateCooked']>[1]) => {
         rows = rows.map((r) => (r.id === id ? { ...r, ...patch } : r))
       },
     ),
+    // Forget a record.
     undoCooked: vi.fn(async (id: string) => {
       rows = rows.filter((r) => r.id !== id)
     }),
+    // Count a recipe's records, the latest and its latest note.
     cookedSummary: vi.fn(async (recipeId: string): Promise<CookedSummary> => {
       const mine = rows
         .filter((r) => r.recipeId === recipeId)

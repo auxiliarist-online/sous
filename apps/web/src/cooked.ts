@@ -36,12 +36,14 @@ export interface HistoryItem extends Cooked {
 export interface CookedApi {
   /** The cooked records for these plan entries, by entry id. */
   cookedEntries(entryIds: string[]): Promise<Record<string, Cooked>>
+  /** Record a meal as cooked; a plan entry already cooked returns its record. */
   markCooked(meal: {
     recipeId: string
     planEntryId?: string | null
     cookedOn: string
     scale?: number
   }): Promise<Cooked>
+  /** Set or change a cooked meal's rating and note. */
   rateCooked(
     id: string,
     patch: { rating?: Rating | null; note?: string | null },
