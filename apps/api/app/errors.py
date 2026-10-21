@@ -8,6 +8,7 @@ import asyncio
 import functools
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
@@ -47,27 +48,49 @@ def safe(exc: BaseException) -> ApiError:
     return ApiError(f"{kind.__module__}.{kind.__qualname__}").with_traceback(exc.__traceback__)
 
 
+# The client events go to, once report_errors has set it up.
+_client: Posthog | None = None
+
+
+async def _send(send: functools.partial[Any]) -> None:
+    """Make one report in a thread of its own, giving up after a few seconds."""
+    try:
+        await asyncio.wait_for(
+            asyncio.get_running_loop().run_in_executor(_senders, send), REPORT_SECONDS
+        )
+    except Exception:
+        log.warning("couldn't report to PostHog", exc_info=True)
+
+
+async def report_event(event: str, properties: dict[str, str]) -> None:
+    """Count something that happened ("import_failed"), with no user and
+    nothing they sent: only the properties given, which name no one."""
+    if _client is not None:
+        await _send(
+            functools.partial(_client.capture, event, distinct_id="sous-api", properties=properties)
+        )
+
+
 def report_errors(app: FastAPI, client: Posthog | None) -> None:
     """Report the API's unhandled errors. The report is made from Starlette's
     own 500 handler, so the error is still logged and re-raised as usual,
-    and in a thread with a time limit, so a slow upload holds up nothing."""
+    and in a thread with a time limit, so a slow upload holds up nothing.
+    Events (report_event) go to the same client."""
+    global _client
+    _client = client
     if client is None:
         return
 
     async def report(request: Request, exc: Exception) -> Response:
         """Send the report (giving up after a few seconds), then a plain 500."""
-        try:
-            send = functools.partial(
+        await _send(
+            functools.partial(
                 client.capture_exception,
                 safe(exc),
                 distinct_id="sous-api",
                 properties={"route": request.url.path, "method": request.method},
             )
-            await asyncio.wait_for(
-                asyncio.get_running_loop().run_in_executor(_senders, send), REPORT_SECONDS
-            )
-        except Exception:
-            log.warning("couldn't report an error to PostHog", exc_info=True)
+        )
         return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
     app.add_exception_handler(Exception, report)

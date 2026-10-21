@@ -2,13 +2,21 @@
 never its message or the request's contents; without a key nothing is set
 up."""
 
+import asyncio
 import time
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app import errors
+
+
+@pytest.fixture(autouse=True)
+def keep_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests set up reporting with fakes; put the real setting back after."""
+    monkeypatch.setattr(errors, "_client", errors._client)
 
 
 def test_off_without_a_key() -> None:
@@ -18,11 +26,16 @@ def test_off_without_a_key() -> None:
 class FakePostHog:
     def __init__(self, delay: float = 0) -> None:
         self.calls: list[tuple[BaseException, dict[str, Any]]] = []
+        self.events: list[tuple[str, dict[str, Any]]] = []
         self.delay = delay
 
     def capture_exception(self, exc: BaseException, **kwargs: Any) -> None:
         time.sleep(self.delay)
         self.calls.append((exc, kwargs))
+
+    def capture(self, event: str, **kwargs: Any) -> None:
+        time.sleep(self.delay)
+        self.events.append((event, kwargs))
 
 
 def app_with(fake: FakePostHog) -> TestClient:
@@ -57,3 +70,25 @@ def test_a_slow_report_doesnt_hold_up_the_response(monkeypatch: Any) -> None:
     started = time.monotonic()
     assert app_with(FakePostHog(delay=1.0)).post("/boom").status_code == 500
     assert time.monotonic() - started < 0.9
+
+
+def test_events_go_out_with_only_their_properties() -> None:
+    fake = FakePostHog()
+    errors.report_errors(FastAPI(), fake)  # type: ignore[arg-type]
+    asyncio.run(errors.report_event("import_failed", {"reason": "blocked"}))
+    assert fake.events == [
+        ("import_failed", {"distinct_id": "sous-api", "properties": {"reason": "blocked"}})
+    ]
+
+
+def test_a_slow_event_gives_up(monkeypatch: Any) -> None:
+    monkeypatch.setattr(errors, "REPORT_SECONDS", 0.05)
+    errors.report_errors(FastAPI(), FakePostHog(delay=1.0))  # type: ignore[arg-type]
+    started = time.monotonic()
+    asyncio.run(errors.report_event("import_failed", {"reason": "blocked"}))
+    assert time.monotonic() - started < 0.9
+
+
+def test_no_events_without_a_key() -> None:
+    errors.report_errors(FastAPI(), None)
+    asyncio.run(errors.report_event("import_failed", {"reason": "blocked"}))  # no error

@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.auth import current_user_id
+from app.errors import report_event
 from app.recipes.extract import (
     MAX_LD_BLOCKS,
     MAX_LD_CHARS,
@@ -62,6 +63,17 @@ class ImportResult(BaseModel):
     status: str
 
 
+async def _import_failed(e: FetchError, url: str) -> None:
+    """Count a failed import by reason and site (TYL-74), so sites that block
+    Sous show up as a list. Only the site's domain is sent: not the page, nor
+    who tried. An address that isn't valid sends no domain (it may be anything
+    the user typed)."""
+    props = {"reason": e.code}
+    if e.code != "invalid_url":
+        props["domain"] = domain_of(url)
+    await report_event("import_failed", props)
+
+
 @router.post("/import", status_code=status.HTTP_200_OK)
 async def import_recipe(
     body: ImportRequest, user_id: Annotated[str, Depends(current_user_id)]
@@ -73,6 +85,7 @@ async def import_recipe(
         page = await fetch_page(url)
         draft = extract_recipe(page.html, page.url)
     except FetchError as e:
+        await _import_failed(e, url)
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, {"code": e.code, "message": e.message}
         ) from e

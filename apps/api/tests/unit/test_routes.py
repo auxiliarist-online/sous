@@ -64,6 +64,21 @@ def test_import_explains_why_a_page_cant_be_imported(client: TestClient) -> None
     assert resp.json()["detail"]["code"] == "blocked"
 
 
+def test_a_failed_import_is_counted_by_reason_and_site(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events: list[tuple[str, dict[str, str]]] = []
+
+    async def fake_event(event: str, properties: dict[str, str]) -> None:
+        events.append((event, properties))
+
+    monkeypatch.setattr(routes, "report_event", fake_event)
+    client.post("/recipes/import", json={"url": "https://www.blocked.example/tacos/?u=me"})
+    client.post("/recipes/import", json={"url": "example-blog.com/tacos/"})
+    # Only the site: not the page, its query, or who tried.
+    assert events == [("import_failed", {"reason": "blocked", "domain": "blocked.example"})]
+
+
 def test_import_requires_sign_in() -> None:
     resp = TestClient(app).post("/recipes/import", json={"url": "https://example.com/"})
     assert resp.status_code == 401
