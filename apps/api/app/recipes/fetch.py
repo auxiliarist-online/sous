@@ -32,6 +32,7 @@ class FetchError(Exception):
     """A page we can't import. `code` is stable for clients; the message is user-facing."""
 
     def __init__(self, code: str, message: str) -> None:
+        """The error's code and message; fetch_page fills in `url` as it raises."""
         super().__init__(message)
         self.code = code
         self.message = message

@@ -78,6 +78,9 @@ async def _import_failed(reason: str, url: str) -> None:
 async def import_recipe(
     body: ImportRequest, user_id: Annotated[str, Depends(current_user_id)]
 ) -> ImportResult:
+    """Fetch a recipe page by its link, read it, and save it for the user. A
+    page we can't import answers 422 with a code and a message; either kind of
+    failure is counted by reason and site (TYL-74)."""
     url = body.url.strip()
     if "://" not in url:
         url = f"https://{url}"
