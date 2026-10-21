@@ -3403,14 +3403,17 @@ describe('cooked meals (TYL-68)', () => {
     )
     // A meal moves to another week whole, and only the user's own.
     const moved = await as('authenticated', COOK, async () => {
-      await db.query("select add_to_meal_plan('2026-10-12', $1, 0.5)", [soup])
+      await db.query(
+        "select add_to_meal_plan('2026-10-12', $1, 0.5, null, 'lunch')",
+        [soup],
+      )
       const { rows: e } = await db.query(
         'select id from meal_plan_entries where recipe_id = $1 and scale = 0.5',
         [soup],
       )
       await db.query("select move_plan_entry($1, '2026-10-19')", [e[0].id])
       const { rows } = await db.query(
-        `select mp.week_start::text as week, e.scale::float as scale
+        `select mp.week_start::text as week, e.scale::float as scale, e.meal
          from meal_plan_entries e join meal_plans mp on mp.id = e.meal_plan_id
          where e.recipe_id = $1 order by mp.week_start, e.scale`,
         [soup],
@@ -3418,8 +3421,8 @@ describe('cooked meals (TYL-68)', () => {
       return rows
     })
     assert.deepEqual(moved, [
-      { week: '2026-10-12', scale: 2 },
-      { week: '2026-10-19', scale: 0.5 },
+      { week: '2026-10-12', scale: 2, meal: null },
+      { week: '2026-10-19', scale: 0.5, meal: 'lunch' },
     ])
     await assert.rejects(
       as('authenticated', COOK, () =>
