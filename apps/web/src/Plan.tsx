@@ -19,6 +19,7 @@ import {
   type BuyItem,
   type Fit,
   type PantryStatus,
+  type PlanChoice,
   type PlanCost,
   type PlanEntry,
   type Scale,
@@ -60,6 +61,12 @@ export interface PlanApi {
   ): Promise<void>
   /** Back to the usual price at a store (or anywhere, with null). */
   clearMyPrice(ingredientId: string, storeId: string | null): Promise<void>
+  /** Which option of an "or" line to buy this week (TYL-98). */
+  saveChoice(
+    weekStart: string,
+    key: string,
+    ingredientId: string,
+  ): Promise<void>
 }
 
 /** The week's meals (TYL-15): what's planned on which day and at what size,
@@ -155,6 +162,18 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
 
       {entries && (
         <>
+          {cost && cost !== 'error' && (
+            <Choices
+              choices={cost.choices}
+              busy={busy}
+              onChoose={(key, ingredientId) =>
+                void change(
+                  () => api.saveChoice(week, key, ingredientId),
+                  "We couldn't save your choice. Try again.",
+                )
+              }
+            />
+          )}
           <Budget
             cost={cost}
             empty={entries.length === 0}
@@ -704,6 +723,113 @@ function Entry({
         )}
       </details>
     </li>
+  )
+}
+
+/** The week's "or" lines (TYL-98): ones waiting for the user to choose,
+ *  each option with what it adds, and ones settled by what another recipe
+ *  needs or an earlier choice, which can be switched. One settled by diet
+ *  has nothing to choose, so it isn't shown. */
+function Choices({
+  choices,
+  busy,
+  onChoose,
+}: {
+  choices: PlanChoice[]
+  busy: boolean
+  onChoose: (key: string, ingredientId: string) => void
+}) {
+  const shown = choices.filter((c) => c.options.length > 1)
+  if (shown.length === 0) return null
+  const pending = shown.filter((c) => c.reason === 'pending')
+  return (
+    <section className="choices" aria-labelledby="choices-title">
+      <h3 id="choices-title">
+        {pending.length > 0
+          ? 'Choose before you shop'
+          : 'Recipes that take either'}
+      </h3>
+      {pending.length > 0 && (
+        <p className="small muted">These go on your list once you choose.</p>
+      )}
+      <ul>
+        {shown.map((c) => (
+          <li key={c.key}>
+            <ChoiceRow choice={c} busy={busy} onChoose={onChoose} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+// Why an "or" line uses the option it does, after its name.
+const REASONS: Record<PlanChoice['reason'], string> = {
+  diet: ', the one that fits your diet.',
+  chosen: ', your choice.',
+  on_hand: ', since you have it.',
+  needed: ', since another recipe needs it.',
+  pending: '.',
+}
+
+/** One "or" line: its options as buttons while it waits, or what's used,
+ *  why, and what the other would add. */
+function ChoiceRow({
+  choice,
+  busy,
+  onChoose,
+}: {
+  choice: PlanChoice
+  busy: boolean
+  onChoose: (key: string, ingredientId: string) => void
+}) {
+  const names = choice.options.map((o) => o.name).join(' or ')
+  const where =
+    choice.recipes > 1 ? `${choice.recipes} recipes take` : 'A recipe takes'
+  if (choice.reason === 'pending') {
+    return (
+      <>
+        <p className="small">
+          {where} {names}.
+        </p>
+        <div className="chips">
+          {choice.options.map((o) => (
+            <button
+              key={o.ingredientId}
+              type="button"
+              className="chip"
+              disabled={busy}
+              onClick={() => onChoose(choice.key, o.ingredientId)}
+            >
+              {o.name}
+              {o.cents !== null && ` +${dollars(o.cents)}`}
+            </button>
+          ))}
+        </div>
+      </>
+    )
+  }
+  const used = choice.options.find((o) => o.ingredientId === choice.chosen)
+  const others = choice.options.filter((o) => o !== used)
+  return (
+    <p className="small">
+      {where} {names}: using <strong>{used?.name}</strong>
+      {REASONS[choice.reason]}{' '}
+      {others.map((o) => (
+        <button
+          key={o.ingredientId}
+          type="button"
+          className="link"
+          disabled={busy}
+          onClick={() => onChoose(choice.key, o.ingredientId)}
+        >
+          Use {o.name} instead
+          {o.cents !== null &&
+            used?.cents != null &&
+            ` (${o.cents >= used.cents ? '+' : '−'}${dollars(Math.abs(o.cents - used.cents))})`}
+        </button>
+      ))}
+    </p>
   )
 }
 

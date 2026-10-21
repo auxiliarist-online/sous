@@ -22,6 +22,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any, Literal
 
+from app.plans.options import Choice, settle
 from app.pricing.estimate import Ingredient, PriceQuote, estimate_cost
 from app.pricing.units import UnknownUnitError, convert
 
@@ -98,6 +99,9 @@ class PlanCost:
     store_name: str | None = None
     store_id: str | None = None
     entries: list[EntryCost] = field(default_factory=list)
+    # The week's "or" lines and how each was settled (TYL-98); one that's
+    # pending adds nothing until the user chooses.
+    choices: list[Choice] = field(default_factory=list)
 
 
 @dataclass
@@ -215,7 +219,28 @@ def _shares(cents: int, used: dict[str, float | None]) -> dict[str, int]:
 
 def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) -> PlanCost:
     """`inputs` is what plan_cost_inputs() returns. Candidate entries (recipes
-    the user might add) are left out; added_costs() prices them."""
+    the user might add) are left out; added_costs() prices them. Each "or"
+    line is settled first (app/plans/options.py), and each of its options is
+    priced: what buying it adds to the week."""
+    entries, choices = settle(inputs)
+    cost = _cost({**inputs, "entries": entries}, on=on, store_id=store_id)
+    for choice in choices:
+        if len(choice.options) < 2:
+            continue
+        priced = {
+            o: _cost(
+                {**inputs, "entries": settle(inputs, {choice.key: o})[0]}, on=on, store_id=store_id
+            ).total_cents
+            for o in ("", *(opt.ingredient_id for opt in choice.options))
+        }
+        for opt in choice.options:
+            opt.cents = priced[opt.ingredient_id] - priced[""]
+    cost.choices = choices
+    return cost
+
+
+def _cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) -> PlanCost:
+    """The week's cost and buy list, for entries whose "or" lines are settled."""
     info: dict[str, dict[str, Any]] = inputs.get("ingredients", {})
     conversions = {
         id_: Ingredient(
@@ -361,12 +386,14 @@ def added_costs(
 ) -> list[AddedCost]:
     """For each candidate entry in `inputs`, what adding it would add to the
     week's cost: the total with it minus the total without it."""
-    planned = [e for e in inputs.get("entries", []) if not e.get("candidate")]
-    base = plan_cost({**inputs, "entries": planned}, on=on, store_id=store_id)
+    # Settled once for all: a candidate's "or" lines follow the week's choices.
+    entries = settle(inputs)[0]
+    planned = [e for e in entries if not e.get("candidate")]
+    base = _cost({**inputs, "entries": planned}, on=on, store_id=store_id)
     before = {i.ingredient_id: i.cents for i in base.items}
     out = []
-    for candidate in (e for e in inputs.get("entries", []) if e.get("candidate")):
-        withit = plan_cost(
+    for candidate in (e for e in entries if e.get("candidate")):
+        withit = _cost(
             {**inputs, "entries": [*planned, {**candidate, "candidate": False}]},
             on=on,
             store_id=store_id,

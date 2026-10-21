@@ -80,6 +80,7 @@ const COST: PlanCost = {
   storeStatus: 'not_chosen' as const,
   homeZip: null,
   entryCents: {},
+  choices: [],
   items: [
     buy('eggs', {
       aisle: 'dairy_eggs',
@@ -432,6 +433,33 @@ describe('ListPage', () => {
     })
     await waitFor(() => expect(screen.queryByText(/You're offline/)).toBeNull())
     expect(screen.getByText(/1 of 2 in the cart/)).toBeInTheDocument()
+  })
+
+  it('says what waits for a choice on the plan (TYL-98)', async () => {
+    const api = listApi({
+      planCost: vi.fn(async () => ({
+        ...COST,
+        choices: [
+          {
+            key: 'almond,milk',
+            options: [
+              { ingredientId: 'almond', name: 'almond milk', cents: 349 },
+              { ingredientId: 'milk', name: 'milk', cents: 429 },
+            ],
+            chosen: null,
+            reason: 'pending' as const,
+            recipes: 1,
+          },
+        ],
+      })),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    expect(
+      await screen.findByText(/Not on the list until you choose/),
+    ).toHaveTextContent('almond milk or milk')
+    expect(
+      screen.getByRole('link', { name: 'Choose on your plan' }),
+    ).toHaveAttribute('href', `/plan/${WEEK}`)
   })
 
   it('adds anything, edits it, and takes items off and back on', async () => {

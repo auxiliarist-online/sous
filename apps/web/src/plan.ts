@@ -279,6 +279,22 @@ export interface BuyItem {
   regularCents: number | null
 }
 
+/** One "or" line the planned recipes offer ("almond milk or cow's milk") and
+ *  how the week settled it (TYL-98). */
+export interface PlanChoice {
+  /** The options' ingredient ids, sorted and joined: how a choice is saved. */
+  key: string
+  /** The options that fit the user, each with what buying it adds. */
+  options: { ingredientId: string; name: string; cents: number | null }[]
+  /** The option bought, or null while it waits for the user. */
+  chosen: string | null
+  /** Why: it's the one that fits their diet, they chose it, it's on hand,
+   *  another recipe needs it anyway, or it's waiting for them. */
+  reason: 'diet' | 'chosen' | 'on_hand' | 'needed' | 'pending'
+  /** How many planned recipes offer these options. */
+  recipes: number
+}
+
 export interface PlanCost {
   budgetCents: number | null
   totalCents: number
@@ -298,6 +314,8 @@ export interface PlanCost {
   storeId: string | null
   /** Each planned recipe's share of the total, by plan entry id (TYL-30). */
   entryCents: Record<string, number>
+  /** The week's "or" lines (TYL-98). */
+  choices: PlanChoice[]
 }
 
 interface ItemBody {
@@ -343,6 +361,13 @@ export async function planCost(
     store_status?: StoreStatus
     home_zip?: string | null
     entries?: { entry_id: string; cents: number }[]
+    choices?: {
+      key: string
+      options: { ingredient_id: string; name: string; cents: number | null }[]
+      chosen: string | null
+      reason: PlanChoice['reason']
+      recipes: number
+    }[]
   }
   return {
     budgetCents: body.budget_cents,
@@ -379,7 +404,42 @@ export async function planCost(
     entryCents: Object.fromEntries(
       (body.entries ?? []).map((e) => [e.entry_id, e.cents]),
     ),
+    choices: (body.choices ?? []).map((c) => ({
+      key: c.key,
+      options: c.options.map((o) => ({
+        ingredientId: o.ingredient_id,
+        name: o.name,
+        cents: o.cents,
+      })),
+      chosen: c.chosen,
+      reason: c.reason,
+      recipes: c.recipes,
+    })),
   }
+}
+
+/** Save which option of an "or" line the user buys this week (TYL-98). One
+ *  choice covers every recipe offering the same options. The plan's choices
+ *  are read and written back, under row-level security (their own plan). */
+export async function saveChoice(
+  db: SupabaseClient,
+  weekStart: string,
+  key: string,
+  ingredientId: string,
+): Promise<void> {
+  const { data, error } = await db
+    .from('meal_plans')
+    .select('id, choices')
+    .eq('week_start', weekStart)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('No plan for that week')
+  const plan = data as { id: string; choices: Record<string, string> | null }
+  const { error: saveError } = await db
+    .from('meal_plans')
+    .update({ choices: { ...(plan.choices ?? {}), [key]: ingredientId } })
+    .eq('id', plan.id)
+  if (saveError) throw saveError
 }
 
 /** What adding a recipe at full size would add to the week (TYL-30). */

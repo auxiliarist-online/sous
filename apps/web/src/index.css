@@ -1047,3 +1047,25 @@ label.button {
 .install-offer .share-icon {
   vertical-align: -2px;
 }
+
+/* "Or" lines to choose between (TYL-98), on the plan and the list. */
+.choices,
+.notice {
+  border-left: 3px solid var(--color-accent);
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.choices h3 {
+  margin: 0 0 0.25rem;
+}
+
+.choices ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.choices li + li {
+  margin-top: 0.5rem;
+}

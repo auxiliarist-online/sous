@@ -1,4 +1,4 @@
-import type { Session } from '@supabase/supabase-js'
+import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,6 +13,7 @@ import {
   formatQuantity,
   isMonday,
   planCost,
+  saveChoice,
   scaledLine,
   weekDays,
   weekLabel,
@@ -385,6 +386,7 @@ const COST: PlanCost = {
   storeStatus: 'not_chosen' as const,
   homeZip: null,
   entryCents: {},
+  choices: [],
   items: [
     item('white rice', {
       quantity: 1,
@@ -457,9 +459,153 @@ function fakeApi({
       ) => void 0,
     ),
     clearMyPrice: vi.fn(async (_id: string, _store: string | null) => void 0),
+    saveChoice: vi.fn(
+      async (_week: string, _key: string, _id: string) => void 0,
+    ),
   } satisfies PlanApi
   return api
 }
+
+const MILKS = {
+  key: 'almond,milk',
+  options: [
+    { ingredientId: 'almond', name: 'almond milk', cents: 349 },
+    { ingredientId: 'milk', name: 'milk', cents: 429 },
+  ],
+  recipes: 2,
+}
+
+describe('choices (TYL-98)', () => {
+  it('reads the week’s choices from the API', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            budget_cents: null,
+            total_cents: 0,
+            estimated: false,
+            unpriced: 0,
+            items: [],
+            choices: [
+              {
+                key: 'almond,milk',
+                options: [
+                  { ingredient_id: 'almond', name: 'almond milk', cents: 349 },
+                  { ingredient_id: 'milk', name: 'milk', cents: 429 },
+                ],
+                chosen: null,
+                reason: 'pending',
+                recipes: 2,
+                lines: ['1 cup almond milk or milk'],
+              },
+            ],
+          }),
+        ),
+    )
+    const cost = await planCost({} as Session, WEEK, send)
+    expect(cost.choices).toEqual([
+      { ...MILKS, chosen: null, reason: 'pending' },
+    ])
+  })
+
+  it('saves a choice next to the week’s others', async () => {
+    const eq = vi.fn(async () => ({ error: null }))
+    const update = vi.fn(() => ({ eq }))
+    const maybeSingle = vi.fn(async () => ({
+      data: { id: 'plan-1', choices: { 'a,b': 'a' } },
+      error: null,
+    }))
+    const select = vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle })) }))
+    const db = {
+      from: vi.fn(() => ({ select, update })),
+    } as unknown as SupabaseClient
+    await saveChoice(db, WEEK, 'almond,milk', 'milk')
+    expect(update).toHaveBeenCalledWith({
+      choices: { 'a,b': 'a', 'almond,milk': 'milk' },
+    })
+    expect(eq).toHaveBeenCalledWith('id', 'plan-1')
+  })
+
+  it('asks which to buy, with what each adds, and saves the answer', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [{ ...MILKS, chosen: null, reason: 'pending' }],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByRole('heading', { name: 'Choose before you shop' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('2 recipes take almond milk or milk.'),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'milk +$4.29' }))
+    expect(api.saveChoice).toHaveBeenCalledWith(WEEK, 'almond,milk', 'milk')
+    await waitFor(() => expect(api.planCost).toHaveBeenCalledTimes(2))
+  })
+
+  it('says why an option is used, and what the other would add', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [
+          {
+            ...MILKS,
+            options: [
+              { ingredientId: 'almond', name: 'almond milk', cents: 349 },
+              { ingredientId: 'milk', name: 'milk', cents: 0 },
+            ],
+            chosen: 'milk',
+            reason: 'needed',
+          },
+        ],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByText(/since another recipe needs it/),
+    ).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Use almond milk instead (+$3.49)' }),
+    )
+    expect(api.saveChoice).toHaveBeenCalledWith(WEEK, 'almond,milk', 'almond')
+  })
+
+  it('uses what’s on hand', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [{ ...MILKS, chosen: 'milk', reason: 'on_hand' }],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(await screen.findByText(/since you have it/)).toBeInTheDocument()
+  })
+
+  it('shows nothing for a line the user’s diet settles', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [
+          {
+            ...MILKS,
+            options: [MILKS.options[0]],
+            chosen: 'almond',
+            reason: 'diet',
+          },
+        ],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    await screen.findByText('white rice')
+    expect(screen.queryByText(/almond milk/)).toBeNull()
+  })
+})
 
 describe('PlanPage', () => {
   it('groups the week by day and shows the cost against the budget', async () => {

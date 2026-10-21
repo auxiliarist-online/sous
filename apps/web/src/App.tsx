@@ -31,6 +31,7 @@ import {
   loadPlan,
   addedCosts,
   clearMyPrice,
+  saveChoice,
   planCost,
   setMyPrice,
   recipeFits,
@@ -124,6 +125,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     setMyPrice: (id, store, cents, basis) =>
       setMyPrice(db, id, store, cents, basis),
     clearMyPrice: (id, store) => clearMyPrice(db, id, store),
+    saveChoice: (week, key, id) => saveChoice(db, week, key, id),
     favoriteCuisines: () =>
       loadPreferences(db, userId).then((p) => p.favoriteCuisines),
     recipeFits: (ids) => recipeFits(db, ids),

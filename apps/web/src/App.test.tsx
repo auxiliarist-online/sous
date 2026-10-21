@@ -81,6 +81,7 @@ const library = (
     storeStatus: 'not_chosen' as const,
     homeZip: null,
     entryCents: {},
+    choices: [],
   })),
   addedCosts: vi.fn(async () => ({
     budgetCents: null,
@@ -90,6 +91,7 @@ const library = (
   setMyPrice: vi.fn(async () => {}),
   favoriteCuisines: vi.fn(async () => []),
   clearMyPrice: vi.fn(async () => {}),
+  saveChoice: vi.fn(async () => {}),
   recipeFits: vi.fn(async () => ({})),
   setPantry: vi.fn(async () => {}),
   searchCatalog: vi.fn(async () => []),

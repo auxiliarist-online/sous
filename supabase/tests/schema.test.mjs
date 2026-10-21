@@ -1728,7 +1728,14 @@ describe('meal planner', () => {
     assert.equal(r.budget_cents, 8000)
     assert.equal(r.entries.length, 2)
     assert.deepEqual(r.entries[0].lines, [
-      { ingredient_id: lentils, quantity: 2, unit: 'cup', raw_text: 'line' },
+      {
+        line_no: 0,
+        option_no: 1,
+        ingredient_id: lentils,
+        quantity: 2,
+        unit: 'cup',
+        raw_text: 'line',
+      },
     ])
     assert.equal(r.entries[0].scale, 2)
     assert.ok(r.ingredients[lentils])
@@ -1898,6 +1905,67 @@ describe('buying: packages, recipe sizes and the pantry', () => {
     )
   })
 
+  it("gives the API every option, the user's rules and their choices (TYL-98)", async () => {
+    const USER = '00000000-0000-0000-0000-0000000000e3'
+    await db.query('insert into auth.users (id) values ($1)', [USER])
+    const almond = await ingredient('almond milk', ['tree_nut'])
+    const milk = await ingredient('milk', ['dairy'])
+    const r = await recipe('Porridge', [[almond, milk]])
+    await as('authenticated', USER, async () => {
+      await db.query("select add_to_meal_plan('2026-10-12', $1, 1)", [r])
+      await db.query(
+        "insert into user_diets (user_id, diet_slug) values ($1, 'vegan')",
+        [USER],
+      )
+      await db.query(
+        'insert into user_disliked_ingredients (user_id, ingredient_id) values ($1, $2)',
+        [USER, almond],
+      )
+      // The user saves their choice on their own plan.
+      await db.query(
+        `update meal_plans set choices = jsonb_build_object($2::text, $3::text)
+         where user_id = $1 and week_start = '2026-10-12'`,
+        [USER, [almond, milk].sort().join(','), milk],
+      )
+    })
+    const inputs = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        "select plan_cost_inputs($1, '2026-10-12') as r",
+        [USER],
+      )
+      return rows[0].r
+    })
+    assert.deepEqual(
+      inputs.entries[0].lines.map((l) => [l.option_no, l.ingredient_id]),
+      [
+        [1, almond],
+        [2, milk],
+      ],
+    )
+    assert.ok(inputs.rules.excludes.includes('dairy'))
+    assert.deepEqual(inputs.rules.allergens, [])
+    assert.ok(inputs.ingredients[milk].contains.includes('dairy'))
+    assert.equal(inputs.ingredients[almond].disliked, true)
+    assert.deepEqual(inputs.choices, {
+      [[almond, milk].sort().join(',')]: milk,
+    })
+    // Choices are a map, and another user can't change them.
+    await assert.rejects(
+      as('authenticated', USER, () =>
+        db.query("update meal_plans set choices = '[]' where user_id = $1", [
+          USER,
+        ]),
+      ),
+      /meal_plans_choices_object/,
+    )
+    const { rowCount } = await as('authenticated', ALICE, () =>
+      db.query("update meal_plans set choices = '{}' where user_id = $1", [
+        USER,
+      ]),
+    )
+    assert.equal(rowCount, 0)
+  })
+
   it('gives the API how ingredients are bought and what the pantry says', async () => {
     const USER = '00000000-0000-0000-0000-0000000000e2'
     await db.query('insert into auth.users (id) values ($1)', [USER])
@@ -1933,6 +2001,9 @@ describe('buying: packages, recipe sizes and the pantry', () => {
       units: {},
       buy_as: null,
       buy_ratio: null,
+      contains: [],
+      may_contain: [],
+      disliked: false,
     })
   })
 })
