@@ -886,6 +886,15 @@ function AddRecipe({
                           {addedText(cost)}
                         </span>
                       )}
+                      {cost && cost.staplesCents > 0 && (
+                        <span
+                          className="muted"
+                          title="Staples like salt and oil you may already have. Mark them in your pantry to leave them off."
+                        >
+                          {' '}
+                          incl. {dollars(cost.staplesCents)} of staples
+                        </span>
+                      )}
                       {cost && over > 0 && (
                         <span className="warning"> · over budget</span>
                       )}

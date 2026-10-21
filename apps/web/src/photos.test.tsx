@@ -138,6 +138,7 @@ describe('RecipeForm from photos', () => {
       recipe: vi.fn(),
       saveManual: vi.fn(async () => 'new-id'),
       readPhotos: vi.fn(async () => DRAFT),
+      sourceNotes: vi.fn(async () => []),
     }
     render(<RecipeForm api={api} />)
     await userEvent.upload(
@@ -168,6 +169,7 @@ describe('RecipeForm from photos', () => {
       recipe: vi.fn(async () => null),
       saveManual: vi.fn(),
       readPhotos: vi.fn(),
+      sourceNotes: vi.fn(async () => []),
     }
     render(<RecipeForm api={api} recipeId="r" />)
     expect(screen.queryByText('Read from photos')).toBeNull()

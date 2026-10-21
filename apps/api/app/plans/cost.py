@@ -27,6 +27,16 @@ from app.pricing.units import UnknownUnitError, convert
 
 # Allow for rounding in recipe amounts: 16.2 oz of a 16 oz can is one can.
 PACKAGE_SLACK = 0.02
+# Fresh produce whose dried or ground form is a different ingredient bought in
+# a jar ("ground ginger", "dried thyme"): on the list it says "fresh", so a
+# tablespoon of ginger isn't bought as the wrong one (TYL-114).
+HAS_DRIED_FORM = frozenset({"ginger", "basil", "dill", "parsley", "rosemary", "thyme"})
+
+
+def list_name(name: str) -> str:
+    """How an ingredient reads on the buy list: "fresh ginger" where a dried
+    or ground form exists separately."""
+    return f"fresh {name}" if name in HAS_DRIED_FORM else name
 
 
 @dataclass
@@ -99,6 +109,10 @@ class AddedCost:
     # True when it brings items with no price, so it would add more than this.
     unpriced: bool
     estimated: bool
+    # Of `cents`, what goes to staples the user hasn't marked in their pantry
+    # (TYL-96): salt and oil they may well have, priced because nothing is
+    # assumed. Marking them "have" takes it off.
+    staples_cents: int = 0
 
 
 SOURCES: dict[str, Literal["user", "store", "estimate"]] = {
@@ -243,7 +257,7 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
             if item is None:
                 i = info[ingredient_id]
                 item = items[ingredient_id] = Item(
-                    name=i["name"],
+                    name=list_name(i["name"]),
                     ingredient_id=ingredient_id,
                     aisle=i.get("aisle"),
                     sold_by=i.get("sold_by"),
@@ -366,6 +380,11 @@ def added_costs(
                 cents=withit.total_cents - base.total_cents,
                 unpriced=withit.unpriced > base.unpriced,
                 estimated=any(i.estimated for i in changed),
+                staples_cents=sum(
+                    (i.cents or 0) - (before.get(i.ingredient_id) or 0)
+                    for i in changed
+                    if i.staple and i.pantry is None
+                ),
             )
         )
     return out

@@ -110,6 +110,12 @@ def item(cost: PlanCost, name: str) -> Item:
 
 
 class TestPlanCost:
+    def test_fresh_produce_with_a_dried_form_says_fresh(self) -> None:
+        cost = cost_of(entry([line(BASIL, 1, "bunch"), line(RICE, 1, "cup")]))
+        names = {i.name for i in cost.items}
+        assert "fresh basil" in names
+        assert "white rice" in names
+
     def test_packages_round_up_across_the_week(self) -> None:
         # 1 cup + 1.5 cups of rice (185 g/cup) is about 1 lb: one 2 lb bag.
         cost = cost_of(entry([line(RICE, 1, "cup")]), entry([line(RICE, 1.5, "cups")]))
@@ -150,7 +156,7 @@ class TestPlanCost:
 
     def test_an_unknown_amount_still_buys_one_package(self) -> None:
         cost = cost_of(entry([line(BASIL, None, None)]))
-        basil = item(cost, "basil")
+        basil = item(cost, "fresh basil")
         assert (basil.amount_unknown, basil.packages, basil.cents) == (True, 1, 250)
 
     def test_lists_what_it_cannot_price(self) -> None:
@@ -365,6 +371,20 @@ class TestAddedCosts:
         assert added["mystery"].unpriced and not added["carrots"].unpriced
         assert added["carrots"].estimated and not added["more-rice"].estimated
 
+    def test_unmarked_staples_are_counted_and_said(self) -> None:
+        salted = entry(
+            [line(CARROTS, 2, "lb"), line(SALT, 1, "tsp")], id_="c", recipe_id="r", candidate=True
+        )
+        (unmarked,) = added_costs(inputs_of(salted), on=MONDAY)
+        assert unmarked.staples_cents > 0
+        assert unmarked.cents == 200 + unmarked.staples_cents
+        # Marked on hand, salt is neither bought nor mentioned.
+        (have,) = added_costs(inputs_of(salted, pantry={SALT: "have"}), on=MONDAY)
+        assert (have.cents, have.staples_cents) == (200, 0)
+        # Marked out, buying it is expected: no "staples" note.
+        (out,) = added_costs(inputs_of(salted, pantry={SALT: "out"}), on=MONDAY)
+        assert out.cents == unmarked.cents and out.staples_cents == 0
+
     def test_candidates_are_left_out_of_the_week(self) -> None:
         cost = plan_cost(
             inputs_of(
@@ -447,7 +467,15 @@ class TestRoute:
         assert resp.json() == {
             "budget_cents": 5000,
             "total_cents": 360,
-            "recipes": [{"recipe_id": R1, "cents": 100, "unpriced": False, "estimated": True}],
+            "recipes": [
+                {
+                    "recipe_id": R1,
+                    "cents": 100,
+                    "unpriced": False,
+                    "estimated": True,
+                    "staples_cents": 0,
+                }
+            ],
         }
 
     def test_added_needs_some_recipes_and_not_too_many(self, client: TestClient) -> None:

@@ -374,7 +374,7 @@ _DURATION = (
 TIMES = {
     "prep": re.compile(r"\bprep(?:aration)?(?: time)?" + _DURATION, re.I),
     "cook": re.compile(r"\b(?:cook(?:ing)?|bak(?:e|ing))(?: time)?" + _DURATION, re.I),
-    "total": re.compile(r"\b(?:total|ready in)(?: time)?" + _DURATION, re.I),
+    "total": re.compile(r"(?:\b(?:total|ready in)(?: time)?|^\W*time\b)" + _DURATION, re.I),
 }
 SERVES = [
     re.compile(r"\bserv(?:es|ings?)\b\D{0,10}?(\d+(?:\.\d+)?)", re.I),
@@ -385,7 +385,7 @@ SERVES = [
 # A line of servings and times ("Serves 6", "Prep time: about 1 hour").
 META = re.compile(
     r"^\W*(?:serves|servings|makes|yields?|prep|preparation|cook|cooking|bake|baking|"
-    r"total|ready in|active)\b",
+    r"total|ready in|active|time)\b",
     re.I,
 )
 YIELD = re.compile(r"^\W*(?:serves|servings|makes|yields?)\b", re.I)
@@ -405,6 +405,30 @@ STEP_VERB = re.compile(
     r"set|simmer|sprinkle|spread|stir|toss|transfer|turn|whisk)\b",
     re.I,
 )
+# A wrapped ingredient's second line that only says how to prepare it
+# ("finely chopped", "peeled and diced", "cut into 1-inch pieces", "plus more
+# for serving"). "chopped tomatoes" names a food after it: an item of its own.
+PREP_WORD = re.compile(
+    r"^(?:\w{3,}ly|chopped|minced|diced|sliced|grated|shredded|peeled|seeded|halved|"
+    r"quartered|cubed|softened|melted|divided|drained|rinsed|trimmed|torn|cut|and|or)$",
+    re.I,
+)
+# What can follow the preparation words and still be preparation.
+PREP_TAIL = re.compile(r"^(?:(?:into|for|to|at|until|in|if|as|about|plus)\b|\(|,|$)", re.I)
+
+
+def _only_preparation(text: str) -> bool:
+    """Whether a line is all preparation, with no food named: "finely
+    chopped", "plus more for serving", but not "chopped tomatoes"."""
+    if re.match(r"^(?:plus|to taste|for (?:serving|garnish))\b", text, re.I):
+        return True
+    words = re.findall(r"[\w-]+|[(,]", text)
+    n = 0
+    while n < len(words) and PREP_WORD.match(words[n]):
+        n += 1
+    return n > 0 and bool(PREP_TAIL.match(" ".join(words[n:])))
+
+
 # A line ending mid-phrase: the next line carries on.
 OPEN_END = re.compile(r"(?:[,(/\-–—]|\b(?:or|and|of|with|to|for|in|plus|a|the))$", re.I)
 
@@ -478,39 +502,51 @@ def _clean(blocks: list[Block]) -> list[Block]:
 def _furniture_line(ln: Line, b: Block, page: list[Line]) -> bool:
     """A page number, a running head or footer ("155 Frittatas", "Pâte à
     Choux | 47"), or a rule of dots: not part of the recipe. A short line with
-    a number counts only at the very top or bottom of the page, with no other
-    text between it and the edge, set apart from the text by a gap (a tightly
-    framed photo's last ingredient isn't a footer)."""
+    a page number counts when it's the topmost or bottommost text on the page
+    and set apart from the rest by a gap. That's measured against the text,
+    not the photo's edge, which may show the table below the book. A tightly
+    framed last ingredient has no gap above it, so it isn't a footer."""
     text = ln.text
     if not re.search(r"[A-Za-z0-9]", text) or re.fullmatch(r"\W*\d{1,4}\W*", text):
         return True
-    if not b.page_height or len(text.split()) > 6 or not re.search(r"\d", text):
+    if len(text.split()) > 6 or not re.search(r"\b\d{1,4}\b", text) or text.endswith("."):
         return False
-    margin, gap = 0.07 * b.page_height, 1.5 * max(ln.height, 1.0)
-    others = [o for o in page if o is not ln]
-    if ln.bottom < margin:
+    # "1 cup olive oil", "2 eggs": an amount then a lower-case word is an
+    # ingredient, however far below the rest it sits. A folio's words are
+    # capitalized ("155 Frittatas").
+    if re.match(r"^\W*[\d½¼¾⅓⅔⅛/.\s–-]+\s*[a-z]", text):
+        return False
+    gap = 1.5 * max(ln.height, 1.0)
+    # Lines beside it on the same row (a folio split into two blocks) don't count.
+    others = [o for o in page if o is not ln and not (o.top < ln.bottom and ln.top < o.bottom)]
+    if len(others) < 2:
+        return False  # a footer sits below a body of text, not beside a title
+    if not any(o.bottom <= ln.top for o in others):
         # Nothing above it, and set apart from the text below.
-        return not any(o.bottom < ln.top for o in others) and not any(
-            ln.bottom <= o.top < ln.bottom + gap for o in others
-        )
-    if ln.top > b.page_height - margin:
-        return not any(o.top > ln.bottom for o in others) and not any(
-            ln.top - gap < o.bottom <= ln.top for o in others
-        )
+        return min(o.top for o in others) - ln.bottom >= gap
+    if not any(o.top >= ln.bottom for o in others):
+        return ln.top - max(o.bottom for o in others) >= gap
     return False
 
 
-def _continues(prev: Line, ln: Line, margin: float, right: float = math.inf) -> bool:
+def _continues(
+    prev: Line, ln: Line, margin: float, right: float = math.inf, lower_items: bool = False
+) -> bool:
     """Whether a line carries on the one before rather than starting a new
-    item: indented (a hanging indent), starting in lower case or with a
-    bracket, after a line that ends mid-phrase or with a bracket open, or
-    after one that runs to the column's edge (a narrow column wraps nearly
+    item: indented (a hanging indent), starting with a bracket, starting in
+    lower case (unless this list's items do, `lower_items`, and it doesn't
+    start with a preparation like "finely chopped"), after a line that
+    ends mid-phrase or with a bracket open, or after one that runs to the
+    column's edge (a narrow column wraps nearly
     every item) when it doesn't start with an amount itself."""
     text = ln.text
     size = max(ln.height, 1.0)
     if ln.left - margin > 0.8 * size:
         return True
-    if text[:1].islower() or text[:1] in "([":
+    # Lower case carries on, unless this list starts its items in lower case
+    # ("a pinch of salt", "ground black pepper"); even then, a line that starts
+    # by saying how to prepare it ("finely chopped") carries on.
+    if text[:1] in "([" or (text[:1].islower() and (not lower_items or _only_preparation(text))):
         return True
     if OPEN_END.search(prev.text) or prev.text.count("(") > prev.text.count(")"):
         return True
@@ -530,13 +566,30 @@ def _join(lines: list[Line], keep_hyphens: bool = False) -> str:
     return text
 
 
-def _items(lines: list[Line], right: float = math.inf) -> list[tuple[str, list[Line]]]:
+def _mostly_amounts(lines: list[Line]) -> bool:
+    """A paragraph most of whose lines start with an amount: an ingredient
+    list, as opposed to prose."""
+    return sum(bool(QUANTITY.match(ln.text)) for ln in lines) * 2 > len(lines)
+
+
+def _lower_items(lines: list[Line]) -> bool:
+    """Whether a list starts its items in lower case ("about 8 cups…", "a pinch
+    of…"): then a lower-case line isn't a sign of a wrapped one."""
+    return any(ln.text[:1].islower() and QUANTITY.match(ln.text) for ln in lines)
+
+
+def _items(
+    lines: list[Line], right: float = math.inf, lower_items: bool | None = None
+) -> list[tuple[str, list[Line]]]:
     """A paragraph split into items: a new one starts at each line that
-    doesn't carry on the one before. `right` is the column's right edge."""
+    doesn't carry on the one before. `right` is the column's right edge;
+    `lower_items` says whether the list starts items in lower case (worked out
+    from these lines when not given)."""
     margin = min(ln.left for ln in lines)
+    lower = _lower_items(lines) if lower_items is None else lower_items
     groups: list[list[Line]] = []
     for ln in lines:
-        if groups and _continues(groups[-1][-1], ln, margin, right):
+        if groups and _continues(groups[-1][-1], ln, margin, right, lower):
             groups[-1].append(ln)
         else:
             groups.append([ln])
@@ -672,6 +725,11 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
     for blocks in ordered:
         last_item = None  # an item doesn't carry on onto the next page
         page_lines = [ln for b in blocks for p in b.paragraphs for ln in p]
+        # Whether this book starts ingredient lines in lower case: its style,
+        # so judged across the page's lists (prose has lower-case lines too).
+        lower_items = any(
+            _lower_items(p) for b in blocks for p in b.paragraphs if _mostly_amounts(p)
+        )
         for b in blocks:
             for para in b.paragraphs:
                 lines = []
@@ -709,7 +767,12 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
                 if (
                     last_item
                     and _right_below(last_item[-1], lines[0])
-                    and _continues(last_item[-1], lines[0], min(ln.left for ln in last_item))
+                    and _continues(
+                        last_item[-1],
+                        lines[0],
+                        min(ln.left for ln in last_item),
+                        lower_items=lower_items,
+                    )
                     and not QUANTITY.match(lines[0].text)
                 ):
                     # The last ingredient carries on here: Vision put its
@@ -729,7 +792,7 @@ def recipe_from_pages(pages: list[list[Block]]) -> Draft:
                     # A step Vision split in two: it carries on mid-sentence.
                     draft.instructions[-1] = _join([Line(draft.instructions[-1]), Line(text)])
                     continue
-                items = _items(lines, b.right)
+                items = _items(lines, b.right, lower_items)
                 if mode != "notes" and _is_list(items):
                     if mode == "start":
                         mode = "ingredients"

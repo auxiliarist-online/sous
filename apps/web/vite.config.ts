@@ -19,7 +19,8 @@ export default defineConfig({
         name: 'Sous',
         short_name: 'Sous',
         description: 'Plan the week. Shop the deals.',
-        theme_color: '#2f6b4f',
+        // Matches the page behind the system bars (TYL-93); see index.html.
+        theme_color: '#faf8f4',
         background_color: '#faf8f4',
         display: 'standalone',
         start_url: '/',

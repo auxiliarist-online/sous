@@ -452,6 +452,86 @@ def test_an_item_doesnt_carry_on_into_another_column_or_page() -> None:
     assert draft.ingredients[0] == "1 cabbage, shredded,"
 
 
+def test_a_time_line_lower_case_items_and_a_footer_above_the_table() -> None:
+    # Like a Moosewood page (TYL-101): "Time:" with no prep or cook, items that
+    # start in lower case, and the book's name and page number at the foot,
+    # with the photo running on below the book.
+    greens = page(
+        block(60, 40, 600, [["Quick Greens"]], h=48),
+        block(60, 120, 600, [["Serves 4 to 6", "Time: 15 minutes"]]),
+        block(
+            60,
+            200,
+            400,
+            [
+                [
+                    "about 8 cups chopped chard or",
+                    ">kale",
+                    "2 tablespoons olive oil",
+                    "a pinch of red pepper flakes",
+                    "1/2 teaspoon salt",
+                    "ground black pepper",
+                ]
+            ],
+        ),
+        block(60, 420, 600, [["Warm the oil, add the greens and cook until tender."]]),
+        block(60, 1000, 400, [["A Cookbook of Favorites 268"]]),
+    )
+    draft = recipe_from_pages([blocks_of(greens)])
+    assert (draft.servings, draft.total_minutes) == (4.0, 15)
+    assert draft.ingredients == [
+        "about 8 cups chopped chard or kale",
+        "2 tablespoons olive oil",
+        "a pinch of red pepper flakes",
+        "1/2 teaspoon salt",
+        "ground black pepper",
+    ]
+    assert "A Cookbook of Favorites 268" in draft.skipped
+
+
+def test_a_wrapped_preparation_joins_its_item_in_a_lower_case_list() -> None:
+    # A list that starts items in lower case still wraps "finely chopped".
+    herbs = page(
+        block(60, 40, 600, [["Herb Rice"]], h=48),
+        block(
+            60,
+            120,
+            400,
+            [
+                [
+                    "a pinch of salt",
+                    "1 cup rice",
+                    "2 tablespoons parsley",
+                    "finely chopped",
+                    "chopped tomatoes",
+                    "1 onion",
+                    "cut into wedges",
+                ]
+            ],
+        ),
+        block(60, 320, 600, [["Simmer the rice, then stir in the parsley."]]),
+    )
+    draft = recipe_from_pages([blocks_of(herbs)])
+    assert draft.ingredients == [
+        "a pinch of salt",
+        "1 cup rice",
+        "2 tablespoons parsley finely chopped",
+        "chopped tomatoes",
+        "1 onion cut into wedges",
+    ]
+
+
+def test_an_ingredient_set_apart_at_the_foot_is_not_a_footer() -> None:
+    # The last ingredient, well below the rest, is still an ingredient.
+    oil = page(
+        block(60, 40, 600, [["Dressing"]], h=48),
+        block(60, 120, 400, [["2 tablespoons vinegar", "1 teaspoon mustard"]]),
+        block(60, 400, 400, [["1 cup olive oil"]]),
+    )
+    draft = recipe_from_pages([blocks_of(oil)])
+    assert "1 cup olive oil" in draft.ingredients
+
+
 def test_a_word_set_apart_rejoins_its_line() -> None:
     # Vision can return a line's last word as a block of its own.
     split = page(

@@ -1,5 +1,6 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
+import { sourceNotes } from './sous.ts'
 import {
   allTags,
   cleanTag,
@@ -230,5 +231,49 @@ describe('tags (TYL-81)', () => {
       ['Batch', 'for guests', 'Weeknight'],
     )
     expect(cleanTag('  For   guests  ')).toBe('For guests')
+  })
+})
+
+describe('sourceNotes', () => {
+  it('suggests the user’s own sources once each, most used first', async () => {
+    const rows = [
+      { source_note: 'Grandma' },
+      { source_note: 'Salt Fat Acid Heat' },
+      { source_note: 'salt fat acid heat ' },
+      { source_note: '  ' },
+    ]
+    const range = vi.fn(async () => ({ data: rows, error: null }))
+    const order = vi.fn(() => ({ range }))
+    const not = vi.fn(() => ({ order }))
+    const eq = vi.fn(() => ({ not }))
+    const select = vi.fn(() => ({ eq }))
+    const db = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient
+    expect(await sourceNotes(db, 'u1')).toEqual([
+      'Salt Fat Acid Heat',
+      'Grandma',
+    ])
+    expect(eq).toHaveBeenCalledWith('added_by', 'u1')
+  })
+
+  it('reads every page before ranking', async () => {
+    const page = (note: string, n: number) =>
+      Array.from({ length: n }, () => ({ source_note: note }))
+    // Page one is full of "Blog"; "Book" shows up more, mostly on page two.
+    const pages = [
+      [...page('Blog', 600), ...page('Book', 400)],
+      page('Book', 300),
+    ]
+    const range = vi.fn(async (from: number) => ({
+      data: pages[from / 1000] ?? [],
+      error: null,
+    }))
+    const order = vi.fn(() => ({ range }))
+    const not = vi.fn(() => ({ order }))
+    const eq = vi.fn(() => ({ not }))
+    const select = vi.fn(() => ({ eq }))
+    const db = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient
+    expect(await sourceNotes(db, 'u1')).toEqual(['Book', 'Blog'])
+    expect(range).toHaveBeenCalledTimes(2)
+    expect(range).toHaveBeenLastCalledWith(1000, 1999)
   })
 })

@@ -271,6 +271,7 @@ describe('RecipeForm', () => {
       recipe: vi.fn(),
       saveManual: vi.fn(async () => SOUP.id),
       readPhotos: vi.fn(),
+      sourceNotes: vi.fn(async () => []),
     }
     render(<RecipeForm api={api} />)
     const save = screen.getByRole('button', { name: 'Save recipe' })
@@ -295,10 +296,57 @@ describe('RecipeForm', () => {
     )
   })
 
+  it('suggests sources the user has typed before', async () => {
+    const api = {
+      recipe: vi.fn(),
+      saveManual: vi.fn(),
+      readPhotos: vi.fn(),
+      sourceNotes: vi.fn(async () => ['Salt Fat Acid Heat', 'Grandma']),
+    }
+    const { container } = render(<RecipeForm api={api} />)
+    const field = screen.getByLabelText("Where it's from (optional)")
+    expect(field).toHaveAttribute('list', 'source-notes')
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll('#source-notes option')].map(
+          (o) => (o as HTMLOptionElement).value,
+        ),
+      ).toEqual(['Salt Fat Acid Heat', 'Grandma']),
+    )
+  })
+
+  it('drops the last account’s suggestions when the API changes', async () => {
+    const first = {
+      recipe: vi.fn(),
+      saveManual: vi.fn(),
+      readPhotos: vi.fn(),
+      sourceNotes: vi.fn(async () => ['Old Book']),
+    }
+    const { container, rerender } = render(<RecipeForm api={first} />)
+    await waitFor(() =>
+      expect(container.querySelectorAll('#source-notes option')).toHaveLength(
+        1,
+      ),
+    )
+    const second = {
+      ...first,
+      sourceNotes: vi.fn(async () => {
+        throw new Error('down')
+      }),
+    }
+    rerender(<RecipeForm api={second} />)
+    await waitFor(() =>
+      expect(container.querySelectorAll('#source-notes option')).toHaveLength(
+        0,
+      ),
+    )
+  })
+
   it('edits the user’s own recipe, starting from what they typed', async () => {
     const api = {
       recipe: vi.fn(async () => SOUP),
       readPhotos: vi.fn(),
+      sourceNotes: vi.fn(async () => []),
       saveManual: vi.fn(
         async (_input: ManualRecipeInput, _id?: string) => SOUP.id,
       ),
@@ -320,6 +368,7 @@ describe('RecipeForm', () => {
       recipe: vi.fn(async () => BURRITOS),
       saveManual: vi.fn(),
       readPhotos: vi.fn(),
+      sourceNotes: vi.fn(async () => []),
     }
     render(<RecipeForm api={api} recipeId={BURRITOS.id} />)
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -331,6 +380,7 @@ describe('RecipeForm', () => {
     const api = {
       recipe: vi.fn(),
       readPhotos: vi.fn(),
+      sourceNotes: vi.fn(async () => []),
       saveManual: vi.fn(async () => {
         throw new Error("We couldn't save the recipe. Try again.")
       }),

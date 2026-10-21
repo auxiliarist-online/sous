@@ -215,7 +215,13 @@ describe('addedCosts', () => {
             budget_cents: 5000,
             total_cents: 4200,
             recipes: [
-              { recipe_id: 'a', cents: 650, unpriced: false, estimated: true },
+              {
+                recipe_id: 'a',
+                cents: 650,
+                unpriced: false,
+                estimated: true,
+                staples_cents: 130,
+              },
             ],
           }),
         ),
@@ -228,7 +234,9 @@ describe('addedCosts', () => {
     expect(added).toEqual({
       budgetCents: 5000,
       totalCents: 4200,
-      recipes: { a: { cents: 650, unpriced: false, estimated: true } },
+      recipes: {
+        a: { cents: 650, unpriced: false, estimated: true, staplesCents: 130 },
+      },
     })
   })
 })
@@ -748,13 +756,40 @@ describe('PlanPage', () => {
     await waitFor(() => expect(api.plan).toHaveBeenCalledTimes(2))
   })
 
+  it('says how much of a recipe’s cost is staples not marked in the pantry', async () => {
+    const api = fakeApi({
+      recipes: [saved('a', 'Lentil soup')],
+      added: {
+        budgetCents: 5000,
+        totalCents: 1200,
+        recipes: {
+          a: {
+            cents: 650,
+            unpriced: false,
+            estimated: true,
+            staplesCents: 130,
+          },
+        },
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const list = await screen.findByRole('list', {
+      name: 'Recipes you can add',
+    })
+    expect(
+      await within(list).findByText(/incl\. \$1\.30 of staples/),
+    ).toHaveAttribute('title', expect.stringContaining('pantry'))
+  })
+
   it('shows what each recipe would add, and adds one that fits straight away', async () => {
     const api = fakeApi({
       recipes: [saved('a', 'Lentil soup')],
       added: {
         budgetCents: 5000,
         totalCents: 1200,
-        recipes: { a: { cents: 650, unpriced: true, estimated: true } },
+        recipes: {
+          a: { cents: 650, unpriced: true, estimated: true, staplesCents: 0 },
+        },
       },
     })
     render(<PlanPage api={api} week={WEEK} />)
@@ -786,10 +821,30 @@ describe('PlanPage', () => {
         budgetCents: 5000,
         totalCents: 4500,
         recipes: {
-          steak: { cents: 2400, unpriced: false, estimated: false },
-          beans: { cents: 300, unpriced: false, estimated: false },
-          dal: { cents: 450, unpriced: false, estimated: false },
-          noodles: { cents: 100, unpriced: false, estimated: false },
+          steak: {
+            cents: 2400,
+            unpriced: false,
+            estimated: false,
+            staplesCents: 0,
+          },
+          beans: {
+            cents: 300,
+            unpriced: false,
+            estimated: false,
+            staplesCents: 0,
+          },
+          dal: {
+            cents: 450,
+            unpriced: false,
+            estimated: false,
+            staplesCents: 0,
+          },
+          noodles: {
+            cents: 100,
+            unpriced: false,
+            estimated: false,
+            staplesCents: 0,
+          },
         },
       },
     })
@@ -829,9 +884,24 @@ describe('PlanPage', () => {
         budgetCents: 5000,
         totalCents: 4500,
         recipes: {
-          steak: { cents: 2400, unpriced: false, estimated: false },
-          beans: { cents: 300, unpriced: false, estimated: false },
-          dal: { cents: 450, unpriced: false, estimated: false },
+          steak: {
+            cents: 2400,
+            unpriced: false,
+            estimated: false,
+            staplesCents: 0,
+          },
+          beans: {
+            cents: 300,
+            unpriced: false,
+            estimated: false,
+            staplesCents: 0,
+          },
+          dal: {
+            cents: 450,
+            unpriced: false,
+            estimated: false,
+            staplesCents: 0,
+          },
         },
       },
     })
@@ -858,7 +928,14 @@ describe('PlanPage', () => {
       added: {
         budgetCents: 5000,
         totalCents: 4500,
-        recipes: { steak: { cents: 2400, unpriced: false, estimated: false } },
+        recipes: {
+          steak: {
+            cents: 2400,
+            unpriced: false,
+            estimated: false,
+            staplesCents: 0,
+          },
+        },
       },
     })
     render(<PlanPage api={api} week={WEEK} />)

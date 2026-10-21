@@ -14,6 +14,8 @@ export interface RecipeFormApi {
   saveManual(input: ManualRecipeInput, recipeId?: string): Promise<string>
   /** Read photos of a cookbook's pages into a draft (TYL-52). */
   readPhotos(images: string[]): Promise<PhotoDraft>
+  /** Sources the user has typed before, to suggest (TYL-100). */
+  sourceNotes(): Promise<string[]>
 }
 
 const EMPTY: ManualRecipeInput = {
@@ -46,6 +48,25 @@ export function RecipeForm({
   const [error, setError] = useState<string | null>(null)
   // After reading photos: what to check, and what was left out.
   const [review, setReview] = useState<PhotoDraft | null>(null)
+  // Suggestions, kept with the API they came from: another account's never
+  // show, even while its own are loading or if they fail to.
+  const [loaded, setLoaded] = useState<{
+    api: RecipeFormApi
+    notes: string[]
+  } | null>(null)
+  const notes = loaded?.api === api ? loaded.notes : []
+
+  // Suggestions only: the field works the same without them.
+  useEffect(() => {
+    let live = true
+    api.sourceNotes().then(
+      (n) => live && setLoaded({ api, notes: n }),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
 
   useEffect(() => {
     if (!recipeId) return
@@ -209,9 +230,16 @@ export function RecipeForm({
         id="source-note"
         maxLength={300}
         placeholder="Grandma, or a cookbook and page"
+        list="source-notes"
+        autoComplete="off"
         value={input.sourceNote}
         onChange={(e) => set({ sourceNote: e.target.value })}
       />
+      <datalist id="source-notes">
+        {notes.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
 
       <button type="submit" disabled={saving || !input.title.trim()}>
         {saving ? 'Saving…' : 'Save recipe'}
