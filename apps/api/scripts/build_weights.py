@@ -63,22 +63,50 @@ def portions(rows: list[dict[str, str]]) -> list[tuple[str, float]]:
 
 
 def per_cup(ps: list[tuple[str, float]]) -> float | None:
-    # A plain cup first, then chopped, sliced or whole; never whipped,
-    # puréed or packed, which aren't how recipes measure.
+    """Grams in a cup. A plain cup first, then chopped, sliced or whole;
+    never whipped, puréed or packed ("not packed" is fine), which aren't how
+    recipes measure. Then a spoon, a fluid ounce (a drink), a serving given
+    in cups ("serving 1/2 cup"), or a spoon in brackets ("envelope (1 tbsp)")."""
+    loose = [(label.replace("not packed", "loose"), g) for label, g in ps]
     for pattern, factor in (
-        (r"^cups?$", 1),
-        (r"^cups?,? (fluid|chopped|sliced|diced|whole|shredded|grated|cubes|cubed|pieces|raw)", 1),
-        (r"^cups?\b(?!.*(whipped|pure|mashed|packed|juice|sections))", 1),
-        (r"^(tbsp|tablespoons?)\b", 16),
-        (r"^(tsp|teaspoons?)\b", 48),
+        (r"^cups?$", 1.0),
+        (
+            r"^cups?,? (fluid|chopped|sliced|diced|whole|shredded|grated|crumbled"
+            r"|cubes|cubed|pieces|raw)",
+            1.0,
+        ),
+        (r"^cups?\b(?!.*(whipped|pure|mashed|packed|juice|sections))", 1.0),
+        (r"^(tbsp|tablespoons?)\b", 16.0),
+        (r"^(tsp|teaspoons?)\b", 48.0),
+        (r"^fl oz$", 8.0),
+        (r"^serving 1/2 cup$", 2.0),
+        (r"^serving 1 cup$", 1.0),
+        (r"\(1 tbsp\)", 16.0),
+        (r"\(1 tsp\)", 48.0),
     ):
-        for label, grams in ps:
+        for label, grams in loose:
             if re.search(pattern, label):
                 return grams * factor
     return None
 
 
-def per_each(ps: list[tuple[str, float]], choice: str) -> float | None:
+def _forms(word: str) -> set[str]:
+    """A word and the singulars it could have: "cubes" -> cube, "anchovies" ->
+    anchovy, "tomatoes" -> tomato."""
+    out = {word}
+    if word.endswith("ies"):
+        out.add(word[:-3] + "y")
+    if word.endswith("es"):
+        out.add(word[:-2])
+    if word.endswith("s") and not word.endswith("ss"):
+        out.add(word[:-1])
+    return out
+
+
+def per_each(ps: list[tuple[str, float]], choice: str, name: str = "") -> float | None:
+    """Grams in one: the chosen portion, else a medium (or whole, or large)
+    one, else a portion named after the food itself ("croissant, medium",
+    "anchovy" for anchovies, "pomegranate (4" dia)")."""
     if choice == "-":
         return None
     if choice:
@@ -91,7 +119,18 @@ def per_each(ps: list[tuple[str, float]], choice: str) -> float | None:
         for label, g in candidates:
             if label.startswith(word):
                 return g
-    return candidates[0][1] if candidates else None
+    if candidates:
+        return candidates[0][1]
+    own = _forms(name.split()[-1]) if name else set()
+    named = [
+        (label, g)
+        for label, g in ps
+        if own & _forms(re.split(r"[ ,(]", label)[0]) and not NOT_EACH.search(label)
+    ]
+    for label, g in named:
+        if "medium" in label:
+            return g
+    return named[0][1] if named else None
 
 
 def unit_portions(ps: list[tuple[str, float]]) -> dict[str, float]:
@@ -140,6 +179,8 @@ def build_units(fdc: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
 
 
 def build(fdc: Path) -> list[dict[str, str]]:
+    """Each ingredient in data/fdc_map.csv with its cup and item weights,
+    read from the USDA portions of the food it maps to."""
     ids = {r["description"]: r["fdc_id"] for r in csv.DictReader((fdc / "food.csv").open())}
     by_food: dict[str, list[dict[str, str]]] = {}
     for p in csv.DictReader((fdc / "food_portion.csv").open()):
@@ -151,7 +192,7 @@ def build(fdc: Path) -> list[dict[str, str]]:
         if desc and not fid:
             errors.append(f"line {n}: no FDC food named {desc!r}")
         ps = portions(by_food.get(fid, []))
-        cup, each = per_cup(ps), per_each(ps, r["each"].strip())
+        cup, each = per_cup(ps), per_each(ps, r["each"].strip(), r["name"].strip())
         rows.append(
             {
                 "name": r["name"].strip(),
@@ -171,11 +212,16 @@ def sql_text(s: str) -> str:
 
 
 def migration(rows: list[dict[str, str]], units: list[dict[str, str]]) -> str:
+    """The weights and units as a migration: weights fill only what's empty,
+    hand weights for one win over USDA's, and units are upserted."""
+    # A hand weight for "one" corrects USDA's (a habanero isn't a medium
+    # chili), so USDA's isn't used for those.
+    hand_each = {u["ingredient"] for u in units if u["unit"] == "each" and u["source"] == "hand"}
     values = ",\n".join(
         f"  ({sql_text(r['name'])}, {r['grams_per_cup'] or 'null'}, "
-        f"{r['grams_per_each'] or 'null'})"
+        f"{'null' if r['name'] in hand_each else r['grams_per_each'] or 'null'})"
         for r in rows
-        if r["grams_per_cup"] or r["grams_per_each"]
+        if r["grams_per_cup"] or (r["grams_per_each"] and r["name"] not in hand_each)
     )
     each = ",\n".join(
         f"  ({sql_text(u['ingredient'])}, {u['grams']})"

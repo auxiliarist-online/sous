@@ -7,9 +7,11 @@ import {
   type PlanEntry,
 } from './plan.ts'
 import { plannedItems } from './list.ts'
+import { CookedButton } from './Cooked.tsx'
+import type { Cooked, CookedApi } from './cooked.ts'
 import { Link } from './router.tsx'
 
-export interface HomeApi {
+export interface HomeApi extends CookedApi {
   /** The week's planned recipes. */
   plan(weekStart: string): Promise<PlanEntry[]>
   /** The week's buy list and cost against the budget. */
@@ -34,6 +36,8 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   const [cost, setCost] = useState<PlanCost | null>(null)
   const [costFailed, setCostFailed] = useState(false)
   const [failed, setFailed] = useState(false)
+  // Tonight's meals already cooked (TYL-68), by plan entry.
+  const [cooked, setCooked] = useState<Record<string, Cooked> | null>(null)
 
   useEffect(() => {
     let live = true
@@ -41,6 +45,10 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
       (e) => {
         if (!live) return
         setEntries(e)
+        api.cookedEntries(e.map((x) => x.id)).then(
+          (c) => live && setCooked(c),
+          () => live && setCooked({}),
+        )
         setCostFailed(false) // a new request: an earlier failure no longer holds
         // The cost comes from the API; home works without it.
         if (e.length)
@@ -98,6 +106,17 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
             {tonight.map((e) => (
               <li key={e.id}>
                 <Link to={`/recipe/${e.recipeId}`}>{e.title}</Link>
+                {cooked && (
+                  <CookedButton
+                    api={api}
+                    recipeId={e.recipeId}
+                    title={e.title}
+                    planEntryId={e.id}
+                    cookedOn={day}
+                    scale={e.scale}
+                    cooked={cooked[e.id] ?? null}
+                  />
+                )}
               </li>
             ))}
           </ul>

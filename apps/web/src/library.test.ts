@@ -123,6 +123,7 @@ describe('savedRecipes', () => {
         ingredients: ['red lentils'],
         tags: ['weeknight'],
         cuisines: [],
+        favorite: null,
       },
     ])
     expect(order).toHaveBeenCalledWith('created_at', { ascending: false })
@@ -215,6 +216,7 @@ describe('tags (TYL-81)', () => {
     ingredients: [],
     tags: [],
     cuisines: [],
+    favorite: null,
     ...over,
   })
 

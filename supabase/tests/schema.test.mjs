@@ -1728,7 +1728,14 @@ describe('meal planner', () => {
     assert.equal(r.budget_cents, 8000)
     assert.equal(r.entries.length, 2)
     assert.deepEqual(r.entries[0].lines, [
-      { ingredient_id: lentils, quantity: 2, unit: 'cup', raw_text: 'line' },
+      {
+        line_no: 0,
+        option_no: 1,
+        ingredient_id: lentils,
+        quantity: 2,
+        unit: 'cup',
+        raw_text: 'line',
+      },
     ])
     assert.equal(r.entries[0].scale, 2)
     assert.ok(r.ingredients[lentils])
@@ -1898,6 +1905,83 @@ describe('buying: packages, recipe sizes and the pantry', () => {
     )
   })
 
+  it("gives the API every option, the user's rules and their choices (TYL-98)", async () => {
+    const USER = '00000000-0000-0000-0000-0000000000e3'
+    await db.query('insert into auth.users (id) values ($1)', [USER])
+    const almond = await ingredient('almond milk', ['tree_nut'])
+    const milk = await ingredient('milk', ['dairy'])
+    const r = await recipe('Porridge', [[almond, milk]])
+    await as('authenticated', USER, async () => {
+      await db.query("select add_to_meal_plan('2026-10-12', $1, 1)", [r])
+      await db.query(
+        "insert into user_diets (user_id, diet_slug) values ($1, 'vegan')",
+        [USER],
+      )
+      await db.query(
+        'insert into user_disliked_ingredients (user_id, ingredient_id) values ($1, $2)',
+        [USER, almond],
+      )
+      // The user saves their choice on their own plan, merged with others.
+      await db.query("select set_plan_choice('2026-10-12', 'x,y', $1)", [
+        almond,
+      ])
+      await db.query("select set_plan_choice('2026-10-12', $1, $2)", [
+        [almond, milk].sort().join(','),
+        milk,
+      ])
+    })
+    const inputs = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        "select plan_cost_inputs($1, '2026-10-12') as r",
+        [USER],
+      )
+      return rows[0].r
+    })
+    assert.deepEqual(
+      inputs.entries[0].lines.map((l) => [l.option_no, l.ingredient_id]),
+      [
+        [1, almond],
+        [2, milk],
+      ],
+    )
+    assert.ok(inputs.rules.excludes.includes('dairy'))
+    assert.deepEqual(inputs.rules.allergens, [])
+    assert.ok(inputs.ingredients[milk].contains.includes('dairy'))
+    assert.equal(inputs.ingredients[almond].disliked, true)
+    assert.deepEqual(inputs.choices, {
+      'x,y': almond,
+      [[almond, milk].sort().join(',')]: milk,
+    })
+    // Only for a plan of their own, and not for anyone signed out.
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query("select set_plan_choice('2026-10-12', 'x,y', $1)", [milk]),
+      ),
+      /No plan for that week/,
+    )
+    await assert.rejects(
+      as('anon', null, () =>
+        db.query("select set_plan_choice('2026-10-12', 'x,y', $1)", [milk]),
+      ),
+      /permission denied/,
+    )
+    // Choices are a map, and another user can't change them.
+    await assert.rejects(
+      as('authenticated', USER, () =>
+        db.query("update meal_plans set choices = '[]' where user_id = $1", [
+          USER,
+        ]),
+      ),
+      /meal_plans_choices_object/,
+    )
+    const { rowCount } = await as('authenticated', ALICE, () =>
+      db.query("update meal_plans set choices = '{}' where user_id = $1", [
+        USER,
+      ]),
+    )
+    assert.equal(rowCount, 0)
+  })
+
   it('gives the API how ingredients are bought and what the pantry says', async () => {
     const USER = '00000000-0000-0000-0000-0000000000e2'
     await db.query('insert into auth.users (id) values ($1)', [USER])
@@ -1933,6 +2017,9 @@ describe('buying: packages, recipe sizes and the pantry', () => {
       units: {},
       buy_as: null,
       buy_ratio: null,
+      contains: [],
+      may_contain: [],
+      disliked: false,
     })
   })
 })
@@ -2873,6 +2960,10 @@ describe('your store and your account (TYL-19, TYL-74)', () => {
     )
     await as('authenticated', FRAN, async () => {
       await db.query('select add_to_meal_plan($1, $2, 1)', ['2026-10-12', own])
+      await db.query(
+        "insert into cooked_meals (recipe_id, rating, note) values ($1, 'love', 'more salt')",
+        [own],
+      )
       await db.query('select delete_my_account()')
     })
     const { rows: tables } = await db.query(
@@ -3233,5 +3324,202 @@ describe('bug reports', () => {
       ),
       /check constraint/,
     )
+  })
+})
+
+describe('cooked meals (TYL-68)', () => {
+  const COOK = '00000000-0000-0000-0000-0000000000d1'
+  const OTHER = '00000000-0000-0000-0000-0000000000d2'
+
+  it('keeps what a user cooked, private to them, once per plan entry', async () => {
+    await db.query('insert into auth.users (id) values ($1), ($2)', [
+      COOK,
+      OTHER,
+    ])
+    const soup = await recipe('Cooked soup', [])
+    const secret = await recipe('Someone’s secret', [], {
+      visibility: 'private',
+      addedBy: OTHER,
+    })
+    const entry = await as('authenticated', COOK, async () => {
+      await db.query("select add_to_meal_plan('2026-10-12', $1, 2)", [soup])
+      const { rows } = await db.query(
+        'select id from meal_plan_entries where recipe_id = $1',
+        [soup],
+      )
+      await db.query(
+        `insert into cooked_meals (recipe_id, plan_entry_id, cooked_on, scale, rating, note)
+         values ($1, $2, '2026-10-12', 2, 'up', 'less salt')`,
+        [soup, rows[0].id],
+      )
+      return rows[0].id
+    })
+    // Counted once per plan entry.
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query(
+          'insert into cooked_meals (recipe_id, plan_entry_id) values ($1, $2)',
+          [soup, entry],
+        ),
+      ),
+      /cooked_meals_entry/,
+    )
+    // Not a recipe they can't see, and only the ratings Sous knows.
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query('insert into cooked_meals (recipe_id) values ($1)', [secret]),
+      ),
+      /row-level security/,
+    )
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query(
+          "insert into cooked_meals (recipe_id, rating) values ($1, 'meh')",
+          [soup],
+        ),
+      ),
+      /check constraint/,
+    )
+    // Nor another user's plan entry: they can't claim it.
+    const otherSoup = await recipe('Other’s soup', [])
+    const otherEntry = await as('authenticated', OTHER, async () => {
+      await db.query("select add_to_meal_plan('2026-10-12', $1, 1)", [
+        otherSoup,
+      ])
+      const { rows } = await db.query(
+        'select id from meal_plan_entries where recipe_id = $1',
+        [otherSoup],
+      )
+      return rows[0].id
+    })
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query(
+          'insert into cooked_meals (recipe_id, plan_entry_id) values ($1, $2)',
+          [otherSoup, otherEntry],
+        ),
+      ),
+      /row-level security/,
+    )
+    // A meal moves to another week whole, and only the user's own.
+    const moved = await as('authenticated', COOK, async () => {
+      await db.query(
+        "select add_to_meal_plan('2026-10-12', $1, 0.5, null, 'lunch')",
+        [soup],
+      )
+      const { rows: e } = await db.query(
+        'select id from meal_plan_entries where recipe_id = $1 and scale = 0.5',
+        [soup],
+      )
+      await db.query("select move_plan_entry($1, '2026-10-19')", [e[0].id])
+      const { rows } = await db.query(
+        `select mp.week_start::text as week, e.scale::float as scale, e.meal
+         from meal_plan_entries e join meal_plans mp on mp.id = e.meal_plan_id
+         where e.recipe_id = $1 order by mp.week_start, e.scale`,
+        [soup],
+      )
+      return rows
+    })
+    assert.deepEqual(moved, [
+      { week: '2026-10-12', scale: 2, meal: null },
+      { week: '2026-10-19', scale: 0.5, meal: 'lunch' },
+    ])
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query("select move_plan_entry($1, '2026-10-19')", [otherEntry]),
+      ),
+      /No such plan entry/,
+    )
+    // Nobody else sees it.
+    const { rows: seen } = await as('authenticated', OTHER, () =>
+      db.query('select * from cooked_meals'),
+    )
+    assert.equal(seen.length, 0)
+    // It's in their export.
+    const { rows } = await as('authenticated', COOK, () =>
+      db.query('select export_my_data() as d'),
+    )
+    assert.deepEqual(rows[0].d.cooked, [
+      {
+        recipe: 'Cooked soup',
+        cooked_on: '2026-10-12',
+        scale: 2,
+        rating: 'up',
+        note: 'less salt',
+      },
+    ])
+  })
+})
+
+describe('favorite recipes (TYL-66)', () => {
+  const FAN = '00000000-0000-0000-0000-0000000000d3'
+
+  it('keeps favorites and how often, private to the user', async () => {
+    await db.query('insert into auth.users (id) values ($1)', [FAN])
+    const stew = await recipe('Favorite stew', [])
+    const hidden = await recipe('Hidden', [], {
+      visibility: 'private',
+      addedBy: ALICE,
+    })
+    await as('authenticated', FAN, () =>
+      db.query(
+        "insert into user_favorite_recipes (recipe_id, frequency) values ($1, 'weekly')",
+        [stew],
+      ),
+    )
+    await assert.rejects(
+      as('authenticated', FAN, () =>
+        db.query('insert into user_favorite_recipes (recipe_id) values ($1)', [
+          hidden,
+        ]),
+      ),
+      /row-level security/,
+    )
+    await assert.rejects(
+      as('authenticated', FAN, () =>
+        db.query(
+          "update user_favorite_recipes set frequency = 'daily' where recipe_id = $1",
+          [stew],
+        ),
+      ),
+      /check constraint/,
+    )
+    const { rows: seen } = await as('authenticated', BOB, () =>
+      db.query('select * from user_favorite_recipes'),
+    )
+    assert.equal(seen.length, 0)
+    const { rows } = await as('authenticated', FAN, () =>
+      db.query('select export_my_data() as d'),
+    )
+    assert.deepEqual(rows[0].d.favorite_recipes, [
+      { recipe: 'Favorite stew', how_often: 'weekly' },
+    ])
+    assert.deepEqual(rows[0].d.cooked, [])
+  })
+})
+
+describe('weights round 3 (TYL-60)', () => {
+  it('fills weights USDA gives, and a hand weight for one wins', async () => {
+    const { rows } = await db.query(
+      `select name, grams_per_cup::float as cup, grams_per_each::float as each
+       from ingredients where name in
+         ('white wine', 'bouillon cubes', 'habanero peppers', 'croissants')
+       order by name`,
+    )
+    assert.deepEqual(rows, [
+      { name: 'bouillon cubes', cup: 124.8, each: 3.6 },
+      { name: 'croissants', cup: null, each: 57 },
+      // USDA's nearest is a 45 g chili; one habanero is about 9 g.
+      { name: 'habanero peppers', cup: 150, each: 9 },
+      { name: 'white wine', cup: 235.2, each: null },
+    ])
+    const { rows: units } = await db.query(
+      `select i.name, u.unit, u.grams::float as grams, u.source
+       from ingredient_units u join ingredients i on i.id = u.ingredient_id
+       where (i.name, u.unit) in (('cheese', 'slice'), ('sweet corn kernels', 'ear'))
+       order by i.name`,
+    )
+    assert.equal(units.length, 2)
+    assert.ok(units.every((u) => u.grams > 0 && u.source === 'usda'))
   })
 })

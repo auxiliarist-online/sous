@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
 import {
   addDays,
+  isoDate,
   dayName,
   buyText,
   dollars,
@@ -19,14 +20,18 @@ import {
   type BuyItem,
   type Fit,
   type PantryStatus,
+  type PlanChoice,
   type PlanCost,
   type PlanEntry,
   type Scale,
 } from './plan.ts'
+import { CookedButton } from './Cooked.tsx'
+import type { Cooked, CookedApi } from './cooked.ts'
 import { Link } from './router.tsx'
+import { isDue, RECENT_WEEKS, varietyNotes, type Recent } from './variety.ts'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
-export interface PlanApi {
+export interface PlanApi extends CookedApi {
   list(): Promise<SavedRecipe[]>
   recipe(id: string): Promise<RecipeDetail | null>
   plan(weekStart: string): Promise<PlanEntry[]>
@@ -60,6 +65,16 @@ export interface PlanApi {
   ): Promise<void>
   /** Back to the usual price at a store (or anywhere, with null). */
   clearMyPrice(ingredientId: string, storeId: string | null): Promise<void>
+  /** Move a planned meal to another week, in one step (TYL-68). */
+  moveEntry(id: string, weekStart: string): Promise<void>
+  /** Recipes planned or cooked lately, by how many weeks ago (TYL-66). */
+  recentRecipes(weekStart: string, weeks: number): Promise<Recent>
+  /** Which option of an "or" line to buy this week (TYL-98). */
+  saveChoice(
+    weekStart: string,
+    key: string,
+    ingredientId: string,
+  ): Promise<void>
 }
 
 /** The week's meals (TYL-15): what's planned on which day and at what size,
@@ -67,6 +82,10 @@ export interface PlanApi {
 export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const [entries, setEntries] = useState<PlanEntry[] | null>(null)
   const [cost, setCost] = useState<PlanCost | 'error' | null>(null)
+  // What's been cooked, by plan entry (TYL-68); null until it's loaded, so a
+  // cooked meal never shows "Cooked it" first.
+  const [cooked, setCooked] = useState<Record<string, Cooked> | null>(null)
+  const [cookedFailed, setCookedFailed] = useState(false)
   const [failed, setFailed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -83,6 +102,16 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
         if (!live) return
         setEntries(planned)
         setFailed(false)
+        // Extra: the plan works without knowing what was cooked.
+        api.cookedEntries(planned.map((e) => e.id)).then(
+          (c) => {
+            if (!live) return
+            setCooked(c)
+            setCookedFailed(false)
+          },
+          // Unknown, not "none": a cooked meal mustn't look uncooked.
+          () => live && setCookedFailed(true),
+        )
         // The cost comes from the API; the plan works without it.
         api.planCost(week).then(
           (c) => live && setCost(c),
@@ -155,6 +184,18 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
 
       {entries && (
         <>
+          {cost && cost !== 'error' && (
+            <Choices
+              choices={cost.choices}
+              busy={busy}
+              onChoose={(key, ingredientId) =>
+                void change(
+                  () => api.saveChoice(week, key, ingredientId),
+                  "We couldn't save your choice. Try again.",
+                )
+              }
+            />
+          )}
           <Budget
             cost={cost}
             empty={entries.length === 0}
@@ -182,6 +223,16 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
             }}
           />
 
+          <VarietyNotes entries={entries} />
+          {cookedFailed && entries.length > 0 && (
+            <p className="small muted" role="status">
+              We couldn't check what's been cooked.{' '}
+              <button type="button" className="link" onClick={reload}>
+                Try again
+              </button>
+            </p>
+          )}
+
           {entries.length === 0 && (
             <div className="empty">
               <p className="muted">Nothing planned for this week yet.</p>
@@ -207,6 +258,24 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
                     <Entry
                       key={e.id}
                       entry={e}
+                      cooked={cooked ? (cooked[e.id] ?? null) : undefined}
+                      onCooked={(c) =>
+                        setCooked((all) => {
+                          const next = { ...(all ?? {}) }
+                          if (c) next[e.id] = c
+                          else delete next[e.id]
+                          return next
+                        })
+                      }
+                      onMoveOn={
+                        week < thisWeek
+                          ? () =>
+                              void change(
+                                () => api.moveEntry(e.id, thisWeek),
+                                "We couldn't move that. Try again.",
+                              )
+                          : null
+                      }
                       cost={cost && cost !== 'error' ? cost : null}
                       days={days}
                       api={api}
@@ -596,6 +665,9 @@ function PriceForm({
  *  ingredients at the planned size on request. */
 function Entry({
   entry,
+  cooked,
+  onCooked,
+  onMoveOn,
   cost,
   days,
   api,
@@ -604,6 +676,12 @@ function Entry({
   onRemove,
 }: {
   entry: PlanEntry
+  /** Whether it's been cooked, with the rating and note (TYL-68); undefined
+   *  while that's loading. */
+  cooked: Cooked | null | undefined
+  onCooked: (cooked: Cooked | null) => void
+  /** In a week that's over: move a meal that wasn't cooked to this week. */
+  onMoveOn: (() => void) | null
   /** The week's cost, for this recipe's share of it (TYL-30). */
   cost: PlanCost | null
   days: string[]
@@ -682,6 +760,31 @@ function Entry({
           Remove
         </button>
       </div>
+      {cooked !== undefined && (
+        <CookedButton
+          api={api}
+          recipeId={entry.recipeId}
+          title={entry.title}
+          planEntryId={entry.id}
+          cookedOn={cookedOn(entry.day)}
+          scale={entry.scale}
+          cooked={cooked}
+          onChange={onCooked}
+        />
+      )}
+      {onMoveOn && cooked === null && (
+        <p className="small muted">
+          Didn't make it?{' '}
+          <button
+            type="button"
+            className="link"
+            disabled={busy}
+            onClick={onMoveOn}
+          >
+            Move to this week
+          </button>
+        </p>
+      )}
       <details onToggle={(e) => open(e.currentTarget.open)}>
         <summary className="small">
           Ingredients
@@ -704,6 +807,152 @@ function Entry({
         )}
       </details>
     </li>
+  )
+}
+
+/** Why a suggestion sits where it does (TYL-66): a favorite that's due, or
+ *  a recipe had lately. */
+function lately(r: SavedRecipe, recent: Recent): string | null {
+  const ago = recent[r.id]
+  if (r.favorite && isDue(r.favorite, ago)) return '♥ due again'
+  if (ago === undefined || ago >= RECENT_WEEKS) return null
+  if (ago === 0) return 'already this week'
+  return ago === 1 ? 'had last week' : `had ${ago} weeks ago`
+}
+
+/** What the week repeats (TYL-66), said gently; the plan stays the user's. */
+function VarietyNotes({ entries }: { entries: PlanEntry[] }) {
+  const notes = varietyNotes(entries)
+  if (notes.length === 0) return null
+  return (
+    <p className="small notice" aria-label="Variety">
+      For variety: {notes.join('; ')}.
+    </p>
+  )
+}
+
+/** The day a planned meal counts as cooked: its planned day, unless that's
+ *  still ahead (cooked early), or today for "any day". */
+function cookedOn(day: string | null): string {
+  const today = isoDate(new Date())
+  return day && day <= today ? day : today
+}
+
+/** The week's "or" lines (TYL-98): ones waiting for the user to choose,
+ *  each option with what it adds, and ones settled by what another recipe
+ *  needs or an earlier choice, which can be switched. One settled by diet
+ *  has nothing to choose, so it isn't shown. */
+function Choices({
+  choices,
+  busy,
+  onChoose,
+}: {
+  choices: PlanChoice[]
+  busy: boolean
+  onChoose: (key: string, ingredientId: string) => void
+}) {
+  const shown = choices.filter((c) => c.options.length > 1)
+  if (shown.length === 0) return null
+  const pending = shown.filter((c) => c.reason === 'pending')
+  return (
+    <section className="choices" aria-labelledby="choices-title">
+      <h3 id="choices-title">
+        {pending.length > 0
+          ? 'Choose before you shop'
+          : 'Recipes that take either'}
+      </h3>
+      {pending.length > 0 && (
+        <p className="small muted">These go on your list once you choose.</p>
+      )}
+      <ul>
+        {shown.map((c) => (
+          <li key={c.key}>
+            <ChoiceRow choice={c} busy={busy} onChoose={onChoose} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+// Why an "or" line uses the option it does, after its name.
+const REASONS: Record<PlanChoice['reason'], string> = {
+  diet: ', the one that fits your diet.',
+  chosen: ', your choice.',
+  on_hand: ', since you have it.',
+  needed: ', since another recipe needs it.',
+  pending: '.',
+}
+
+/** One "or" line: its options as buttons while it waits, or what's used,
+ *  why, and what the other would add. */
+function ChoiceRow({
+  choice,
+  busy,
+  onChoose,
+}: {
+  choice: PlanChoice
+  busy: boolean
+  onChoose: (key: string, ingredientId: string) => void
+}) {
+  const names = choice.options.map((o) => o.name).join(' or ')
+  const where =
+    choice.recipes > 1 ? `${choice.recipes} recipes take` : 'A recipe takes'
+  if (choice.reason === 'pending') {
+    return (
+      <>
+        <p className="small">
+          {where} {names}.
+          {!choice.fits && (
+            <span className="warning">
+              {' '}
+              None of these fit your diets or allergies.
+            </span>
+          )}
+        </p>
+        <div className="chips">
+          {choice.options.map((o) => (
+            <button
+              key={o.ingredientId}
+              type="button"
+              className="chip"
+              disabled={busy}
+              onClick={() => onChoose(choice.key, o.ingredientId)}
+            >
+              {o.name}
+              {o.cents !== null && ` +${dollars(o.cents)}`}
+            </button>
+          ))}
+        </div>
+      </>
+    )
+  }
+  const used = choice.options.find((o) => o.ingredientId === choice.chosen)
+  const others = choice.options.filter((o) => o !== used)
+  return (
+    <p className="small">
+      {where} {names}: using <strong>{used?.name}</strong>
+      {REASONS[choice.reason]}{' '}
+      {!choice.fits && (
+        <span className="warning">
+          It doesn't fit your diets or allergies.{' '}
+        </span>
+      )}
+      {others.map((o) => (
+        <button
+          key={o.ingredientId}
+          type="button"
+          className="link"
+          disabled={busy}
+          onClick={() => onChoose(choice.key, o.ingredientId)}
+        >
+          Use {o.name} instead
+          {o.cents !== null &&
+            used?.cents != null &&
+            ` (${o.cents >= used.cents ? '+' : '−'}${dollars(Math.abs(o.cents - used.cents))})`}
+        </button>
+      ))}
+    </p>
   )
 }
 
@@ -735,6 +984,9 @@ function AddRecipe({
   const [fits, setFits] = useState<Record<string, Fit>>({})
   const [added, setAdded] = useState<AddedCosts | null>(null)
   const [favorites, setFavorites] = useState<string[]>([])
+  // Planned or cooked lately (TYL-66): favorites due come first, the rest
+  // of the recent ones last.
+  const [recent, setRecent] = useState<Recent>({})
   const [query, setQuery] = useState('')
   const [failed, setFailed] = useState(false)
   // A recipe waiting for "Add anyway": it breaks the user's rules, or the budget.
@@ -761,6 +1013,19 @@ function AddRecipe({
     }
   }, [api])
 
+  // Ordering only, so it can fail quietly. Long enough back for a monthly
+  // favorite's rhythm.
+  useEffect(() => {
+    let live = true
+    api.recentRecipes(week, 5).then(
+      (r) => live && setRecent(r),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api, week, version])
+
   // What each would add; without it the list still works, just without costs.
   useEffect(() => {
     if (!recipes?.length) return
@@ -786,7 +1051,16 @@ function AddRecipe({
   }
   if (!recipes) return null
 
-  const shown = filterRecipes(recipes, { ...NO_FILTER, query })
+  // A favorite that's due first, one planned or cooked lately last.
+  const place = (r: SavedRecipe) =>
+    r.favorite && isDue(r.favorite, recent[r.id])
+      ? 0
+      : recent[r.id] !== undefined && recent[r.id] < RECENT_WEEKS
+        ? 2
+        : 1
+  const shown = filterRecipes(recipes, { ...NO_FILTER, query }).sort(
+    (a, b) => place(a) - place(b),
+  )
   const budget = added?.budgetCents ?? null
   // How far over budget the week would go with this recipe; 0 when it fits.
   const overBy = (r: SavedRecipe) => {
@@ -854,6 +1128,12 @@ function AddRecipe({
                       >
                         {' '}
                         *
+                      </span>
+                    )}
+                    {lately(r, recent) && (
+                      <span className="muted small">
+                        {' '}
+                        · {lately(r, recent)}
                       </span>
                     )}
                   </span>

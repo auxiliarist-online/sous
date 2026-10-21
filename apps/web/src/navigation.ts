@@ -38,6 +38,7 @@ export type Route =
   | { page: 'welcome' }
   | { page: 'list'; week: string | null }
   | { page: 'privacy' }
+  | { page: 'history' }
 
 const UUID = '[0-9a-f-]{36}'
 
@@ -59,6 +60,7 @@ export function route(path: string): Route {
   m = path.match(/^\/list\/(\d{4}-\d{2}-\d{2})\/?$/)
   if (m) return { page: 'list', week: m[1] }
   if (/^\/privacy\/?$/.test(path)) return { page: 'privacy' }
+  if (/^\/history\/?$/.test(path)) return { page: 'history' }
   if (/^\/plan\/?$/.test(path)) return { page: 'plan', week: null }
   m = path.match(/^\/plan\/(\d{4}-\d{2}-\d{2})\/?$/)
   if (m) return { page: 'plan', week: m[1] }

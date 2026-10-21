@@ -263,6 +263,7 @@ export function ListPage({
           </span>
         )}
       </p>
+      {cost && <WaitingChoices cost={cost} week={week} />}
       {(offline || pending > 0) && (
         <p role="status" className="muted small offline-note">
           {offline
@@ -349,6 +350,20 @@ export function ListPage({
         </p>
       )}
     </section>
+  )
+}
+
+/** "Almond milk or cow's milk" lines waiting for the user's choice (TYL-98)
+ *  aren't on the list yet: say so, and where to choose. */
+function WaitingChoices({ cost, week }: { cost: PlanCost; week: string }) {
+  const waiting = cost.choices.filter((c) => c.reason === 'pending')
+  if (waiting.length === 0) return null
+  return (
+    <p className="small notice">
+      Not on the list until you choose:{' '}
+      {waiting.map((c) => c.options.map((o) => o.name).join(' or ')).join('; ')}
+      . <Link to={`/plan/${week}`}>Choose on your plan</Link>
+    </p>
   )
 }
 

@@ -5,6 +5,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { apiFetch } from './auth.ts'
 import type { DietLabel } from './library.ts'
+import type { Frequency } from './variety.ts'
 
 export interface IngredientLine {
   lineNo: number
@@ -42,6 +43,8 @@ export interface RecipeDetail {
   saved: boolean
   /** The user's own tags, when saved (TYL-81). */
   tags: string[]
+  /** How often it should come back, when it's a favorite (TYL-66). */
+  favorite: Frequency | null
   ingredients: IngredientLine[]
   diets: DietLabel[]
   cuisines: string[]
@@ -82,6 +85,7 @@ interface RecipeRow {
     checks: DietLabel['checks'] | null
   }[]
   cuisines: { cuisine_slug: string }[]
+  favorite?: { frequency: Frequency }[] | null
 }
 
 /** One recipe with its ingredients, labels and cuisines, plus whether the
@@ -103,7 +107,8 @@ export async function recipeDetail(
       `id, title, source_url, source_note, servings, prep_minutes, cook_minutes, total_minutes,
        instructions, added_by, source:recipe_sources(name, license_name, license_url, attribution),
        ingredients:recipe_ingredients(line_no, option_no, raw_text, section, name, quantity, quantity_max, unit, preparation, is_optional),
-       diets:recipe_diets(diet_slug, source, checks), cuisines:recipe_cuisines(cuisine_slug)`,
+       diets:recipe_diets(diet_slug, source, checks), cuisines:recipe_cuisines(cuisine_slug),
+       favorite:user_favorite_recipes(frequency)`,
     )
     .eq('id', id)
     .maybeSingle()
@@ -132,6 +137,8 @@ export async function recipeDetail(
     handTyped: !r.source_url && r.added_by === userId,
     saved: !!saved.data,
     tags: (saved.data as { tags: string[] | null } | null)?.tags ?? [],
+    // Row-level security shows only the user's own (TYL-66).
+    favorite: r.favorite?.[0]?.frequency ?? null,
     ingredients: [...r.ingredients]
       .sort((a, b) => a.line_no - b.line_no || a.option_no - b.option_no)
       .map((i) => ({

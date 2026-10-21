@@ -1,4 +1,4 @@
-import type { Session } from '@supabase/supabase-js'
+import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,6 +13,7 @@ import {
   formatQuantity,
   isMonday,
   planCost,
+  saveChoice,
   scaledLine,
   weekDays,
   weekLabel,
@@ -25,6 +26,8 @@ import {
   type Scale,
 } from './plan.ts'
 import type { IngredientLine, RecipeDetail } from './sous.ts'
+import type { Cooked } from './cooked.ts'
+import { fakeCookedApi } from './cookedFake.ts'
 
 describe('weeks', () => {
   it('starts on Monday', () => {
@@ -340,6 +343,7 @@ const saved = (
   ingredients: [],
   tags: [],
   cuisines,
+  favorite: null,
 })
 
 const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
@@ -350,6 +354,8 @@ const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
   recipeServings: 4,
   day: null,
   position: 0,
+  proteins: [],
+  cuisines: [],
   ...extra,
 })
 
@@ -362,6 +368,7 @@ const DETAIL: RecipeDetail = {
   license: null,
   saved: true,
   tags: [],
+  favorite: null,
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,
@@ -385,6 +392,7 @@ const COST: PlanCost = {
   storeStatus: 'not_chosen' as const,
   homeZip: null,
   entryCents: {},
+  choices: [],
   items: [
     item('white rice', {
       quantity: 1,
@@ -422,6 +430,7 @@ function fakeApi({
   favorites = [] as string[],
   added = { budgetCents: null, totalCents: 0, recipes: {} } as AddedCosts,
   copied = 0,
+  cooked = fakeCookedApi(),
 } = {}) {
   let current = entries
   const api = {
@@ -457,9 +466,315 @@ function fakeApi({
       ) => void 0,
     ),
     clearMyPrice: vi.fn(async (_id: string, _store: string | null) => void 0),
+    moveEntry: vi.fn(async (_id: string, _week: string) => void 0),
+    saveChoice: vi.fn(
+      async (_week: string, _key: string, _id: string) => void 0,
+    ),
+    ...cooked,
   } satisfies PlanApi
   return api
 }
+
+const MILKS = {
+  key: 'almond,milk',
+  fits: true,
+  options: [
+    { ingredientId: 'almond', name: 'almond milk', cents: 349 },
+    { ingredientId: 'milk', name: 'milk', cents: 429 },
+  ],
+  recipes: 2,
+}
+
+describe('cooked on the plan (TYL-68)', () => {
+  it('shows a cooked meal as cooked even when that loads after the plan', async () => {
+    const cooked = fakeCookedApi()
+    let arrive: (v: Record<string, Cooked>) => void = () => {}
+    cooked.cookedEntries.mockImplementationOnce(
+      () => new Promise((resolve) => (arrive = resolve)),
+    )
+    const api = fakeApi({ entries: [entry('1')], cooked })
+    render(<PlanPage api={api} week={WEEK} />)
+    await screen.findByRole('link', { name: 'Recipe 1' })
+    // Not "Cooked it" while it's unknown…
+    expect(screen.queryByRole('button', { name: /^Cooked / })).toBeNull()
+    arrive({
+      '1': {
+        id: 'c1',
+        recipeId: 'r-1',
+        planEntryId: '1',
+        cookedOn: '2026-10-13',
+        scale: 1,
+        rating: 'love',
+        note: null,
+      },
+    })
+    // …and once it's in, its rating.
+    const rate = await screen.findByRole('group', { name: 'Rate Recipe 1' })
+    expect(
+      within(rate).getByRole('button', { name: 'Would make again' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('shows a planned meal already cooked, with its rating', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cooked: fakeCookedApi([
+        {
+          id: 'c1',
+          recipeId: 'soup',
+          planEntryId: '1',
+          cookedOn: '2026-10-13',
+          scale: 1,
+          rating: 'up',
+          note: null,
+        },
+      ]),
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const rate = await screen.findByRole('group', { name: /^Rate / })
+    expect(within(rate).getByRole('button', { name: 'Good' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(api.cookedEntries).toHaveBeenCalledWith(['1'])
+  })
+})
+
+describe('variety (TYL-66)', () => {
+  it('notes when the week repeats a protein, gently', async () => {
+    const poultry = { proteins: ['poultry'] }
+    const api = fakeApi({
+      entries: [entry('1', poultry), entry('2', poultry), entry('3', poultry)],
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(await screen.findByLabelText('Variety')).toHaveTextContent(
+      'For variety: 3 dinners with poultry this week.',
+    )
+  })
+
+  it('puts favorites that are due first, and recipes had lately last', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      recipes: [
+        saved('lately', 'Had last week'),
+        saved('plain', 'Something else'),
+        { ...saved('fav', 'Favorite soup'), favorite: 'biweekly' },
+      ],
+      cooked: fakeCookedApi([], [], { lately: 1, fav: 3 }),
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const list = await screen.findByRole('list', {
+      name: 'Recipes you can add',
+    })
+    await waitFor(() =>
+      expect(
+        within(list)
+          .getAllByRole('listitem')
+          .map((li) => li.textContent),
+      ).toEqual([
+        expect.stringContaining('Favorite soup · ♥ due again'),
+        expect.stringContaining('Something else'),
+        expect.stringContaining('Had last week · had last week'),
+      ]),
+    )
+    expect(api.recentRecipes).toHaveBeenCalledWith(WEEK, 5)
+  })
+})
+
+describe('a week that’s over (TYL-68)', () => {
+  it('moves a meal that wasn’t cooked to this week', async () => {
+    const past = addDays(weekOf(), -7)
+    const api = fakeApi({ entries: [entry('1', { day: null })] })
+    render(<PlanPage api={api} week={past} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Move to this week' }),
+    )
+    expect(api.moveEntry).toHaveBeenCalledWith('1', weekOf())
+  })
+
+  it('offers nothing while it can’t tell what was cooked', async () => {
+    const cooked = fakeCookedApi()
+    cooked.cookedEntries.mockRejectedValueOnce(new Error('offline'))
+    const api = fakeApi({ entries: [entry('1', { day: null })], cooked })
+    render(<PlanPage api={api} week={addDays(weekOf(), -7)} />)
+    expect(
+      await screen.findByText(/We couldn't check what's been cooked/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Move to this week' }),
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Cooked / })).toBeNull()
+    // Trying again loads it.
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(
+      await screen.findByRole('button', { name: 'Move to this week' }),
+    ).toBeInTheDocument()
+  })
+
+  it('doesn’t offer it this week, or for a meal that was cooked', async () => {
+    render(
+      <PlanPage api={fakeApi({ entries: [entry('1')] })} week={weekOf()} />,
+    )
+    await screen.findByRole('button', { name: /^Cooked / })
+    expect(
+      screen.queryByRole('button', { name: 'Move to this week' }),
+    ).toBeNull()
+  })
+})
+
+describe('choices (TYL-98)', () => {
+  it('reads the week’s choices from the API', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            budget_cents: null,
+            total_cents: 0,
+            estimated: false,
+            unpriced: 0,
+            items: [],
+            choices: [
+              {
+                key: 'almond,milk',
+                options: [
+                  { ingredient_id: 'almond', name: 'almond milk', cents: 349 },
+                  { ingredient_id: 'milk', name: 'milk', cents: 429 },
+                ],
+                chosen: null,
+                reason: 'pending',
+                recipes: 2,
+                lines: ['1 cup almond milk or milk'],
+              },
+            ],
+          }),
+        ),
+    )
+    const cost = await planCost({} as Session, WEEK, send)
+    expect(cost.choices).toEqual([
+      { ...MILKS, chosen: null, reason: 'pending' },
+    ])
+  })
+
+  it('saves a choice in one merge, in the database', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: null }))
+    const db = { rpc } as unknown as SupabaseClient
+    await saveChoice(db, WEEK, 'almond,milk', 'milk')
+    expect(rpc).toHaveBeenCalledWith('set_plan_choice', {
+      p_week: WEEK,
+      p_key: 'almond,milk',
+      p_ingredient: 'milk',
+    })
+  })
+
+  it('asks which to buy, with what each adds, and saves the answer', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [{ ...MILKS, chosen: null, reason: 'pending' }],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByRole('heading', { name: 'Choose before you shop' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('2 recipes take almond milk or milk.'),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'milk +$4.29' }))
+    expect(api.saveChoice).toHaveBeenCalledWith(WEEK, 'almond,milk', 'milk')
+    await waitFor(() => expect(api.planCost).toHaveBeenCalledTimes(2))
+  })
+
+  it('says why an option is used, and what the other would add', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [
+          {
+            ...MILKS,
+            options: [
+              { ingredientId: 'almond', name: 'almond milk', cents: 349 },
+              { ingredientId: 'milk', name: 'milk', cents: 0 },
+            ],
+            chosen: 'milk',
+            reason: 'needed',
+          },
+        ],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByText(/since another recipe needs it/),
+    ).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Use almond milk instead (+$3.49)' }),
+    )
+    expect(api.saveChoice).toHaveBeenCalledWith(WEEK, 'almond,milk', 'almond')
+  })
+
+  it('warns when none of the options fits', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [{ ...MILKS, chosen: null, reason: 'pending', fits: false }],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByText(/None of these fit your diets or allergies/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'milk +$4.29' })).toBeEnabled()
+  })
+
+  it('keeps the warning once a choice that doesn’t fit is made', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [{ ...MILKS, chosen: 'milk', reason: 'chosen', fits: false }],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByText(/doesn't fit your diets or allergies/),
+    ).toBeInTheDocument()
+  })
+
+  it('uses what’s on hand', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [{ ...MILKS, chosen: 'milk', reason: 'on_hand' }],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(await screen.findByText(/since you have it/)).toBeInTheDocument()
+  })
+
+  it('shows nothing for a line the user’s diet settles', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [
+          {
+            ...MILKS,
+            options: [MILKS.options[0]],
+            chosen: 'almond',
+            reason: 'diet',
+          },
+        ],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    await screen.findByText('white rice')
+    expect(screen.queryByText(/almond milk/)).toBeNull()
+  })
+})
 
 describe('PlanPage', () => {
   it('groups the week by day and shows the cost against the budget', async () => {

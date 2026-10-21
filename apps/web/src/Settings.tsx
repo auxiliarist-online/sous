@@ -436,6 +436,9 @@ function Account({
 
   return (
     <div className="account-data">
+      <Link to="/history" className="small">
+        What you've cooked
+      </Link>
       <Link to="/privacy" className="small">
         What Sous keeps about you
       </Link>

@@ -4,6 +4,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { apiFetch } from './auth.ts'
 import type { IngredientLine } from './sous.ts'
+import { mainProteins } from './variety.ts'
 
 // ---------- weeks ----------
 
@@ -76,6 +77,10 @@ export interface PlanEntry {
   /** The day it's planned for, or null for "some day this week". */
   day: string | null
   position: number
+  /** Its main proteins ("poultry") and cuisines ("Italian"), for variety
+   *  notes (TYL-66). */
+  proteins: string[]
+  cuisines: string[]
 }
 
 interface EntryRow {
@@ -83,9 +88,23 @@ interface EntryRow {
   scale: number
   planned_for: string | null
   position: number
-  recipe: { id: string; title: string; servings: number | null } | null
+  recipe: {
+    id: string
+    title: string
+    servings: number | null
+    lines?:
+      | {
+          option_no: number
+          is_optional: boolean
+          ingredient: { aisle: string | null; contains: string[] } | null
+        }[]
+      | null
+    cuisines?: { cuisine: { name: string } | null }[] | null
+  } | null
 }
 
+/** The week's planned meals in order, each with its recipe's main proteins
+ *  and cuisines for the variety notes (TYL-66). */
 export async function loadPlan(
   db: SupabaseClient,
   weekStart: string,
@@ -93,7 +112,7 @@ export async function loadPlan(
   const { data, error } = await db
     .from('meal_plans')
     .select(
-      'entries:meal_plan_entries(id, scale, planned_for, position, recipe:recipes(id, title, servings))',
+      'entries:meal_plan_entries(id, scale, planned_for, position, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name))))',
     )
     .eq('week_start', weekStart)
     .maybeSingle()
@@ -110,8 +129,30 @@ export async function loadPlan(
       recipeServings: e.recipe!.servings,
       day: e.planned_for,
       position: e.position,
+      proteins: mainProteins(
+        (e.recipe!.lines ?? [])
+          .filter((l) => l.option_no === 1 && !l.is_optional && l.ingredient)
+          .map((l) => l.ingredient!),
+      ),
+      cuisines: (e.recipe!.cuisines ?? []).flatMap((c) =>
+        c.cuisine ? [c.cuisine.name] : [],
+      ),
     }))
     .sort((a, b) => a.position - b.position)
+}
+
+/** Move a planned meal to another week in one step (TYL-68): it's never in
+ *  both weeks, or neither, whatever fails. */
+export async function moveEntry(
+  db: SupabaseClient,
+  id: string,
+  weekStart: string,
+): Promise<void> {
+  const { error } = await db.rpc('move_plan_entry', {
+    p_entry: id,
+    p_week: weekStart,
+  })
+  if (error) throw error
 }
 
 export async function addToPlan(
@@ -279,6 +320,25 @@ export interface BuyItem {
   regularCents: number | null
 }
 
+/** One "or" line the planned recipes offer ("almond milk or cow's milk") and
+ *  how the week settled it (TYL-98). */
+export interface PlanChoice {
+  /** The options' ingredient ids, sorted and joined: how a choice is saved. */
+  key: string
+  /** The options that fit the user, each with what buying it adds. */
+  options: { ingredientId: string; name: string; cents: number | null }[]
+  /** The option bought, or null while it waits for the user. */
+  chosen: string | null
+  /** Why: it's the one that fits their diet, they chose it, it's on hand,
+   *  another recipe needs it anyway, or it's waiting for them. */
+  reason: 'diet' | 'chosen' | 'on_hand' | 'needed' | 'pending'
+  /** How many planned recipes offer these options. */
+  recipes: number
+  /** False when none of the options fits the user's diets or allergies:
+   *  all of them are shown, and only the user's choice settles it. */
+  fits: boolean
+}
+
 export interface PlanCost {
   budgetCents: number | null
   totalCents: number
@@ -298,6 +358,8 @@ export interface PlanCost {
   storeId: string | null
   /** Each planned recipe's share of the total, by plan entry id (TYL-30). */
   entryCents: Record<string, number>
+  /** The week's "or" lines (TYL-98). */
+  choices: PlanChoice[]
 }
 
 interface ItemBody {
@@ -343,6 +405,14 @@ export async function planCost(
     store_status?: StoreStatus
     home_zip?: string | null
     entries?: { entry_id: string; cents: number }[]
+    choices?: {
+      key: string
+      options: { ingredient_id: string; name: string; cents: number | null }[]
+      chosen: string | null
+      reason: PlanChoice['reason']
+      recipes: number
+      fits?: boolean
+    }[]
   }
   return {
     budgetCents: body.budget_cents,
@@ -379,7 +449,37 @@ export async function planCost(
     entryCents: Object.fromEntries(
       (body.entries ?? []).map((e) => [e.entry_id, e.cents]),
     ),
+    choices: (body.choices ?? []).map((c) => ({
+      key: c.key,
+      options: c.options.map((o) => ({
+        ingredientId: o.ingredient_id,
+        name: o.name,
+        cents: o.cents,
+      })),
+      chosen: c.chosen,
+      reason: c.reason,
+      recipes: c.recipes,
+      fits: c.fits ?? true,
+    })),
   }
+}
+
+/** Save which option of an "or" line the user buys this week (TYL-98). One
+ *  choice covers every recipe offering the same options. Merged into the
+ *  week's other choices in the database, so saves from two devices don't
+ *  undo each other; row-level security keeps it to the user's own plan. */
+export async function saveChoice(
+  db: SupabaseClient,
+  weekStart: string,
+  key: string,
+  ingredientId: string,
+): Promise<void> {
+  const { error } = await db.rpc('set_plan_choice', {
+    p_week: weekStart,
+    p_key: key,
+    p_ingredient: ingredientId,
+  })
+  if (error) throw error
 }
 
 /** What adding a recipe at full size would add to the week (TYL-30). */

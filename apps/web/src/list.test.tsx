@@ -22,6 +22,7 @@ import {
 import { ListPage, type ListApi } from './ListPage.tsx'
 import { PantryPage, type PantryApi } from './PantryPage.tsx'
 import type { BuyItem, PlanCost, PlanEntry } from './plan.ts'
+import { fakeCookedApi } from './cookedFake.ts'
 
 const WEEK = '2026-10-12'
 
@@ -80,6 +81,7 @@ const COST: PlanCost = {
   storeStatus: 'not_chosen' as const,
   homeZip: null,
   entryCents: {},
+  choices: [],
   items: [
     buy('eggs', {
       aisle: 'dairy_eggs',
@@ -434,6 +436,34 @@ describe('ListPage', () => {
     expect(screen.getByText(/1 of 2 in the cart/)).toBeInTheDocument()
   })
 
+  it('says what waits for a choice on the plan (TYL-98)', async () => {
+    const api = listApi({
+      planCost: vi.fn(async () => ({
+        ...COST,
+        choices: [
+          {
+            key: 'almond,milk',
+            options: [
+              { ingredientId: 'almond', name: 'almond milk', cents: 349 },
+              { ingredientId: 'milk', name: 'milk', cents: 429 },
+            ],
+            chosen: null,
+            reason: 'pending' as const,
+            recipes: 1,
+            fits: true,
+          },
+        ],
+      })),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    expect(
+      await screen.findByText(/Not on the list until you choose/),
+    ).toHaveTextContent('almond milk or milk')
+    expect(
+      screen.getByRole('link', { name: 'Choose on your plan' }),
+    ).toHaveAttribute('href', `/plan/${WEEK}`)
+  })
+
   it('adds anything, edits it, and takes items off and back on', async () => {
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(
       '00000000-0000-4000-8000-000000000001',
@@ -560,6 +590,8 @@ const entry = (id: string, day: string | null, title: string): PlanEntry => ({
   recipeServings: 4,
   day,
   position: 0,
+  proteins: [],
+  cuisines: [],
 })
 
 describe('Home', () => {
@@ -567,6 +599,24 @@ describe('Home', () => {
   const homeApi = (entries: PlanEntry[]): HomeApi => ({
     plan: vi.fn(async () => entries),
     planCost: vi.fn(async () => COST),
+    ...fakeCookedApi(),
+  })
+
+  it('marks tonight’s meal cooked, dated today (TYL-68)', async () => {
+    const api = homeApi([entry('1', '2026-10-14', 'Red lentil dal')])
+    render(<Home api={api} now={now} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Cooked Red lentil dal' }),
+    )
+    expect(api.markCooked).toHaveBeenCalledWith({
+      recipeId: 'r-1',
+      planEntryId: '1',
+      cookedOn: '2026-10-14',
+      scale: 1,
+    })
+    expect(
+      await screen.findByRole('group', { name: 'Rate Red lentil dal' }),
+    ).toBeInTheDocument()
   })
 
   it('shows tonight, the days ahead, and what’s left to buy', async () => {
