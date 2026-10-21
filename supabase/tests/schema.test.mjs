@@ -3380,6 +3380,27 @@ describe('cooked meals (TYL-68)', () => {
       ),
       /check constraint/,
     )
+    // Nor another user's plan entry: they can't claim it.
+    const otherSoup = await recipe('Other’s soup', [])
+    const otherEntry = await as('authenticated', OTHER, async () => {
+      await db.query("select add_to_meal_plan('2026-10-12', $1, 1)", [
+        otherSoup,
+      ])
+      const { rows } = await db.query(
+        'select id from meal_plan_entries where recipe_id = $1',
+        [otherSoup],
+      )
+      return rows[0].id
+    })
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query(
+          'insert into cooked_meals (recipe_id, plan_entry_id) values ($1, $2)',
+          [otherSoup, otherEntry],
+        ),
+      ),
+      /row-level security/,
+    )
     // Nobody else sees it.
     const { rows: seen } = await as('authenticated', OTHER, () =>
       db.query('select * from cooked_meals'),

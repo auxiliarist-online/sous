@@ -23,12 +23,19 @@ create unique index cooked_meals_entry on public.cooked_meals (plan_entry_id)
   where plan_entry_id is not null;
 
 alter table public.cooked_meals enable row level security;
--- Their own rows, for recipes they can see.
+-- Their own rows, for recipes they can see and from their own plans (the
+-- subqueries run under row-level security: another user's recipe or plan
+-- entry isn't found). Without the plan check, someone could claim another
+-- user's entry and keep them from marking it cooked.
 create policy "Own rows" on public.cooked_meals for all to authenticated
   using (user_id = (select auth.uid()))
   with check (
     user_id = (select auth.uid())
     and exists (select 1 from public.recipes r where r.id = recipe_id)
+    and (
+      plan_entry_id is null
+      or exists (select 1 from public.meal_plan_entries e where e.id = plan_entry_id)
+    )
   );
 
 grant select on public.cooked_meals to anon;
