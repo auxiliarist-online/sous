@@ -89,6 +89,30 @@ before(async () => {
   await db.exec(`insert into auth.users (id) values ('${ALICE}'), ('${BOB}')`)
 })
 
+describe('data API grants', () => {
+  // TYL-117: since October 30, 2026, Supabase grants new tables nothing. A
+  // migration that creates a table must grant it, or supabase-js and the API
+  // get "permission denied". (The test setup grants no tables itself.)
+  it('grants every table in public to each role', async () => {
+    const { rows } = await db.query(`
+      select c.relname as name,
+        has_table_privilege('anon', c.oid, 'select') as anon,
+        -- Each privilege on its own: a list is true when any one is held.
+        (select bool_and(has_table_privilege('authenticated', c.oid, p))
+          from unnest(array['select', 'insert', 'update', 'delete']) p) as authenticated,
+        (select bool_and(has_table_privilege('service_role', c.oid, p))
+          from unnest(array['select', 'insert', 'update', 'delete']) p) as service
+      from pg_class c
+      where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+      order by 1`)
+    assert.ok(rows.length > 0)
+    const missing = rows
+      .filter((r) => !(r.anon && r.authenticated && r.service))
+      .map((r) => r.name)
+    assert.deepEqual(missing, [], 'grant these tables in their migration')
+  })
+})
+
 describe('reference data', () => {
   it('seeds diets, cuisines and store chains', async () => {
     const { rows } = await db.query(`
