@@ -26,6 +26,7 @@ import {
   type Scale,
 } from './plan.ts'
 import type { IngredientLine, RecipeDetail } from './sous.ts'
+import type { Cooked } from './cooked.ts'
 import { fakeCookedApi } from './cookedFake.ts'
 
 describe('weeks', () => {
@@ -484,6 +485,35 @@ const MILKS = {
 }
 
 describe('cooked on the plan (TYL-68)', () => {
+  it('shows a cooked meal as cooked even when that loads after the plan', async () => {
+    const cooked = fakeCookedApi()
+    let arrive: (v: Record<string, Cooked>) => void = () => {}
+    cooked.cookedEntries.mockImplementationOnce(
+      () => new Promise((resolve) => (arrive = resolve)),
+    )
+    const api = fakeApi({ entries: [entry('1')], cooked })
+    render(<PlanPage api={api} week={WEEK} />)
+    await screen.findByRole('link', { name: 'Recipe 1' })
+    // Not "Cooked it" while it's unknown…
+    expect(screen.queryByRole('button', { name: /^Cooked / })).toBeNull()
+    arrive({
+      '1': {
+        id: 'c1',
+        recipeId: 'r-1',
+        planEntryId: '1',
+        cookedOn: '2026-10-13',
+        scale: 1,
+        rating: 'love',
+        note: null,
+      },
+    })
+    // …and once it's in, its rating.
+    const rate = await screen.findByRole('group', { name: 'Rate Recipe 1' })
+    expect(
+      within(rate).getByRole('button', { name: 'Would make again' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('shows a planned meal already cooked, with its rating', async () => {
     const api = fakeApi({
       entries: [entry('1')],

@@ -15,6 +15,7 @@ export function FavoriteControl({
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
 
+  // Save a new rhythm (or none), with the controls disabled meanwhile.
   async function change(frequency: Frequency | null) {
     setBusy(true)
     setFailed(false)

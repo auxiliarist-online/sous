@@ -3468,3 +3468,29 @@ describe('favorite recipes (TYL-66)', () => {
     assert.deepEqual(rows[0].d.cooked, [])
   })
 })
+
+describe('weights round 3 (TYL-60)', () => {
+  it('fills weights USDA gives, and a hand weight for one wins', async () => {
+    const { rows } = await db.query(
+      `select name, grams_per_cup::float as cup, grams_per_each::float as each
+       from ingredients where name in
+         ('white wine', 'bouillon cubes', 'habanero peppers', 'croissants')
+       order by name`,
+    )
+    assert.deepEqual(rows, [
+      { name: 'bouillon cubes', cup: 124.8, each: 3.6 },
+      { name: 'croissants', cup: null, each: 57 },
+      // USDA's nearest is a 45 g chili; one habanero is about 9 g.
+      { name: 'habanero peppers', cup: 150, each: 9 },
+      { name: 'white wine', cup: 235.2, each: null },
+    ])
+    const { rows: units } = await db.query(
+      `select i.name, u.unit, u.grams::float as grams, u.source
+       from ingredient_units u join ingredients i on i.id = u.ingredient_id
+       where (i.name, u.unit) in (('cheese', 'slice'), ('sweet corn kernels', 'ear'))
+       order by i.name`,
+    )
+    assert.equal(units.length, 2)
+    assert.ok(units.every((u) => u.grams > 0 && u.source === 'usda'))
+  })
+})

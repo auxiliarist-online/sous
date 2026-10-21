@@ -80,6 +80,7 @@ export function varietyNotes(
   return notes
 }
 
+/** The day after a YYYY-MM-DD date, as YYYY-MM-DD (local, like isoDate). */
 function nextDay(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
   const next = new Date(y, m - 1, d + 1)

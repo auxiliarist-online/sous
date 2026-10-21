@@ -179,6 +179,8 @@ def build_units(fdc: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
 
 
 def build(fdc: Path) -> list[dict[str, str]]:
+    """Each ingredient in data/fdc_map.csv with its cup and item weights,
+    read from the USDA portions of the food it maps to."""
     ids = {r["description"]: r["fdc_id"] for r in csv.DictReader((fdc / "food.csv").open())}
     by_food: dict[str, list[dict[str, str]]] = {}
     for p in csv.DictReader((fdc / "food_portion.csv").open()):
@@ -210,6 +212,8 @@ def sql_text(s: str) -> str:
 
 
 def migration(rows: list[dict[str, str]], units: list[dict[str, str]]) -> str:
+    """The weights and units as a migration: weights fill only what's empty,
+    hand weights for one win over USDA's, and units are upserted."""
     # A hand weight for "one" corrects USDA's (a habanero isn't a medium
     # chili), so USDA's isn't used for those.
     hand_each = {u["ingredient"] for u in units if u["unit"] == "each" and u["source"] == "hand"}

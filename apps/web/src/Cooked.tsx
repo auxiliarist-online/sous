@@ -43,6 +43,7 @@ export function CookedButton({
     onChange?.(next)
   }
 
+  // Do one save, with the controls disabled meanwhile and a message if it fails.
   async function run(action: () => Promise<void>) {
     setBusy(true)
     setFailed(false)
@@ -55,11 +56,13 @@ export function CookedButton({
     }
   }
 
+  // Record the meal as cooked.
   const mark = () =>
     run(async () =>
       update(await api.markCooked({ recipeId, planEntryId, cookedOn, scale })),
     )
 
+  // Set a rating, or clear it by tapping the same one again.
   const rate = (rating: Rating) =>
     run(async () => {
       const next = cooked!.rating === rating ? null : rating
@@ -67,6 +70,7 @@ export function CookedButton({
       update({ ...cooked!, rating: next })
     })
 
+  // Save the note (an empty one clears it) and close the field.
   const saveNote = (e: FormEvent) => {
     e.preventDefault()
     void run(async () => {
@@ -76,12 +80,14 @@ export function CookedButton({
     })
   }
 
+  // Make the recipe a favorite, after a ❤️ (TYL-66).
   const favorite = () =>
     run(async () => {
       await api.addFavorite(recipeId)
       setFavorited(true)
     })
 
+  // Take the "cooked" back, rating and note with it.
   const undo = () =>
     run(async () => {
       await api.undoCooked(cooked!.id)

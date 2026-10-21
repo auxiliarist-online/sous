@@ -80,8 +80,9 @@ export interface PlanApi extends CookedApi {
 export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const [entries, setEntries] = useState<PlanEntry[] | null>(null)
   const [cost, setCost] = useState<PlanCost | 'error' | null>(null)
-  // What's been cooked, by plan entry (TYL-68).
-  const [cooked, setCooked] = useState<Record<string, Cooked>>({})
+  // What's been cooked, by plan entry (TYL-68); null until it's loaded, so a
+  // cooked meal never shows "Cooked it" first.
+  const [cooked, setCooked] = useState<Record<string, Cooked> | null>(null)
   const [failed, setFailed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -101,7 +102,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
         // Extra: the plan works without knowing what was cooked.
         api.cookedEntries(planned.map((e) => e.id)).then(
           (c) => live && setCooked(c),
-          () => {},
+          () => live && setCooked({}),
         )
         // The cost comes from the API; the plan works without it.
         api.planCost(week).then(
@@ -241,10 +242,10 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
                     <Entry
                       key={e.id}
                       entry={e}
-                      cooked={cooked[e.id] ?? null}
+                      cooked={cooked ? (cooked[e.id] ?? null) : undefined}
                       onCooked={(c) =>
                         setCooked((all) => {
-                          const next = { ...all }
+                          const next = { ...(all ?? {}) }
                           if (c) next[e.id] = c
                           else delete next[e.id]
                           return next
@@ -664,8 +665,9 @@ function Entry({
   onRemove,
 }: {
   entry: PlanEntry
-  /** Whether it's been cooked, with the rating and note (TYL-68). */
-  cooked: Cooked | null
+  /** Whether it's been cooked, with the rating and note (TYL-68); undefined
+   *  while that's loading. */
+  cooked: Cooked | null | undefined
   onCooked: (cooked: Cooked | null) => void
   /** In a week that's over: move a meal that wasn't cooked to this week. */
   onMoveOn: (() => void) | null
@@ -747,17 +749,19 @@ function Entry({
           Remove
         </button>
       </div>
-      <CookedButton
-        api={api}
-        recipeId={entry.recipeId}
-        title={entry.title}
-        planEntryId={entry.id}
-        cookedOn={cookedOn(entry.day)}
-        scale={entry.scale}
-        cooked={cooked}
-        onChange={onCooked}
-      />
-      {onMoveOn && !cooked && (
+      {cooked !== undefined && (
+        <CookedButton
+          api={api}
+          recipeId={entry.recipeId}
+          title={entry.title}
+          planEntryId={entry.id}
+          cookedOn={cookedOn(entry.day)}
+          scale={entry.scale}
+          cooked={cooked}
+          onChange={onCooked}
+        />
+      )}
+      {onMoveOn && cooked === null && (
         <p className="small muted">
           Didn't make it?{' '}
           <button
