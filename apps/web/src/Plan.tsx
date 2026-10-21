@@ -791,6 +791,12 @@ function ChoiceRow({
       <>
         <p className="small">
           {where} {names}.
+          {!choice.fits && (
+            <span className="warning">
+              {' '}
+              None of these fit your diets or allergies.
+            </span>
+          )}
         </p>
         <div className="chips">
           {choice.options.map((o) => (

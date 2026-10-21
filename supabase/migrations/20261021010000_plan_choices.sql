@@ -145,3 +145,22 @@ begin
   return v_result;
 end
 $$;
+
+-- Save one choice for a week, merged into the plan's others in one statement,
+-- so two devices saving at once don't lose each other's choice. Runs as the
+-- user: row-level security keeps it to their own plan.
+create function public.set_plan_choice(p_week date, p_key text, p_ingredient uuid)
+returns void
+language plpgsql security invoker as $$
+begin
+  update public.meal_plans
+  set choices = choices || jsonb_build_object(p_key, p_ingredient::text)
+  where user_id = (select auth.uid()) and week_start = p_week;
+  if not found then
+    raise exception 'No plan for that week' using errcode = 'P0002';
+  end if;
+end
+$$;
+
+revoke execute on function public.set_plan_choice(date, text, uuid) from public, anon;
+grant execute on function public.set_plan_choice(date, text, uuid) to authenticated;

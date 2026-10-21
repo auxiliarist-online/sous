@@ -2,7 +2,8 @@
 milk". Each such line is settled, in order, by:
 
 1. diet: options that break the user's diets, allergies, exclusions or
-   dislikes are dropped; if one is left, it's used (a vegan gets almond milk);
+   dislikes are dropped; if one is left, it's used (a vegan gets almond milk).
+   If none is left, only the user's own choice settles it;
 2. choice: what the user picked for these options this week;
 3. on hand: an option marked "have" in the pantry, since it costs nothing;
 4. needed: an option another recipe in the week needs on its own, since it's
@@ -21,6 +22,8 @@ Reason = Literal["diet", "chosen", "on_hand", "needed", "pending"]
 
 @dataclass
 class Option:
+    """One ingredient an "or" line offers, and what buying it adds."""
+
     ingredient_id: str
     name: str
     # What buying this option adds to the week, against not buying either.
@@ -41,6 +44,9 @@ class Choice:
     recipes: int = 0
     # The recipes' own wording, for showing which line this is.
     lines: list[str] = field(default_factory=list)
+    # False when no option fits the user's rules: the options shown are all
+    # of them, and only the user's choice settles it.
+    fits: bool = True
 
 
 def _fits(info: dict[str, Any], rules: dict[str, Any]) -> bool:
@@ -103,11 +109,18 @@ def settle(
                     next((ln for ln in group if ln.get("ingredient_id") == pick), group[0])
                 )
                 continue
-            fitting = [o for o in options if _fits(info[o], rules)] or options
+            fitting = [o for o in options if _fits(info[o], rules)]
+            # None fits (a recipe planned despite the warning, TYL-85): only
+            # the user's own choice settles it, never the pantry or the week.
+            fits = bool(fitting)
+            offered = fitting or options
             key = ",".join(sorted(options))
             chosen: str | None
             if force is not None and key in force:
                 chosen, reason = force[key] or None, "chosen"
+            elif not fits:
+                chosen = saved.get(key) if saved.get(key) in options else None
+                reason = "chosen" if chosen else "pending"
             elif len(fitting) == 1:
                 chosen, reason = fitting[0], "diet"
             elif saved.get(key) in fitting:
@@ -126,9 +139,10 @@ def settle(
                     key,
                     Choice(
                         key=key,
-                        options=[Option(o, info[o].get("name") or o) for o in fitting],
+                        options=[Option(o, info[o].get("name") or o) for o in offered],
                         chosen=chosen,
                         reason=reason,  # type: ignore[arg-type]
+                        fits=fits,
                     ),
                 )
                 choice.recipes += 1

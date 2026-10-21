@@ -468,6 +468,7 @@ function fakeApi({
 
 const MILKS = {
   key: 'almond,milk',
+  fits: true,
   options: [
     { ingredientId: 'almond', name: 'almond milk', cents: 349 },
     { ingredientId: 'milk', name: 'milk', cents: 429 },
@@ -508,22 +509,15 @@ describe('choices (TYL-98)', () => {
     ])
   })
 
-  it('saves a choice next to the week’s others', async () => {
-    const eq = vi.fn(async () => ({ error: null }))
-    const update = vi.fn(() => ({ eq }))
-    const maybeSingle = vi.fn(async () => ({
-      data: { id: 'plan-1', choices: { 'a,b': 'a' } },
-      error: null,
-    }))
-    const select = vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle })) }))
-    const db = {
-      from: vi.fn(() => ({ select, update })),
-    } as unknown as SupabaseClient
+  it('saves a choice in one merge, in the database', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: null }))
+    const db = { rpc } as unknown as SupabaseClient
     await saveChoice(db, WEEK, 'almond,milk', 'milk')
-    expect(update).toHaveBeenCalledWith({
-      choices: { 'a,b': 'a', 'almond,milk': 'milk' },
+    expect(rpc).toHaveBeenCalledWith('set_plan_choice', {
+      p_week: WEEK,
+      p_key: 'almond,milk',
+      p_ingredient: 'milk',
     })
-    expect(eq).toHaveBeenCalledWith('id', 'plan-1')
   })
 
   it('asks which to buy, with what each adds, and saves the answer', async () => {
@@ -572,6 +566,21 @@ describe('choices (TYL-98)', () => {
       screen.getByRole('button', { name: 'Use almond milk instead (+$3.49)' }),
     )
     expect(api.saveChoice).toHaveBeenCalledWith(WEEK, 'almond,milk', 'almond')
+  })
+
+  it('warns when none of the options fits', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [{ ...MILKS, chosen: null, reason: 'pending', fits: false }],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByText(/None of these fit your diets or allergies/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'milk +$4.29' })).toBeEnabled()
   })
 
   it('uses what’s on hand', async () => {

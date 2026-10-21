@@ -449,6 +449,7 @@ describe('ListPage', () => {
             chosen: null,
             reason: 'pending' as const,
             recipes: 1,
+            fits: true,
           },
         ],
       })),

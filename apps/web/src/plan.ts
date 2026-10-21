@@ -293,6 +293,9 @@ export interface PlanChoice {
   reason: 'diet' | 'chosen' | 'on_hand' | 'needed' | 'pending'
   /** How many planned recipes offer these options. */
   recipes: number
+  /** False when none of the options fits the user's diets or allergies:
+   *  all of them are shown, and only the user's choice settles it. */
+  fits: boolean
 }
 
 export interface PlanCost {
@@ -367,6 +370,7 @@ export async function planCost(
       chosen: string | null
       reason: PlanChoice['reason']
       recipes: number
+      fits?: boolean
     }[]
   }
   return {
@@ -414,32 +418,27 @@ export async function planCost(
       chosen: c.chosen,
       reason: c.reason,
       recipes: c.recipes,
+      fits: c.fits ?? true,
     })),
   }
 }
 
 /** Save which option of an "or" line the user buys this week (TYL-98). One
- *  choice covers every recipe offering the same options. The plan's choices
- *  are read and written back, under row-level security (their own plan). */
+ *  choice covers every recipe offering the same options. Merged into the
+ *  week's other choices in the database, so saves from two devices don't
+ *  undo each other; row-level security keeps it to the user's own plan. */
 export async function saveChoice(
   db: SupabaseClient,
   weekStart: string,
   key: string,
   ingredientId: string,
 ): Promise<void> {
-  const { data, error } = await db
-    .from('meal_plans')
-    .select('id, choices')
-    .eq('week_start', weekStart)
-    .maybeSingle()
+  const { error } = await db.rpc('set_plan_choice', {
+    p_week: weekStart,
+    p_key: key,
+    p_ingredient: ingredientId,
+  })
   if (error) throw error
-  if (!data) throw new Error('No plan for that week')
-  const plan = data as { id: string; choices: Record<string, string> | null }
-  const { error: saveError } = await db
-    .from('meal_plans')
-    .update({ choices: { ...(plan.choices ?? {}), [key]: ingredientId } })
-    .eq('id', plan.id)
-  if (saveError) throw saveError
 }
 
 /** What adding a recipe at full size would add to the week (TYL-30). */

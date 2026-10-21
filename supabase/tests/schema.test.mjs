@@ -1921,12 +1921,14 @@ describe('buying: packages, recipe sizes and the pantry', () => {
         'insert into user_disliked_ingredients (user_id, ingredient_id) values ($1, $2)',
         [USER, almond],
       )
-      // The user saves their choice on their own plan.
-      await db.query(
-        `update meal_plans set choices = jsonb_build_object($2::text, $3::text)
-         where user_id = $1 and week_start = '2026-10-12'`,
-        [USER, [almond, milk].sort().join(','), milk],
-      )
+      // The user saves their choice on their own plan, merged with others.
+      await db.query("select set_plan_choice('2026-10-12', 'x,y', $1)", [
+        almond,
+      ])
+      await db.query("select set_plan_choice('2026-10-12', $1, $2)", [
+        [almond, milk].sort().join(','),
+        milk,
+      ])
     })
     const inputs = await as('service_role', null, async () => {
       const { rows } = await db.query(
@@ -1947,8 +1949,22 @@ describe('buying: packages, recipe sizes and the pantry', () => {
     assert.ok(inputs.ingredients[milk].contains.includes('dairy'))
     assert.equal(inputs.ingredients[almond].disliked, true)
     assert.deepEqual(inputs.choices, {
+      'x,y': almond,
       [[almond, milk].sort().join(',')]: milk,
     })
+    // Only for a plan of their own, and not for anyone signed out.
+    await assert.rejects(
+      as('authenticated', ALICE, () =>
+        db.query("select set_plan_choice('2026-10-12', 'x,y', $1)", [milk]),
+      ),
+      /No plan for that week/,
+    )
+    await assert.rejects(
+      as('anon', null, () =>
+        db.query("select set_plan_choice('2026-10-12', 'x,y', $1)", [milk]),
+      ),
+      /permission denied/,
+    )
     // Choices are a map, and another user can't change them.
     await assert.rejects(
       as('authenticated', USER, () =>

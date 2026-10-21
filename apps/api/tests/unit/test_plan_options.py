@@ -172,6 +172,18 @@ class TestSettle:
         )
         assert (cost.choices[0].chosen, cost.choices[0].reason) == (ALMOND, "diet")
 
+    def test_when_no_option_fits_only_the_users_choice_settles_it(self) -> None:
+        rules = {"excludes": ["dairy"], "allergens": ["tree_nut"]}
+        # Not the pantry, nor another recipe that needs one of them.
+        week = inputs(entry("a", either()), entry("b", only(MILK)), rules=rules)
+        week["ingredients"] = {**INGREDIENTS, ALMOND: {**INGREDIENTS[ALMOND], "pantry": "have"}}
+        (choice,) = plan_cost(week, on=MONDAY).choices
+        assert (choice.chosen, choice.reason, choice.fits) == (None, "pending", False)
+        assert [o.ingredient_id for o in choice.options] == [ALMOND, MILK]
+        # The user can still choose, knowing it doesn't fit.
+        chosen = plan_cost({**week, "choices": {KEY: ALMOND}}, on=MONDAY).choices[0]
+        assert (chosen.chosen, chosen.reason, chosen.fits) == (ALMOND, "chosen", False)
+
     def test_lines_without_options_are_left_alone(self) -> None:
         cost = plan_cost(inputs(entry("a", only(RICE))), on=MONDAY)
         assert cost.choices == []
