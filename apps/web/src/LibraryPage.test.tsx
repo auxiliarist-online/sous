@@ -13,6 +13,7 @@ const DAL: SavedRecipe = {
   ingredients: ['red lentils', 'spinach'],
   tags: [],
   cuisines: [],
+  favorite: null,
   totalMinutes: 35,
   savedAt: '2026-10-09T00:00:00Z',
   diets: [
