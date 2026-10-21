@@ -32,9 +32,12 @@ class FetchError(Exception):
     """A page we can't import. `code` is stable for clients; the message is user-facing."""
 
     def __init__(self, code: str, message: str) -> None:
+        """The error's code and message; fetch_page fills in `url` as it raises."""
         super().__init__(message)
         self.code = code
         self.message = message
+        # The address that failed: after redirects, not always the one asked for.
+        self.url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +213,9 @@ async def fetch_page(
             except httpx.HTTPError as e:
                 raise FetchError("unreachable", "We couldn't reach that site.") from e
         raise FetchError("unreachable", "That link redirects too many times.")
+    except FetchError as e:
+        e.url = e.url or url
+        raise
     finally:
         if own_client:
             await client.aclose()

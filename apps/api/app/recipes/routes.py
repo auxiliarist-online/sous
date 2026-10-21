@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.auth import current_user_id
+from app.errors import report_event
 from app.recipes.extract import (
     MAX_LD_BLOCKS,
     MAX_LD_CHARS,
@@ -35,7 +36,7 @@ from app.recipes.extract import (
 from app.recipes.fetch import FetchError, fetch_page
 from app.recipes.ingredients import parse_line
 from app.recipes.photos import PhotoError, read_pages, recipe_from_pages, record_read
-from app.recipes.store import NotYours, save_manual, save_recipe
+from app.recipes.store import NotYours, StoreError, save_manual, save_recipe
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -62,21 +63,46 @@ class ImportResult(BaseModel):
     status: str
 
 
+async def _import_failed(reason: str, url: str) -> None:
+    """Count a failed import by reason and site (TYL-74), so sites that block
+    Sous show up as a list. Only the site's domain is sent: not the page, nor
+    who tried. An address that isn't valid sends no domain (it may be anything
+    the user typed)."""
+    props = {"reason": reason}
+    if reason != "invalid_url":
+        props["domain"] = domain_of(url)
+    await report_event("import_failed", props)
+
+
 @router.post("/import", status_code=status.HTTP_200_OK)
 async def import_recipe(
     body: ImportRequest, user_id: Annotated[str, Depends(current_user_id)]
 ) -> ImportResult:
+    """Fetch a recipe page by its link, read it, and save it for the user. A
+    page we can't import answers 422 with a code and a message; either kind of
+    failure is counted by reason and site (TYL-74)."""
     url = body.url.strip()
     if "://" not in url:
         url = f"https://{url}"
+    at = url  # where it failed: the page's own address, once fetched
     try:
         page = await fetch_page(url)
+        at = page.url
         draft = extract_recipe(page.html, page.url)
     except FetchError as e:
+        # The site that turned us away, after any redirect.
+        await _import_failed(e.code, e.url or at)
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, {"code": e.code, "message": e.message}
         ) from e
-    return _result(draft, await save_recipe(draft, user_id))
+    try:
+        saved = await save_recipe(draft, user_id)
+    except StoreError:
+        # Still a 500 (and reported as an error); counted too, so a save that
+        # keeps failing for one site shows up next to the sites that block us.
+        await _import_failed("save_failed", draft.source_url)
+        raise
+    return _result(draft, saved)
 
 
 @router.post("/import-page", status_code=status.HTTP_200_OK)

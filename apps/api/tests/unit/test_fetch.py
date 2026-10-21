@@ -47,6 +47,19 @@ class TestFetch:
         page = run(site(pages=pages), "https://example-blog.com/old/")
         assert page.url == "https://example-blog.com/tacos/"
 
+    def test_a_failure_names_the_address_that_failed(self) -> None:
+        # Redirected to another site that blocks us: that site is the one named.
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/robots.txt":
+                return httpx.Response(200, text="")
+            if request.url.host == "example-blog.com":
+                return httpx.Response(301, headers={"location": "https://cdn.example/tacos/"})
+            return httpx.Response(403)
+
+        with pytest.raises(FetchError) as err:
+            run(handler, "https://example-blog.com/old/")
+        assert (err.value.code, err.value.url) == ("blocked", "https://cdn.example/tacos/")
+
     def test_obeys_robots_txt(self) -> None:
         robots = "User-agent: SousBot\nDisallow: /\n"
         with pytest.raises(FetchError) as err:
