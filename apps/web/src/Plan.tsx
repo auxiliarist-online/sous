@@ -28,6 +28,7 @@ import {
 import { CookedButton } from './Cooked.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
 import { Link } from './router.tsx'
+import { isDue, RECENT_WEEKS, varietyNotes, type Recent } from './variety.ts'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
 export interface PlanApi extends CookedApi {
@@ -64,6 +65,8 @@ export interface PlanApi extends CookedApi {
   ): Promise<void>
   /** Back to the usual price at a store (or anywhere, with null). */
   clearMyPrice(ingredientId: string, storeId: string | null): Promise<void>
+  /** Recipes planned or cooked lately, by how many weeks ago (TYL-66). */
+  recentRecipes(weekStart: string, weeks: number): Promise<Recent>
   /** Which option of an "or" line to buy this week (TYL-98). */
   saveChoice(
     weekStart: string,
@@ -210,6 +213,8 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
               )
             }}
           />
+
+          <VarietyNotes entries={entries} />
 
           {entries.length === 0 && (
             <div className="empty">
@@ -790,6 +795,27 @@ function Entry({
   )
 }
 
+/** Why a suggestion sits where it does (TYL-66): a favorite that's due, or
+ *  a recipe had lately. */
+function lately(r: SavedRecipe, recent: Recent): string | null {
+  const ago = recent[r.id]
+  if (r.favorite && isDue(r.favorite, ago)) return '♥ due again'
+  if (ago === undefined || ago >= RECENT_WEEKS) return null
+  if (ago === 0) return 'already this week'
+  return ago === 1 ? 'had last week' : `had ${ago} weeks ago`
+}
+
+/** What the week repeats (TYL-66), said gently; the plan stays the user's. */
+function VarietyNotes({ entries }: { entries: PlanEntry[] }) {
+  const notes = varietyNotes(entries)
+  if (notes.length === 0) return null
+  return (
+    <p className="small notice" aria-label="Variety">
+      For variety: {notes.join('; ')}.
+    </p>
+  )
+}
+
 /** The day a planned meal counts as cooked: its planned day, unless that's
  *  still ahead (cooked early), or today for "any day". */
 function cookedOn(day: string | null): string {
@@ -943,6 +969,9 @@ function AddRecipe({
   const [fits, setFits] = useState<Record<string, Fit>>({})
   const [added, setAdded] = useState<AddedCosts | null>(null)
   const [favorites, setFavorites] = useState<string[]>([])
+  // Planned or cooked lately (TYL-66): favorites due come first, the rest
+  // of the recent ones last.
+  const [recent, setRecent] = useState<Recent>({})
   const [query, setQuery] = useState('')
   const [failed, setFailed] = useState(false)
   // A recipe waiting for "Add anyway": it breaks the user's rules, or the budget.
@@ -969,6 +998,19 @@ function AddRecipe({
     }
   }, [api])
 
+  // Ordering only, so it can fail quietly. Long enough back for a monthly
+  // favorite's rhythm.
+  useEffect(() => {
+    let live = true
+    api.recentRecipes(week, 5).then(
+      (r) => live && setRecent(r),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api, week, version])
+
   // What each would add; without it the list still works, just without costs.
   useEffect(() => {
     if (!recipes?.length) return
@@ -994,7 +1036,16 @@ function AddRecipe({
   }
   if (!recipes) return null
 
-  const shown = filterRecipes(recipes, { ...NO_FILTER, query })
+  // A favorite that's due first, one planned or cooked lately last.
+  const place = (r: SavedRecipe) =>
+    r.favorite && isDue(r.favorite, recent[r.id])
+      ? 0
+      : recent[r.id] !== undefined && recent[r.id] < RECENT_WEEKS
+        ? 2
+        : 1
+  const shown = filterRecipes(recipes, { ...NO_FILTER, query }).sort(
+    (a, b) => place(a) - place(b),
+  )
   const budget = added?.budgetCents ?? null
   // How far over budget the week would go with this recipe; 0 when it fits.
   const overBy = (r: SavedRecipe) => {
@@ -1062,6 +1113,12 @@ function AddRecipe({
                       >
                         {' '}
                         *
+                      </span>
+                    )}
+                    {lately(r, recent) && (
+                      <span className="muted small">
+                        {' '}
+                        · {lately(r, recent)}
                       </span>
                     )}
                   </span>

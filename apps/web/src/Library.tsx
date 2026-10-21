@@ -591,6 +591,14 @@ function Filters({
         >
           Under 30 min
         </button>
+        <button
+          type="button"
+          className="chip"
+          aria-pressed={filter.favorites}
+          onClick={() => onChange({ ...filter, favorites: !filter.favorites })}
+        >
+          ♥ Favorites
+        </button>
         {tags.map((t) => (
           <button
             key={`tag-${t}`}
@@ -624,6 +632,12 @@ function RecipeList({
       {recipes.map((r) => (
         <li key={r.id}>
           <Link to={`/recipe/${r.id}`}>{r.title}</Link>
+          {r.favorite && (
+            <span className="heart-mark" aria-label="a favorite">
+              {' '}
+              ♥
+            </span>
+          )}
           <span className="muted small">
             {sourceLabel(r.sourceName, r.sourceUrl, r.sourceNote)}
             {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}

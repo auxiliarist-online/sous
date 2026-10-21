@@ -51,6 +51,7 @@ import {
 } from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { History, type HistoryApi } from './History.tsx'
+import { addFavorite, recentRecipes, setFavorite } from './favorites.ts'
 import {
   cookedEntries,
   cookedSummary,
@@ -142,6 +143,9 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     undoCooked: (id) => undoCooked(db, id),
     cookedSummary: (id) => cookedSummary(db, id),
     cookingHistory: () => cookingHistory(db),
+    addFavorite: (id) => addFavorite(db, id),
+    setFavorite: (id, frequency) => setFavorite(db, id, frequency),
+    recentRecipes: (week, weeks) => recentRecipes(db, week, weeks),
     favoriteCuisines: () =>
       loadPreferences(db, userId).then((p) => p.favoriteCuisines),
     recipeFits: (ids) => recipeFits(db, ids),

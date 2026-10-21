@@ -44,6 +44,7 @@ const BURRITOS: RecipeDetail = {
   license: null,
   saved: true,
   tags: [],
+  favorite: null,
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,
@@ -117,6 +118,18 @@ describe('RecipePage', () => {
     ),
     setTags: vi.fn(async (_id: string, _tags: string[]) => {}),
     ...fakeCookedApi(),
+  })
+
+  it('hearts the recipe and keeps how often it comes back (TYL-66)', async () => {
+    const a = api(BURRITOS)
+    render(<RecipePage id={BURRITOS.id} api={a} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Favorite Bean burritos' }),
+    )
+    expect(a.setFavorite).toHaveBeenCalledWith(BURRITOS.id, 'biweekly')
+    expect(
+      await screen.findByLabelText('How often Bean burritos comes back'),
+    ).toHaveValue('biweekly')
   })
 
   it('shows how often it was cooked and the last note (TYL-68)', async () => {
@@ -592,6 +605,7 @@ describe('helpers', () => {
     ingredients: [],
     tags: [],
     cuisines: [],
+    favorite: null,
     ...over,
   })
 

@@ -36,6 +36,7 @@ export function CookedButton({
   const [failed, setFailed] = useState(false)
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState(initial?.note ?? '')
+  const [favorited, setFavorited] = useState(false)
 
   function update(next: Cooked | null) {
     setCooked(next)
@@ -74,6 +75,12 @@ export function CookedButton({
       setNoting(false)
     })
   }
+
+  const favorite = () =>
+    run(async () => {
+      await api.addFavorite(recipeId)
+      setFavorited(true)
+    })
 
   const undo = () =>
     run(async () => {
@@ -122,6 +129,19 @@ export function CookedButton({
           </button>
         ))}
       </span>
+      {cooked.rating === 'love' &&
+        (favorited ? (
+          <span className="small muted">In your favorites</span>
+        ) : (
+          <button
+            type="button"
+            className="link small"
+            disabled={busy}
+            onClick={() => void favorite()}
+          >
+            Add to favorites
+          </button>
+        ))}
       {!noting && (
         <button
           type="button"

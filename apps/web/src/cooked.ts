@@ -48,6 +48,8 @@ export interface CookedApi {
   ): Promise<void>
   /** Take back a "cooked" tapped by mistake. */
   undoCooked(id: string): Promise<void>
+  /** Make it a favorite unless it already is: what a ❤️ offers (TYL-66). */
+  addFavorite(recipeId: string): Promise<void>
 }
 
 interface Row {

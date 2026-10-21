@@ -3,6 +3,8 @@ import { DietChips } from './Library.tsx'
 import { cleanTag, dietLabels, sourceLabel } from './library.ts'
 import { navigate } from './navigation.ts'
 import { CookedButton } from './Cooked.tsx'
+import { FavoriteControl } from './Favorite.tsx'
+import type { Frequency } from './variety.ts'
 import { shortDate, type CookedApi, type CookedSummary } from './cooked.ts'
 import { isoDate, weekOf, type Fit, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
@@ -12,6 +14,8 @@ import { ingredientLines, type RecipeDetail } from './sous.ts'
 export interface RecipePageApi extends CookedApi {
   /** How often the user cooked it, when last, and their latest note (TYL-68). */
   cookedSummary(recipeId: string): Promise<CookedSummary>
+  /** Make it a favorite with how often it comes back, or (null) stop. */
+  setFavorite(recipeId: string, frequency: Frequency | null): Promise<void>
   recipe(id: string): Promise<RecipeDetail | null>
   remove(recipeId: string): Promise<void>
   saveToLibrary(recipeId: string): Promise<void>
@@ -138,7 +142,17 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       <Link to="/recipes" className="small">
         ← Your recipes
       </Link>
-      <h2>{recipe.title}</h2>
+      <div className="recipe-title">
+        <h2>{recipe.title}</h2>
+        <FavoriteControl
+          title={recipe.title}
+          favorite={recipe.favorite}
+          onChange={async (frequency) => {
+            await api.setFavorite(recipe.id, frequency)
+            setRecipe({ ...recipe, favorite: frequency })
+          }}
+        />
+      </div>
       {history?.note && (
         <p className="small cooked-note-shown">
           Your note from {shortDate(history.note.on)}: {history.note.text}

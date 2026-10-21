@@ -3421,3 +3421,50 @@ describe('cooked meals (TYL-68)', () => {
     ])
   })
 })
+
+describe('favorite recipes (TYL-66)', () => {
+  const FAN = '00000000-0000-0000-0000-0000000000d3'
+
+  it('keeps favorites and how often, private to the user', async () => {
+    await db.query('insert into auth.users (id) values ($1)', [FAN])
+    const stew = await recipe('Favorite stew', [])
+    const hidden = await recipe('Hidden', [], {
+      visibility: 'private',
+      addedBy: ALICE,
+    })
+    await as('authenticated', FAN, () =>
+      db.query(
+        "insert into user_favorite_recipes (recipe_id, frequency) values ($1, 'weekly')",
+        [stew],
+      ),
+    )
+    await assert.rejects(
+      as('authenticated', FAN, () =>
+        db.query('insert into user_favorite_recipes (recipe_id) values ($1)', [
+          hidden,
+        ]),
+      ),
+      /row-level security/,
+    )
+    await assert.rejects(
+      as('authenticated', FAN, () =>
+        db.query(
+          "update user_favorite_recipes set frequency = 'daily' where recipe_id = $1",
+          [stew],
+        ),
+      ),
+      /check constraint/,
+    )
+    const { rows: seen } = await as('authenticated', BOB, () =>
+      db.query('select * from user_favorite_recipes'),
+    )
+    assert.equal(seen.length, 0)
+    const { rows } = await as('authenticated', FAN, () =>
+      db.query('select export_my_data() as d'),
+    )
+    assert.deepEqual(rows[0].d.favorite_recipes, [
+      { recipe: 'Favorite stew', how_often: 'weekly' },
+    ])
+    assert.deepEqual(rows[0].d.cooked, [])
+  })
+})

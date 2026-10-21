@@ -1,6 +1,7 @@
 // Importing recipes and reading the user's library (TYL-35, ADR 0002).
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { apiFetch } from './auth.ts'
+import type { Frequency } from './variety.ts'
 
 export interface ImportResult {
   recipe_id: string
@@ -29,6 +30,8 @@ export interface SavedRecipe {
   tags: string[]
   /** Cuisine slugs ("indian"), to prefer the user's favorites. */
   cuisines: string[]
+  /** How often it should come back, when it's a favorite (TYL-66). */
+  favorite: Frequency | null
 }
 
 /** A diet a recipe fits. `checks` lists ingredients whose brand decides it:
@@ -125,6 +128,7 @@ interface SavedRow {
       | null
     ingredients: { name: string | null }[] | null
     cuisines?: { cuisine_slug: string }[] | null
+    favorite?: { frequency: Frequency }[] | null
   } | null
 }
 
@@ -134,7 +138,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
   const { data, error } = await db
     .from('user_saved_recipes')
     .select(
-      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name), cuisines:recipe_cuisines(cuisine_slug))',
+      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name), cuisines:recipe_cuisines(cuisine_slug), favorite:user_favorite_recipes(frequency))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -157,6 +161,8 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
       ),
       tags: row.tags ?? [],
       cuisines: (row.recipe!.cuisines ?? []).map((c) => c.cuisine_slug),
+      // Row-level security shows only the user's own.
+      favorite: row.recipe!.favorite?.[0]?.frequency ?? null,
     }))
 }
 
@@ -323,6 +329,8 @@ export interface RecipeFilter {
   maxMinutes: number | null
   /** Every one of these of the user's own tags, ignoring case. */
   tags: string[]
+  /** Only the user's favorites (TYL-66). */
+  favorites: boolean
 }
 
 export const NO_FILTER: RecipeFilter = {
@@ -330,6 +338,7 @@ export const NO_FILTER: RecipeFilter = {
   diets: [],
   maxMinutes: null,
   tags: [],
+  favorites: false,
 }
 
 function words(text: string): string[] {
@@ -354,6 +363,7 @@ export function filterRecipes(
       return false
     const has = new Set(r.diets.map((d) => d.slug))
     if (!f.diets.every((d) => has.has(d))) return false
+    if (f.favorites && !r.favorite) return false
     const tagged = new Set(r.tags.map((t) => t.toLowerCase()))
     if (!f.tags.every((t) => tagged.has(t.toLowerCase()))) return false
     if (!terms.length) return true

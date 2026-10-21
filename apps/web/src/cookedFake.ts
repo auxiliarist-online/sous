@@ -1,11 +1,13 @@
 import { vi } from 'vitest'
 import type { Cooked, CookedApi, CookedSummary, HistoryItem } from './cooked.ts'
+import type { Frequency, Recent } from './variety.ts'
 
 /** A stand-in for the cooked-meals API in tests (TYL-68): it remembers what's
  *  marked, rated and undone, in memory. */
 export function fakeCookedApi(
   start: Cooked[] = [],
   history: HistoryItem[] = [],
+  recent: Recent = {},
 ) {
   let rows = [...start]
   let next = rows.length
@@ -52,5 +54,10 @@ export function fakeCookedApi(
       }
     }),
     cookingHistory: vi.fn(async () => history),
+    addFavorite: vi.fn(async (_recipeId: string) => {}),
+    setFavorite: vi.fn(
+      async (_recipeId: string, _frequency: Frequency | null) => {},
+    ),
+    recentRecipes: vi.fn(async (_week: string, _weeks: number) => recent),
   } satisfies CookedApi & Record<string, unknown>
 }

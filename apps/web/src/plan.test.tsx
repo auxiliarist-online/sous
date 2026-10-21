@@ -342,6 +342,7 @@ const saved = (
   ingredients: [],
   tags: [],
   cuisines,
+  favorite: null,
 })
 
 const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
@@ -352,6 +353,8 @@ const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
   recipeServings: 4,
   day: null,
   position: 0,
+  proteins: [],
+  cuisines: [],
   ...extra,
 })
 
@@ -364,6 +367,7 @@ const DETAIL: RecipeDetail = {
   license: null,
   saved: true,
   tags: [],
+  favorite: null,
   servings: 4,
   prepMinutes: null,
   cookMinutes: null,
@@ -502,6 +506,47 @@ describe('cooked on the plan (TYL-68)', () => {
       'true',
     )
     expect(api.cookedEntries).toHaveBeenCalledWith(['1'])
+  })
+})
+
+describe('variety (TYL-66)', () => {
+  it('notes when the week repeats a protein, gently', async () => {
+    const poultry = { proteins: ['poultry'] }
+    const api = fakeApi({
+      entries: [entry('1', poultry), entry('2', poultry), entry('3', poultry)],
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(await screen.findByLabelText('Variety')).toHaveTextContent(
+      'For variety: 3 dinners with poultry this week.',
+    )
+  })
+
+  it('puts favorites that are due first, and recipes had lately last', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      recipes: [
+        saved('lately', 'Had last week'),
+        saved('plain', 'Something else'),
+        { ...saved('fav', 'Favorite soup'), favorite: 'biweekly' },
+      ],
+      cooked: fakeCookedApi([], [], { lately: 1, fav: 3 }),
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const list = await screen.findByRole('list', {
+      name: 'Recipes you can add',
+    })
+    await waitFor(() =>
+      expect(
+        within(list)
+          .getAllByRole('listitem')
+          .map((li) => li.textContent),
+      ).toEqual([
+        expect.stringContaining('Favorite soup · ♥ due again'),
+        expect.stringContaining('Something else'),
+        expect.stringContaining('Had last week · had last week'),
+      ]),
+    )
+    expect(api.recentRecipes).toHaveBeenCalledWith(WEEK, 5)
   })
 })
 

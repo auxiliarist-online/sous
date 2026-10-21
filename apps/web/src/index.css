@@ -1111,3 +1111,26 @@ label.button {
 .home-meals li .cooked {
   display: flex;
 }
+
+/* Favorites (TYL-66). */
+.recipe-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.recipe-title h2 {
+  margin-right: auto;
+}
+
+.favorite {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.heart,
+.heart-mark {
+  color: var(--color-secondary);
+}
