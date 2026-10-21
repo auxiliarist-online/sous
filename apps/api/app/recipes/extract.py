@@ -191,6 +191,9 @@ def page_from_json_ld(url: str, blocks: list[str], site_name: str | None = None)
 
 
 def extract_recipe(page: str, url: str) -> RecipeDraft:
+    """Read a page's recipe into a draft to save: its fields, and its
+    ingredient lines numbered through the whole recipe, sections included.
+    Raises FetchError("not_a_recipe") when there's no recipe to read."""
     try:
         scraper = scrape_html(page, org_url=url, supported_only=False)
     except RecipeScrapersExceptions as e:

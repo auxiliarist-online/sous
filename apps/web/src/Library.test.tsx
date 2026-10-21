@@ -233,6 +233,19 @@ describe('Library', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it('shows other failures as they are, without the paste form', async () => {
+    const api = fakeApi()
+    api.save.mockRejectedValueOnce(new Error('Load failed'))
+    render(<Library api={api} />)
+    await userEvent.type(
+      screen.getByLabelText('Recipe link'),
+      'https://example-blog.com/tacos/',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Load failed')
+    expect(screen.queryByLabelText('Ingredients')).toBeNull()
+  })
+
   it('can save just the link when nothing is pasted', async () => {
     const api = fakeApi()
     api.save.mockRejectedValueOnce(new ImportError('blocked', 'Blocked.'))

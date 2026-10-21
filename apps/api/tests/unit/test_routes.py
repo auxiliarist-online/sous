@@ -10,7 +10,7 @@ from app.main import app
 from app.recipes import routes
 from app.recipes.extract import RecipeDraft, page_from_json_ld
 from app.recipes.fetch import FetchError, Page
-from app.recipes.store import NotYours
+from app.recipes.store import NotYours, StoreError
 from tests.helpers import RECIPE_LD, page_html
 
 
@@ -77,6 +77,26 @@ def test_a_failed_import_is_counted_by_reason_and_site(
     client.post("/recipes/import", json={"url": "example-blog.com/tacos/"})
     # Only the site: not the page, its query, or who tried.
     assert events == [("import_failed", {"reason": "blocked", "domain": "blocked.example"})]
+
+
+def test_a_failed_save_is_counted_and_still_fails(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events: list[tuple[str, dict[str, str]]] = []
+
+    async def fake_event(event: str, properties: dict[str, str]) -> None:
+        events.append((event, properties))
+
+    async def failing_save(draft: RecipeDraft, user_id: str, origin: str = "fetched") -> Any:
+        raise StoreError("import_recipe failed: 409")
+
+    monkeypatch.setattr(routes, "report_event", fake_event)
+    monkeypatch.setattr(routes, "save_recipe", failing_save)
+    resp = TestClient(app, raise_server_exceptions=False).post(
+        "/recipes/import", json={"url": "https://example-blog.com/tacos/"}
+    )
+    assert resp.status_code == 500
+    assert events == [("import_failed", {"reason": "save_failed", "domain": "example-blog.com"})]
 
 
 def test_import_requires_sign_in() -> None:

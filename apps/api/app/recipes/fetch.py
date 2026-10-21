@@ -35,6 +35,8 @@ class FetchError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+        # The address that failed: after redirects, not always the one asked for.
+        self.url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +212,9 @@ async def fetch_page(
             except httpx.HTTPError as e:
                 raise FetchError("unreachable", "We couldn't reach that site.") from e
         raise FetchError("unreachable", "That link redirects too many times.")
+    except FetchError as e:
+        e.url = e.url or url
+        raise
     finally:
         if own_client:
             await client.aclose()

@@ -103,6 +103,8 @@ export function Library({
     }
   }
 
+  // Save a recipe from its link. When the site turns Sous away, or the import
+  // fails on our side, offer to save it from pasted ingredients instead.
   async function save(link: string) {
     const target = link.trim()
     if (!target) return
@@ -115,18 +117,19 @@ export function Library({
       refresh()
     } catch (e) {
       const code = e instanceof ImportError ? e.code : 'error'
-      // A failure on our side (TYL-99) gets the same way out.
-      if (
-        code === 'blocked' ||
-        code === 'robots_disallowed' ||
-        code === 'error'
-      ) {
+      // A failure on our side (TYL-99) gets the same way out: only an
+      // ImportError the API answered with, not a network or other error.
+      const ours = e instanceof ImportError && code === 'error'
+      if (code === 'blocked' || code === 'robots_disallowed' || ours) {
         // Not a dead end: offer to save it from what the user can copy.
         setStatus({ state: 'idle' })
         setPaste({
           url: full,
           text: '',
-          reason: code === 'error' ? 'failed' : code,
+          reason:
+            code === 'blocked' || code === 'robots_disallowed'
+              ? code
+              : 'failed',
         })
         return
       }
