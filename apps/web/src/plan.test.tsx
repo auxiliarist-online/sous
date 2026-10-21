@@ -583,6 +583,20 @@ describe('choices (TYL-98)', () => {
     expect(screen.getByRole('button', { name: 'milk +$4.29' })).toBeEnabled()
   })
 
+  it('keeps the warning once a choice that doesn’t fit is made', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cost: {
+        ...COST,
+        choices: [{ ...MILKS, chosen: 'milk', reason: 'chosen', fits: false }],
+      },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByText(/doesn't fit your diets or allergies/),
+    ).toBeInTheDocument()
+  })
+
   it('uses what’s on hand', async () => {
     const api = fakeApi({
       entries: [entry('1')],

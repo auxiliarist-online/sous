@@ -821,6 +821,11 @@ function ChoiceRow({
     <p className="small">
       {where} {names}: using <strong>{used?.name}</strong>
       {REASONS[choice.reason]}{' '}
+      {!choice.fits && (
+        <span className="warning">
+          It doesn't fit your diets or allergies.{' '}
+        </span>
+      )}
       {others.map((o) => (
         <button
           key={o.ingredientId}
