@@ -1069,3 +1069,45 @@ label.button {
 .choices li + li {
   margin-top: 0.5rem;
 }
+
+/* "Cooked it" and its rating (TYL-68). */
+.cooked {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.cooked .chips {
+  gap: 0.25rem;
+}
+
+.cooked-note {
+  display: flex;
+  gap: 0.375rem;
+  flex: 1 1 100%;
+}
+
+.cooked-note input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cooked-note-shown {
+  border-left: 3px solid var(--color-secondary);
+  padding-left: 0.5rem;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+}
+
+.history-list li + li {
+  margin-top: 0.5rem;
+}
+
+.home-meals li .cooked {
+  display: flex;
+}

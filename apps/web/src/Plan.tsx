@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
 import {
   addDays,
+  isoDate,
   dayName,
   buyText,
   dollars,
@@ -24,10 +25,12 @@ import {
   type PlanEntry,
   type Scale,
 } from './plan.ts'
+import { CookedButton } from './Cooked.tsx'
+import type { Cooked, CookedApi } from './cooked.ts'
 import { Link } from './router.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
-export interface PlanApi {
+export interface PlanApi extends CookedApi {
   list(): Promise<SavedRecipe[]>
   recipe(id: string): Promise<RecipeDetail | null>
   plan(weekStart: string): Promise<PlanEntry[]>
@@ -74,6 +77,8 @@ export interface PlanApi {
 export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const [entries, setEntries] = useState<PlanEntry[] | null>(null)
   const [cost, setCost] = useState<PlanCost | 'error' | null>(null)
+  // What's been cooked, by plan entry (TYL-68).
+  const [cooked, setCooked] = useState<Record<string, Cooked>>({})
   const [failed, setFailed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -90,6 +95,11 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
         if (!live) return
         setEntries(planned)
         setFailed(false)
+        // Extra: the plan works without knowing what was cooked.
+        api.cookedEntries(planned.map((e) => e.id)).then(
+          (c) => live && setCooked(c),
+          () => {},
+        )
         // The cost comes from the API; the plan works without it.
         api.planCost(week).then(
           (c) => live && setCost(c),
@@ -226,6 +236,29 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
                     <Entry
                       key={e.id}
                       entry={e}
+                      cooked={cooked[e.id] ?? null}
+                      onCooked={(c) =>
+                        setCooked((all) => {
+                          const next = { ...all }
+                          if (c) next[e.id] = c
+                          else delete next[e.id]
+                          return next
+                        })
+                      }
+                      onMoveOn={
+                        week < thisWeek
+                          ? () =>
+                              void change(async () => {
+                                await api.addToPlan(
+                                  thisWeek,
+                                  e.recipeId,
+                                  e.scale,
+                                  null,
+                                )
+                                await api.removeEntry(e.id)
+                              }, "We couldn't move that. Try again.")
+                          : null
+                      }
                       cost={cost && cost !== 'error' ? cost : null}
                       days={days}
                       api={api}
@@ -615,6 +648,9 @@ function PriceForm({
  *  ingredients at the planned size on request. */
 function Entry({
   entry,
+  cooked,
+  onCooked,
+  onMoveOn,
   cost,
   days,
   api,
@@ -623,6 +659,11 @@ function Entry({
   onRemove,
 }: {
   entry: PlanEntry
+  /** Whether it's been cooked, with the rating and note (TYL-68). */
+  cooked: Cooked | null
+  onCooked: (cooked: Cooked | null) => void
+  /** In a week that's over: move a meal that wasn't cooked to this week. */
+  onMoveOn: (() => void) | null
   /** The week's cost, for this recipe's share of it (TYL-30). */
   cost: PlanCost | null
   days: string[]
@@ -701,6 +742,29 @@ function Entry({
           Remove
         </button>
       </div>
+      <CookedButton
+        api={api}
+        recipeId={entry.recipeId}
+        title={entry.title}
+        planEntryId={entry.id}
+        cookedOn={cookedOn(entry.day)}
+        scale={entry.scale}
+        cooked={cooked}
+        onChange={onCooked}
+      />
+      {onMoveOn && !cooked && (
+        <p className="small muted">
+          Didn't make it?{' '}
+          <button
+            type="button"
+            className="link"
+            disabled={busy}
+            onClick={onMoveOn}
+          >
+            Move to this week
+          </button>
+        </p>
+      )}
       <details onToggle={(e) => open(e.currentTarget.open)}>
         <summary className="small">
           Ingredients
@@ -724,6 +788,13 @@ function Entry({
       </details>
     </li>
   )
+}
+
+/** The day a planned meal counts as cooked: its planned day, unless that's
+ *  still ahead (cooked early), or today for "any day". */
+function cookedOn(day: string | null): string {
+  const today = isoDate(new Date())
+  return day && day <= today ? day : today
 }
 
 /** The week's "or" lines (TYL-98): ones waiting for the user to choose,

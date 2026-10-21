@@ -50,6 +50,15 @@ import {
   syncList,
 } from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
+import { History, type HistoryApi } from './History.tsx'
+import {
+  cookedEntries,
+  cookedSummary,
+  cookingHistory,
+  markCooked,
+  rateCooked,
+  undoCooked,
+} from './cooked.ts'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
 import { Feedback, type FeedbackApi } from './Feedback.tsx'
 import { sendFeedback } from './feedback.ts'
@@ -94,7 +103,8 @@ export type SousApi = LibraryApi &
   PantryApi &
   PlanApi &
   BrowseApi &
-  FeedbackApi
+  FeedbackApi &
+  HistoryApi
 
 /** The real API for a signed-in session: Supabase under the user's
  *  row-level security, and the Sous API for what needs the server. */
@@ -126,6 +136,12 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
       setMyPrice(db, id, store, cents, basis),
     clearMyPrice: (id, store) => clearMyPrice(db, id, store),
     saveChoice: (week, key, id) => saveChoice(db, week, key, id),
+    cookedEntries: (ids) => cookedEntries(db, ids),
+    markCooked: (meal) => markCooked(db, meal),
+    rateCooked: (id, patch) => rateCooked(db, id, patch),
+    undoCooked: (id) => undoCooked(db, id),
+    cookedSummary: (id) => cookedSummary(db, id),
+    cookingHistory: () => cookingHistory(db),
     favoriteCuisines: () =>
       loadPreferences(db, userId).then((p) => p.favoriteCuisines),
     recipeFits: (ids) => recipeFits(db, ids),
@@ -326,6 +342,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
             <ListPage key={week} api={api} week={week} user={session.user.id} />
           )}
           {at.page === 'pantry' && <PantryPage api={api} />}
+          {at.page === 'history' && <History api={api} />}
           {at.page === 'settings' && (
             <Settings
               api={api}

@@ -2960,6 +2960,10 @@ describe('your store and your account (TYL-19, TYL-74)', () => {
     )
     await as('authenticated', FRAN, async () => {
       await db.query('select add_to_meal_plan($1, $2, 1)', ['2026-10-12', own])
+      await db.query(
+        "insert into cooked_meals (recipe_id, rating, note) values ($1, 'love', 'more salt')",
+        [own],
+      )
       await db.query('select delete_my_account()')
     })
     const { rows: tables } = await db.query(
@@ -3320,5 +3324,79 @@ describe('bug reports', () => {
       ),
       /check constraint/,
     )
+  })
+})
+
+describe('cooked meals (TYL-68)', () => {
+  const COOK = '00000000-0000-0000-0000-0000000000d1'
+  const OTHER = '00000000-0000-0000-0000-0000000000d2'
+
+  it('keeps what a user cooked, private to them, once per plan entry', async () => {
+    await db.query('insert into auth.users (id) values ($1), ($2)', [
+      COOK,
+      OTHER,
+    ])
+    const soup = await recipe('Cooked soup', [])
+    const secret = await recipe('Someone’s secret', [], {
+      visibility: 'private',
+      addedBy: OTHER,
+    })
+    const entry = await as('authenticated', COOK, async () => {
+      await db.query("select add_to_meal_plan('2026-10-12', $1, 2)", [soup])
+      const { rows } = await db.query(
+        'select id from meal_plan_entries where recipe_id = $1',
+        [soup],
+      )
+      await db.query(
+        `insert into cooked_meals (recipe_id, plan_entry_id, cooked_on, scale, rating, note)
+         values ($1, $2, '2026-10-12', 2, 'up', 'less salt')`,
+        [soup, rows[0].id],
+      )
+      return rows[0].id
+    })
+    // Counted once per plan entry.
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query(
+          'insert into cooked_meals (recipe_id, plan_entry_id) values ($1, $2)',
+          [soup, entry],
+        ),
+      ),
+      /cooked_meals_entry/,
+    )
+    // Not a recipe they can't see, and only the ratings Sous knows.
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query('insert into cooked_meals (recipe_id) values ($1)', [secret]),
+      ),
+      /row-level security/,
+    )
+    await assert.rejects(
+      as('authenticated', COOK, () =>
+        db.query(
+          "insert into cooked_meals (recipe_id, rating) values ($1, 'meh')",
+          [soup],
+        ),
+      ),
+      /check constraint/,
+    )
+    // Nobody else sees it.
+    const { rows: seen } = await as('authenticated', OTHER, () =>
+      db.query('select * from cooked_meals'),
+    )
+    assert.equal(seen.length, 0)
+    // It's in their export.
+    const { rows } = await as('authenticated', COOK, () =>
+      db.query('select export_my_data() as d'),
+    )
+    assert.deepEqual(rows[0].d.cooked, [
+      {
+        recipe: 'Cooked soup',
+        cooked_on: '2026-10-12',
+        scale: 2,
+        rating: 'up',
+        note: 'less salt',
+      },
+    ])
   })
 })

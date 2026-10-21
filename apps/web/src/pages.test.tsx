@@ -15,6 +15,7 @@ import {
   type Preferences,
   type RecipeDetail,
 } from './sous.ts'
+import { fakeCookedApi } from './cookedFake.ts'
 
 const line = (
   lineNo: number,
@@ -115,6 +116,31 @@ describe('RecipePage', () => {
       Object.fromEntries(ids.map((id) => [id, fit])),
     ),
     setTags: vi.fn(async (_id: string, _tags: string[]) => {}),
+    ...fakeCookedApi(),
+  })
+
+  it('shows how often it was cooked and the last note (TYL-68)', async () => {
+    const a = api(BURRITOS)
+    a.cookedSummary.mockResolvedValue({
+      times: 3,
+      lastOn: '2026-10-12',
+      note: { text: 'less salt', on: '2026-10-12' },
+    })
+    render(<RecipePage id={BURRITOS.id} api={a} />)
+    expect(
+      await screen.findByText('Your note from Oct 12: less salt'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Cooked 3 times, last on Oct 12/),
+    ).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Cooked Bean burritos' }),
+    )
+    expect(a.markCooked).toHaveBeenCalledWith(
+      expect.objectContaining({ recipeId: BURRITOS.id, planEntryId: null }),
+    )
+    // The summary is read again after cooking.
+    expect(a.cookedSummary).toHaveBeenCalledTimes(2)
   })
 
   it('shows where it is from, its labels, and stars the ingredient to check', async () => {

@@ -26,6 +26,7 @@ import {
   type Scale,
 } from './plan.ts'
 import type { IngredientLine, RecipeDetail } from './sous.ts'
+import { fakeCookedApi } from './cookedFake.ts'
 
 describe('weeks', () => {
   it('starts on Monday', () => {
@@ -424,6 +425,7 @@ function fakeApi({
   favorites = [] as string[],
   added = { budgetCents: null, totalCents: 0, recipes: {} } as AddedCosts,
   copied = 0,
+  cooked = fakeCookedApi(),
 } = {}) {
   let current = entries
   const api = {
@@ -462,6 +464,7 @@ function fakeApi({
     saveChoice: vi.fn(
       async (_week: string, _key: string, _id: string) => void 0,
     ),
+    ...cooked,
   } satisfies PlanApi
   return api
 }
@@ -475,6 +478,55 @@ const MILKS = {
   ],
   recipes: 2,
 }
+
+describe('cooked on the plan (TYL-68)', () => {
+  it('shows a planned meal already cooked, with its rating', async () => {
+    const api = fakeApi({
+      entries: [entry('1')],
+      cooked: fakeCookedApi([
+        {
+          id: 'c1',
+          recipeId: 'soup',
+          planEntryId: '1',
+          cookedOn: '2026-10-13',
+          scale: 1,
+          rating: 'up',
+          note: null,
+        },
+      ]),
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    const rate = await screen.findByRole('group', { name: /^Rate / })
+    expect(within(rate).getByRole('button', { name: 'Good' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(api.cookedEntries).toHaveBeenCalledWith(['1'])
+  })
+})
+
+describe('a week that’s over (TYL-68)', () => {
+  it('moves a meal that wasn’t cooked to this week', async () => {
+    const past = addDays(weekOf(), -7)
+    const api = fakeApi({ entries: [entry('1', { day: null })] })
+    render(<PlanPage api={api} week={past} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Move to this week' }),
+    )
+    expect(api.addToPlan).toHaveBeenCalledWith(weekOf(), 'r-1', 1, null)
+    expect(api.removeEntry).toHaveBeenCalledWith('1')
+  })
+
+  it('doesn’t offer it this week, or for a meal that was cooked', async () => {
+    render(
+      <PlanPage api={fakeApi({ entries: [entry('1')] })} week={weekOf()} />,
+    )
+    await screen.findByRole('button', { name: /^Cooked / })
+    expect(
+      screen.queryByRole('button', { name: 'Move to this week' }),
+    ).toBeNull()
+  })
+})
 
 describe('choices (TYL-98)', () => {
   it('reads the week’s choices from the API', async () => {

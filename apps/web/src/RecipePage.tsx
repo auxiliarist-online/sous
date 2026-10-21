@@ -2,12 +2,16 @@ import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { DietChips } from './Library.tsx'
 import { cleanTag, dietLabels, sourceLabel } from './library.ts'
 import { navigate } from './navigation.ts'
-import { weekOf, type Fit, type Scale } from './plan.ts'
+import { CookedButton } from './Cooked.tsx'
+import { shortDate, type CookedApi, type CookedSummary } from './cooked.ts'
+import { isoDate, weekOf, type Fit, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
 import { ExternalLink } from './ExternalLink.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
-export interface RecipePageApi {
+export interface RecipePageApi extends CookedApi {
+  /** How often the user cooked it, when last, and their latest note (TYL-68). */
+  cookedSummary(recipeId: string): Promise<CookedSummary>
   recipe(id: string): Promise<RecipeDetail | null>
   remove(recipeId: string): Promise<void>
   saveToLibrary(recipeId: string): Promise<void>
@@ -42,6 +46,10 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
   const [planned, setPlanned] = useState<'idle' | 'adding' | 'added' | 'error'>(
     'idle',
   )
+  const [history, setHistory] = useState<CookedSummary | null>(null)
+  // Today, as the page opened: what "Cooked it" dates a meal to.
+  const [today] = useState(() => isoDate(new Date()))
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -58,6 +66,18 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       live = false
     }
   }, [api, id])
+
+  // What the user's cooked of it; the page works without it.
+  useEffect(() => {
+    let live = true
+    api.cookedSummary(id).then(
+      (h) => live && setHistory(h),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api, id, version])
 
   async function plan() {
     setPlanned('adding')
@@ -119,7 +139,27 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         ← Your recipes
       </Link>
       <h2>{recipe.title}</h2>
+      {history?.note && (
+        <p className="small cooked-note-shown">
+          Your note from {shortDate(history.note.on)}: {history.note.text}
+        </p>
+      )}
       <p className="muted small">{facts.join(' · ')}</p>
+      <p className="small">
+        {history && history.times > 0 && (
+          <span className="muted">
+            Cooked {history.times === 1 ? 'once' : `${history.times} times`}
+            {history.lastOn && `, last on ${shortDate(history.lastOn)}`}.{' '}
+          </span>
+        )}
+        <CookedButton
+          api={api}
+          recipeId={recipe.id}
+          title={recipe.title}
+          cookedOn={today}
+          onChange={() => setVersion((v) => v + 1)}
+        />
+      </p>
       <DietChips diets={recipe.diets} />
       {recipe.saved && (
         <TagEditor
