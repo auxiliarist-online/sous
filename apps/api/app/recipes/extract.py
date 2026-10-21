@@ -203,10 +203,11 @@ def extract_recipe(page: str, url: str) -> RecipeDraft:
     ingredients: list[Ingredient] = []
     groups = _field(scraper.ingredient_groups) or []
     if len(groups) > 1:
+        # Numbered through the whole recipe: a line's number is its key
+        # (TYL-99: numbering each section from its start failed the save).
         for group in groups:
-            ingredients += [
-                Ingredient(len(ingredients), text, group.purpose) for text in group.ingredients
-            ]
+            for text in group.ingredients:
+                ingredients.append(Ingredient(len(ingredients), text, group.purpose))
     else:
         ingredients = [Ingredient(n, text) for n, text in enumerate(lines)]
 

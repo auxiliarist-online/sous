@@ -20,6 +20,27 @@ class TestExtract:
         assert [i.raw_text for i in draft.ingredients] == RECIPE_LD["recipeIngredient"]
         assert [i.line_no for i in draft.ingredients] == [0, 1, 2]
 
+    def test_numbers_lines_through_every_section(self) -> None:
+        # TYL-99: lines in sections ("For the sauce") were numbered from each
+        # section's start, so two lines shared a number and the save failed.
+        ld = {**RECIPE_LD, "recipeIngredient": ["1 cup cream", "1 clove garlic", "8 mushrooms"]}
+        groups = (
+            '<div class="wprm-recipe-ingredient-group">'
+            '<h4 class="wprm-recipe-group-name">For the sauce</h4><ul>'
+            '<li class="wprm-recipe-ingredient">1 cup cream</li>'
+            '<li class="wprm-recipe-ingredient">1 clove garlic</li></ul></div>'
+            '<div class="wprm-recipe-ingredient-group">'
+            '<h4 class="wprm-recipe-group-name">For the mushrooms</h4><ul>'
+            '<li class="wprm-recipe-ingredient">8 mushrooms</li></ul></div>'
+        )
+        html = page_html(ld).replace("</body>", f"{groups}</body>")
+        draft = extract_recipe(html, "https://example-blog.com/mushrooms/")
+        assert [(i.line_no, i.section) for i in draft.ingredients] == [
+            (0, "For the sauce"),
+            (1, "For the sauce"),
+            (2, "For the mushrooms"),
+        ]
+
     def test_prefers_the_pages_canonical_link_on_the_same_site(self) -> None:
         html = page_html(RECIPE_LD, canonical="https://example-blog.com/tacos/")
         draft = extract_recipe(html, "https://example-blog.com/tacos/print/")

@@ -115,10 +115,19 @@ export function Library({
       refresh()
     } catch (e) {
       const code = e instanceof ImportError ? e.code : 'error'
-      if (code === 'blocked' || code === 'robots_disallowed') {
+      // A failure on our side (TYL-99) gets the same way out.
+      if (
+        code === 'blocked' ||
+        code === 'robots_disallowed' ||
+        code === 'error'
+      ) {
         // Not a dead end: offer to save it from what the user can copy.
         setStatus({ state: 'idle' })
-        setPaste({ url: full, text: '', reason: code })
+        setPaste({
+          url: full,
+          text: '',
+          reason: code === 'error' ? 'failed' : code,
+        })
         return
       }
       setStatus({ state: 'error', message: (e as Error).message, code })
@@ -299,8 +308,9 @@ interface PasteState {
   url: string
   /** Text to start from: a shared selection, or empty. */
   text: string
-  /** Why we're asking: the site blocks Sous, or the user shared text. */
-  reason: 'blocked' | 'robots_disallowed' | 'shared'
+  /** Why we're asking: the site blocks Sous, saving from the link failed
+   *  on our side, or the user shared text. */
+  reason: 'blocked' | 'robots_disallowed' | 'failed' | 'shared'
 }
 
 /** Save a recipe from what the user copied off the page. Only the
@@ -350,8 +360,13 @@ function PasteRecipe({
       <h2>
         {paste.reason === 'shared'
           ? 'Save the ingredients you shared?'
-          : `${site} doesn't let apps read its recipes`}
+          : paste.reason === 'failed'
+            ? `We couldn't save that recipe from ${site}`
+            : `${site} doesn't let apps read its recipes`}
       </h2>
+      {paste.reason === 'failed' && (
+        <p>Something went wrong on our side, and it's been reported.</p>
+      )}
       {paste.reason !== 'shared' && (
         <p>
           You can still save it: copy the ingredients from the page and paste

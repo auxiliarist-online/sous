@@ -212,6 +212,27 @@ describe('Library', () => {
     },
   )
 
+  it('offers to paste the ingredients when saving from a link fails on our side', async () => {
+    const api = fakeApi()
+    api.save.mockRejectedValueOnce(
+      new ImportError('error', 'Something went wrong saving that recipe.'),
+    )
+    render(<Library api={api} />)
+    await userEvent.type(
+      screen.getByLabelText('Recipe link'),
+      'https://www.easycheesyvegetarian.com/simple-stuffed-mushrooms/',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+    expect(
+      await screen.findByRole('heading', {
+        name: "We couldn't save that recipe from easycheesyvegetarian.com",
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/it's been reported/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Ingredients')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('can save just the link when nothing is pasted', async () => {
     const api = fakeApi()
     api.save.mockRejectedValueOnce(new ImportError('blocked', 'Blocked.'))
