@@ -30,6 +30,7 @@ celery,rib,40,hand
 celery,stalk,40,usda
 celery,strip,4,usda
 cheddar cheese,slice,28,usda
+cheese,slice,28,usda
 cherry tomatoes,slice,20,usda
 cherry tomatoes,wedge,31,usda
 chives,bunch,25,hand
@@ -65,6 +66,7 @@ green bell pepper,strip,2.7,usda
 green cabbage,head,908,usda
 green cabbage,leaf,23,usda
 gruyere,slice,28,usda
+habanero peppers,each,9,hand
 ham,slice,28,usda
 honeydew melon,wedge,125,usda
 iceberg lettuce,head,539,usda
@@ -117,6 +119,7 @@ snapper,fillet,218,usda
 sourdough bread,slice,50,hand
 spinach,bunch,340,usda
 spinach,leaf,10,usda
+sweet corn kernels,ear,102,usda
 swiss chard,bunch,300,hand
 swiss chard,leaf,48,usda
 swiss cheese,slice,28,usda
