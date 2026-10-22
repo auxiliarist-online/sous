@@ -7,6 +7,7 @@ export interface DraftApi {
     weekStart: string,
     options: { dinners: number; locked: string[]; exclude: string[] },
   ): Promise<WeekDraft>
+  /** Add one drafted recipe to the week, as an ordinary plan entry. */
   addToPlan(
     weekStart: string,
     recipeId: string,
