@@ -8,10 +8,11 @@ import {
 } from './plan.ts'
 import { plannedItems } from './list.ts'
 import { CookedButton } from './Cooked.tsx'
+import { SeasonCard, type SeasonApi } from './SeasonCard.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
 import { Link } from './router.tsx'
 
-export interface HomeApi extends CookedApi {
+export interface HomeApi extends CookedApi, SeasonApi {
   /** The week's planned recipes. */
   plan(weekStart: string): Promise<PlanEntry[]>
   /** The week's buy list and cost against the budget. */
@@ -84,6 +85,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
         <Link to="/browse" className="small">
           Find recipes
         </Link>
+        <SeasonCard api={api} now={opened} />
       </section>
     )
   }
@@ -167,6 +169,8 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
           Open the list
         </Link>
       </section>
+
+      <SeasonCard api={api} now={opened} />
     </section>
   )
 }

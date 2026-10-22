@@ -21,6 +21,7 @@ import {
   type SavedRecipe,
 } from './library.ts'
 import { ingredientsFromText, titleFromUrl } from './paste.ts'
+import { recipeInSeason, type Seasons } from './seasons.ts'
 import { Link } from './router.tsx'
 import { ExternalLink } from './ExternalLink.tsx'
 import type { Shared } from './share.ts'
@@ -36,6 +37,8 @@ export interface LibraryApi {
     ingredients: string[]
   }): Promise<ImportResult>
   remove(recipeId: string): Promise<void>
+  /** What's in season where the user lives (TYL-70). */
+  seasons(): Promise<Seasons>
 }
 
 type Status =
@@ -77,6 +80,9 @@ export function Library({
   const [status, setStatus] = useState<Status>({ state: 'idle' })
   const [recipes, setRecipes] = useState<SavedRecipe[] | null>(null)
   const [listError, setListError] = useState(false)
+  // Saved recipes whose produce is in season this month (TYL-70); null until
+  // known, or when seasons can't load (the filter just doesn't show).
+  const [inSeason, setInSeason] = useState<Set<string> | null>(null)
 
   const refresh = useCallback(() => {
     api.list().then(
@@ -89,6 +95,32 @@ export function Library({
   }, [api])
 
   useEffect(refresh, [refresh])
+
+  // Which saved recipes are in season this month; optional, so it fails quietly.
+  useEffect(() => {
+    if (!recipes?.length) return
+    let live = true
+    const month = new Date().getMonth() + 1
+    api.seasons().then(
+      (seasons) =>
+        live &&
+        setInSeason(
+          new Set(
+            recipes
+              .filter(
+                (r) =>
+                  recipeInSeason(seasons, r.ingredientIds ?? [], month).length >
+                  0,
+              )
+              .map((r) => r.id),
+          ),
+        ),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api, recipes])
 
   async function run(importing: () => Promise<ImportResult>) {
     setStatus({ state: 'saving' })
@@ -271,6 +303,7 @@ export function Library({
             onChange={setFilter}
             myDiets={myDiets}
             tags={allTags(recipes)}
+            inSeason={inSeason}
           />
         )}
         {!!recipes?.length && (
@@ -509,12 +542,15 @@ function Filters({
   onChange,
   myDiets,
   tags,
+  inSeason,
 }: {
   filter: RecipeFilter
   onChange: (f: RecipeFilter) => void
   myDiets: string[]
   /** The user's own tags across their recipes, offered as filters. */
   tags: string[]
+  /** Saved recipes in season this month; the chip shows when there are some. */
+  inSeason: Set<string> | null
 }) {
   // Tags compare without case, as filterRecipes does: a "weeknight" chip
   // clears a "Weeknight" filter left from a recipe since removed.
@@ -599,6 +635,21 @@ function Filters({
         >
           ♥ Favorites
         </button>
+        {inSeason && inSeason.size > 0 && (
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={!!filter.inSeason}
+            onClick={() =>
+              onChange({
+                ...filter,
+                inSeason: filter.inSeason ? null : inSeason,
+              })
+            }
+          >
+            In season
+          </button>
+        )}
         {tags.map((t) => (
           <button
             key={`tag-${t}`}

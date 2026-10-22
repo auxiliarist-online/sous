@@ -26,6 +26,8 @@ export interface SavedRecipe {
   diets: DietLabel[]
   /** Parsed ingredient names, for search. */
   ingredients: string[]
+  /** The ingredients they matched, for seasons (TYL-70). */
+  ingredientIds?: string[]
   /** The user's own tags ("weeknight"), private to them (TYL-81). */
   tags: string[]
   /** Cuisine slugs ("indian"), to prefer the user's favorites. */
@@ -126,7 +128,7 @@ interface SavedRow {
           checks: DietLabel['checks'] | null
         }[]
       | null
-    ingredients: { name: string | null }[] | null
+    ingredients: { name: string | null; ingredient_id?: string | null }[] | null
     cuisines?: { cuisine_slug: string }[] | null
     favorite?: { frequency: Frequency }[] | null
   } | null
@@ -138,7 +140,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
   const { data, error } = await db
     .from('user_saved_recipes')
     .select(
-      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name), cuisines:recipe_cuisines(cuisine_slug), favorite:user_favorite_recipes(frequency))',
+      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name, ingredient_id), cuisines:recipe_cuisines(cuisine_slug), favorite:user_favorite_recipes(frequency))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -158,6 +160,9 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
         .map((d) => ({ slug: d.diet_slug, checks: d.checks ?? [] })),
       ingredients: (row.recipe!.ingredients ?? []).flatMap((i) =>
         i.name ? [i.name] : [],
+      ),
+      ingredientIds: (row.recipe!.ingredients ?? []).flatMap((i) =>
+        i.ingredient_id ? [i.ingredient_id] : [],
       ),
       tags: row.tags ?? [],
       cuisines: (row.recipe!.cuisines ?? []).map((c) => c.cuisine_slug),
@@ -331,6 +336,8 @@ export interface RecipeFilter {
   tags: string[]
   /** Only the user's favorites (TYL-66). */
   favorites: boolean
+  /** Only recipes whose produce is in season (TYL-70): their ids. */
+  inSeason?: Set<string> | null
 }
 
 export const NO_FILTER: RecipeFilter = {
@@ -364,6 +371,7 @@ export function filterRecipes(
     const has = new Set(r.diets.map((d) => d.slug))
     if (!f.diets.every((d) => has.has(d))) return false
     if (f.favorites && !r.favorite) return false
+    if (f.inSeason && !f.inSeason.has(r.id)) return false
     const tagged = new Set(r.tags.map((t) => t.toLowerCase()))
     if (!f.tags.every((t) => tagged.has(t.toLowerCase()))) return false
     if (!terms.length) return true

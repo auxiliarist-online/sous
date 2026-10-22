@@ -27,10 +27,11 @@ async def _rpc(name: str, body: dict[str, Any]) -> Any:
     return resp.json()
 
 
-async def draft_pool(user_id: str, week_start: date) -> list[dict[str, Any]]:
+async def draft_pool(user_id: str, week_start: date) -> dict[str, Any]:
     """The user's saved recipes "Plan my week" can pick from (TYL-65), with
-    fit, favorite rhythm, weeks since last had, and cuisines."""
-    result: list[dict[str, Any]] = await _rpc(
+    fit, favorite rhythm, weeks since last had, cuisines and produce in season
+    (TYL-70) as "candidates"; and whether they cook with the seasons."""
+    result: dict[str, Any] = await _rpc(
         "plan_draft_pool", {"p_user": user_id, "p_week": week_start.isoformat()}
     )
     return result

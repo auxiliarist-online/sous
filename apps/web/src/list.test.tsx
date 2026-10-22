@@ -361,11 +361,23 @@ function listApi(
     }),
     places: vi.fn(async () => [{ id: 'market', name: 'River Arts market' }]),
     addPlace: vi.fn(async (name: string) => ({ id: 'new-place', name })),
+    seasons: vi.fn(async () => new Map()),
     ...over,
   } as ListApi & Record<string, ReturnType<typeof vi.fn>>
 }
 
 describe('ListPage', () => {
+  it('marks what’s in season that week (TYL-70)', async () => {
+    const api = listApi({
+      seasons: vi.fn(
+        async () => new Map([['i-eggs', { name: 'eggs', months: [10] }]]),
+      ),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    const dairy = await screen.findByRole('list', { name: 'Dairy & eggs' })
+    expect(await within(dairy).findByText('· in season')).toBeInTheDocument()
+  })
+
   it('fills the list from the plan and checks things off', async () => {
     const api = listApi()
     render(<ListPage api={api} week={WEEK} user="u" />)
@@ -600,6 +612,7 @@ describe('Home', () => {
   const homeApi = (entries: PlanEntry[]): HomeApi => ({
     plan: vi.fn(async () => entries),
     planCost: vi.fn(async () => COST),
+    list: vi.fn(async () => []),
     ...fakeCookedApi(),
   })
 

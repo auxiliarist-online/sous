@@ -225,6 +225,38 @@ class TestDraft:
         )
         assert d.picks[0].reason == "A favorite, last had 1 week ago"
 
+    def test_cooks_with_the_seasons(self) -> None:
+        week = inputs(recipe("summer", ("beans", 1, "each")), recipe("plain", ("beans", 1, "each")))
+        ripe = Candidate("summer", "Summer", "fits", in_season=["tomatoes", "corn"])
+        d = draft_week(
+            week, [ripe, Candidate("plain", "Plain", "fits")], dinners=1, locked=[], exclude=[],
+            on=MONDAY,
+        )  # fmt: skip
+        assert picked(d) == ["summer"]
+        assert d.picks[0].reason == "In season: tomatoes, corn"
+
+    def test_isnt_promoted_when_out_of_season(self) -> None:
+        week = inputs(recipe("winter", ("beans", 1, "each")), recipe("plain", ("beans", 1, "each")))
+        # The same cost; one leans on produce that's out of season.
+        cold = Candidate("winter", "Winter", "fits", out_of_season=2)
+        d = draft_week(
+            week, [cold, Candidate("plain", "Plain", "fits")], dinners=1, locked=[], exclude=[],
+            on=MONDAY,
+        )  # fmt: skip
+        assert picked(d) == ["plain"]
+
+    def test_cook_with_the_seasons_turns_it_up(self) -> None:
+        # Steak in season vs beans: a small boost isn't worth $8, a big one is.
+        week = inputs(recipe("steak", ("steak", 1, "each")), recipe("beans", ("beans", 1, "each")))
+        ripe = Candidate("steak", "Steak", "fits", in_season=["a", "b", "c"])
+        args: dict[str, Any] = {"dinners": 1, "locked": [], "exclude": [], "on": MONDAY}
+        plain = draft_week(week, [ripe, Candidate("beans", "Beans", "fits")], **args)
+        seasonal = draft_week(
+            week, [ripe, Candidate("beans", "Beans", "fits")], cook_with_seasons=True, **args
+        )
+        assert picked(plain) == ["beans"]
+        assert picked(seasonal) == ["steak"]
+
     def test_says_what_is_left_over(self) -> None:
         d = draft_week(
             inputs(recipe("rice", ("rice", 1, "cup"))),
@@ -264,12 +296,15 @@ class TestRoute:
         bad = "00000000-0000-0000-0000-0000000000a3"
         asked: dict[str, Any] = {}
 
-        async def fake_pool(user_id: str, week: date) -> list[dict[str, Any]]:
-            return [
-                {"recipe_id": r1, "title": "Salsa", "fit": "fits", "cuisines": []},
-                {"recipe_id": r2, "title": "Tacos", "fit": "fits", "cuisines": []},
-                {"recipe_id": bad, "title": "Pork", "fit": "excluded", "cuisines": []},
-            ]
+        async def fake_pool(user_id: str, week: date) -> dict[str, Any]:
+            return {
+                "cook_with_seasons": False,
+                "candidates": [
+                    {"recipe_id": r1, "title": "Salsa", "fit": "fits", "cuisines": []},
+                    {"recipe_id": r2, "title": "Tacos", "fit": "fits", "cuisines": []},
+                    {"recipe_id": bad, "title": "Pork", "fit": "excluded", "cuisines": []},
+                ],
+            }
 
         async def fake_inputs(
             user_id: str, week: date, candidates: list[str] | None = None

@@ -4,8 +4,9 @@ makes the week best, then swap picks for better ones until none helps.
 
 A week is better when it costs less (as the shopping trip is priced: whole
 packages, the pantry), wastes less (what's left in the packages bought), stays
-in the budget, mixes up proteins and cuisines (TYL-66), and brings back
-favorites that are due. Recipes that break the user's rules are never picked.
+in the budget, mixes up proteins and cuisines (TYL-66), brings back favorites
+that are due, and cooks with the seasons (TYL-70). Recipes that break the
+user's rules are never picked.
 """
 
 import math
@@ -25,6 +26,12 @@ REPEAT_PROTEIN = 5000  # each dinner past two with the same main protein
 REPEAT_CUISINE = 5000  # each dinner past two of the same cuisine
 FAVORITE_DUE = 1500  # a favorite back on its rhythm (a bonus)
 RECENT = 2000  # a recipe had in the last 3 weeks that isn't a favorite due
+# Seasons (TYL-70): a little for each seasonal item in season, a little against
+# each out of season; "Cook with the seasons" turns both up.
+IN_SEASON = 150  # per item, up to SEASON_CAP of them
+OUT_OF_SEASON = 200  # per item
+SEASON_CAP = 3
+SEASONS_UP = 3
 MAX_SAME = 2
 RECENT_WEEKS = 3
 FAVORITE_WEEKS = {"weekly": 1, "biweekly": 2, "monthly": 4}
@@ -43,6 +50,9 @@ class Candidate:
     weeks_ago: int | None = None
     cuisines: list[str] = field(default_factory=list)
     proteins: list[str] = field(default_factory=list)
+    # Its seasonal produce in season the week planned, and how many aren't.
+    in_season: list[str] = field(default_factory=list)
+    out_of_season: int = 0
 
     @property
     def due(self) -> bool:
@@ -109,6 +119,7 @@ class Week:
         *,
         on: date,
         store_id: str | None,
+        seasons: float = 1,
     ) -> None:
         """Split the inputs into what's planned and the candidates' lines, and
         work out each candidate's main proteins."""
@@ -129,6 +140,7 @@ class Week:
             p for e in self.planned for p in main_proteins(e["lines"], self.info)
         ]
         self.budget: int | None = inputs.get("budget_cents")
+        self.seasons = seasons
         self._memo: dict[frozenset[str], tuple[float, PlanCost]] = {}
 
     def cost(self, picks: frozenset[str]) -> PlanCost:
@@ -164,6 +176,8 @@ class Week:
                 score -= FAVORITE_DUE
             elif c.weeks_ago is not None and c.weeks_ago < RECENT_WEEKS:
                 score += RECENT
+            score -= self.seasons * IN_SEASON * min(SEASON_CAP, len(c.in_season))
+            score += self.seasons * OUT_OF_SEASON * c.out_of_season
         self._memo[picks] = (score, cost)
         return score, cost
 
@@ -190,11 +204,14 @@ def draft_week(
     exclude: list[str],
     on: date,
     store_id: str | None = None,
+    cook_with_seasons: bool = False,
 ) -> Draft:
     """Draft the week's open dinners. `inputs` is plan_cost_inputs() with the
     pool as candidates; `locked` picks stay; `exclude` are never picked (a
     swap). Planned dinners count toward `dinners` and stay as they are."""
-    week = Week(inputs, pool, on=on, store_id=store_id)
+    week = Week(
+        inputs, pool, on=on, store_id=store_id, seasons=SEASONS_UP if cook_with_seasons else 1
+    )
     planned_ids = {str(e["recipe_id"]) for e in week.planned}
     keep = [
         r
@@ -264,14 +281,17 @@ def draft_week(
 
 
 def reason(week: Week, picks: frozenset[str], recipe_id: str) -> str:
-    """Why a recipe is in the draft, in a few words: a favorite that's due, an
-    ingredient it shares with another meal, or what it adds."""
+    """Why a recipe is in the draft, in a few words: a favorite that's due,
+    produce in season, an ingredient it shares with another meal, or what it
+    adds."""
     c = week.pool[recipe_id]
     if c.due:
         if not c.weeks_ago:
             return "A favorite you haven't had lately"
         weeks = "week" if c.weeks_ago == 1 else "weeks"
         return f"A favorite, last had {c.weeks_ago} {weeks} ago"
+    if c.in_season and not c.out_of_season:
+        return "In season: " + ", ".join(c.in_season[:3])
     without = {i.ingredient_id: i.cents for i in week.cost(picks - {recipe_id}).items}
     used = {
         line.get("ingredient_id")

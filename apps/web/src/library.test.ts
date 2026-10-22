@@ -121,6 +121,7 @@ describe('savedRecipes', () => {
         savedAt: '2026-10-09T10:00:00Z',
         diets: [{ slug: 'vegan', checks: [] }],
         ingredients: ['red lentils'],
+        ingredientIds: [],
         tags: ['weeknight'],
         cuisines: [],
         favorite: null,

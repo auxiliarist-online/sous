@@ -3560,7 +3560,7 @@ describe('plan draft pool (TYL-65)', () => {
         "select plan_draft_pool($1, '2026-10-19') as p",
         [DRAFTER],
       )
-      return rows[0].p
+      return rows[0].p.candidates
     })
     const byTitle = Object.fromEntries(pool.map((c) => [c.title, c]))
     assert.deepEqual(Object.keys(byTitle).sort(), [
@@ -3597,5 +3597,66 @@ describe('plan draft pool (TYL-65)', () => {
       inputs.entries.map((e) => e.meal),
       ['lunch'],
     )
+  })
+})
+
+describe('seasons (TYL-70)', () => {
+  const NC = '00000000-0000-0000-0000-0000000000d5'
+  const OHIO = '00000000-0000-0000-0000-0000000000d6'
+
+  it('reads a user’s seasons from their state’s chart, else the national guide', async () => {
+    await db.query('insert into auth.users (id) values ($1), ($2)', [NC, OHIO])
+    await db.query(
+      `insert into profiles (user_id, home_zip) values ($1, '28801'), ($2, '43215')
+       on conflict (user_id) do update set home_zip = excluded.home_zip`,
+      [NC, OHIO],
+    )
+    const seasons = async (user) => {
+      const { rows } = await as('authenticated', user, () =>
+        db.query('select my_seasons() as s'),
+      )
+      return Object.fromEntries(rows[0].s.map((x) => [x.name, x.months]))
+    }
+    const nc = await seasons(NC)
+    const ohio = await seasons(OHIO)
+    // NC's chart: strawberries April to June; the national guide: spring and summer.
+    assert.deepEqual(nc.strawberries, [4, 5, 6])
+    assert.deepEqual(ohio.strawberries, [3, 4, 5, 6, 7, 8])
+    // Not on NC's chart: the national months stand in.
+    assert.deepEqual(nc['butternut squash'], ohio['butternut squash'])
+  })
+
+  it('tells the draft which produce is in season the week planned', async () => {
+    const strawberries = (
+      await db.query("select id from ingredients where name = 'strawberries'")
+    ).rows[0].id
+    const basil = (
+      await db.query("select id from ingredients where name = 'basil'")
+    ).rows[0].id
+    const shortcake = await recipe('Seasonal shortcake', [
+      [strawberries],
+      [basil],
+    ])
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+      [NC, shortcake],
+    )
+    const pool = async (week) => {
+      const { rows } = await as('service_role', null, () =>
+        db.query('select plan_draft_pool($1, $2) as p', [NC, week]),
+      )
+      return rows[0].p
+    }
+    const may = await pool('2026-05-11')
+    const mayCake = may.candidates.find((c) => c.title === 'Seasonal shortcake')
+    // Basil is in season all year: not news, not counted either way.
+    assert.deepEqual(mayCake.in_season, ['strawberries'])
+    assert.equal(mayCake.out_of_season, 0)
+    const nov = (await pool('2026-11-09')).candidates.find(
+      (c) => c.title === 'Seasonal shortcake',
+    )
+    assert.deepEqual(nov.in_season, [])
+    assert.equal(nov.out_of_season, 1)
+    assert.equal(may.cook_with_seasons, false)
   })
 })

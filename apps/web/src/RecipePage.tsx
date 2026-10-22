@@ -5,6 +5,7 @@ import { navigate } from './navigation.ts'
 import { CookedButton } from './Cooked.tsx'
 import { FavoriteControl } from './Favorite.tsx'
 import type { Frequency } from './variety.ts'
+import { recipeInSeason, type Seasons } from './seasons.ts'
 import { shortDate, type CookedApi, type CookedSummary } from './cooked.ts'
 import { isoDate, weekOf, type Fit, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
@@ -14,6 +15,8 @@ import { ingredientLines, type RecipeDetail } from './sous.ts'
 export interface RecipePageApi extends CookedApi {
   /** How often the user cooked it, when last, and their latest note (TYL-68). */
   cookedSummary(recipeId: string): Promise<CookedSummary>
+  /** What's in season where the user lives (TYL-70). */
+  seasons(): Promise<Seasons>
   /** Make it a favorite with how often it comes back, or (null) stop. */
   setFavorite(recipeId: string, frequency: Frequency | null): Promise<void>
   recipe(id: string): Promise<RecipeDetail | null>
@@ -28,6 +31,31 @@ export interface RecipePageApi extends CookedApi {
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
   /** Replace the user's tags on a recipe they've saved (TYL-81). */
   setTags(recipeId: string, tags: string[]): Promise<void>
+}
+
+/** "In season: tomatoes, basil" when the recipe's seasonal produce is mostly
+ *  in season this month (TYL-70). */
+function InSeason({
+  seasons,
+  recipe,
+  month,
+}: {
+  seasons: Seasons | null
+  recipe: RecipeDetail
+  month: number
+}) {
+  if (!seasons) return null
+  const names = recipeInSeason(
+    seasons,
+    recipe.ingredients
+      .filter((i) => i.optionNo === 1)
+      .map((i) => i.ingredientId),
+    month,
+  )
+  if (names.length === 0) return null
+  return (
+    <p className="small in-season">In season: {names.slice(0, 4).join(', ')}</p>
+  )
 }
 
 function minutes(m: number | null): string | null {
@@ -51,6 +79,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     'idle',
   )
   const [history, setHistory] = useState<CookedSummary | null>(null)
+  const [seasons, setSeasons] = useState<Seasons | null>(null)
   // Today, as the page opened: what "Cooked it" dates a meal to.
   const [today] = useState(() => isoDate(new Date()))
   const [version, setVersion] = useState(0)
@@ -70,6 +99,18 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       live = false
     }
   }, [api, id])
+
+  // What's in season, for the badge; the page works without it.
+  useEffect(() => {
+    let live = true
+    api.seasons().then(
+      (s) => live && setSeasons(s),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
 
   // What the user's cooked of it; the page works without it.
   useEffect(() => {
@@ -159,6 +200,11 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         </p>
       )}
       <p className="muted small">{facts.join(' · ')}</p>
+      <InSeason
+        seasons={seasons}
+        recipe={recipe}
+        month={Number(today.slice(5, 7))}
+      />
       <p className="small">
         {history && history.times > 0 && (
           <span className="muted">

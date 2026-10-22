@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { Cooked, CookedApi, CookedSummary, HistoryItem } from './cooked.ts'
+import type { Seasons } from './seasons.ts'
 import type { Frequency, Recent } from './variety.ts'
 
 /** A stand-in for the cooked-meals API in tests (TYL-68): it remembers what's
@@ -60,6 +61,7 @@ export function fakeCookedApi(
     }),
     cookingHistory: vi.fn(async () => history),
     addFavorite: vi.fn(async (_recipeId: string) => {}),
+    seasons: vi.fn(async (): Promise<Seasons> => new Map()),
     setFavorite: vi.fn(
       async (_recipeId: string, _frequency: Frequency | null) => {},
     ),

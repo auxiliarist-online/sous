@@ -1162,3 +1162,21 @@ label.button {
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
+
+/* What's in season (TYL-70). */
+.in-season {
+  color: var(--color-accent);
+}
+
+.season-list {
+  list-style: none;
+  padding: 0;
+}
+
+.season-list li + li {
+  margin-top: 0.25rem;
+}
+
+.season-name {
+  text-transform: capitalize;
+}
