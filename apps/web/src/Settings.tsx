@@ -357,6 +357,20 @@ export function Settings({
       </Section>
 
       <Section
+        title="Seasons"
+        hint="What's in season comes from your state's chart where Sous has one (North Carolina so far), else the USDA's national guide."
+      >
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={prefs.cookWithSeasons}
+            onChange={(e) => set({ cookWithSeasons: e.target.checked })}
+          />{' '}
+          Cook with the seasons: Plan my week favors what's in season more
+        </label>
+      </Section>
+
+      <Section
         title="Where you shop"
         hint="Your store's prices, live, for what you plan to buy."
       >

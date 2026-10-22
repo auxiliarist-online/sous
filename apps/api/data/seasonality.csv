@@ -1,0 +1,190 @@
+ingredient,region,months,chart_crop
+acorn squash,US,1 2 9 10 11 12,Winter Squash
+anaheim peppers,NC,6 7 8,Peppers
+apples,US,1 2 3 4 5 6 7 8 9 10 11 12,Apples
+apples,NC,1 2 8 9 10 11 12,Apples
+apricots,US,3 4 5 6 7 8,Apricots
+asparagus,US,3 4 5,Asparagus
+asparagus,NC,3 4,Asparagus
+avocado,US,1 2 3 4 5 6 7 8 12,Avocados
+baby carrots,US,1 2 3 4 5 6 7 8 9 10 11 12,Carrots
+baby carrots,NC,1 6 7 12,Carrots
+banana peppers,NC,6 7 8,Peppers
+bananas,US,1 2 3 4 5 6 7 8 9 10 11 12,Bananas
+basil,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+basil,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+beets,US,1 2 6 7 8 9 10 11 12,Beets
+beets,NC,5 6 10 11 12,Beets
+blackberries,US,3 4 5 6 7 8,Blackberries
+blackberries,NC,6 7 9,Blackberries
+blueberries,US,6 7 8,Blueberries
+blueberries,NC,5 6 7,Blueberries
+bok choy,NC,5 6 10 11 12,Bokchoy
+broccoli,US,3 4 5 9 10 11,Broccoli
+broccoli,NC,4 5,Broccoli
+broccolini,US,3 4 5 9 10 11,Broccoli
+broccolini,NC,4 5,Broccoli
+brussels sprouts,US,1 2 9 10 11 12,Brussels Sprouts
+butter lettuce,US,3 4 5 9 10 11,Lettuce
+butter lettuce,NC,4 5 10 11,Lettuce
+butternut squash,US,1 2 9 10 11 12,Winter Squash
+cabbage slaw mix,US,1 2 3 4 5 9 10 11 12,Cabbage
+cabbage slaw mix,NC,5 6 7 8 9 10 11 12,Cabbage
+cantaloupe,US,6 7 8,Cantaloupe
+cantaloupe,NC,7 8,Cantaloupes
+carrots,US,1 2 3 4 5 6 7 8 9 10 11 12,Carrots
+carrots,NC,1 6 7 12,Carrots
+cauliflower,US,9 10 11,Cauliflower
+celery,US,1 2 3 4 5 6 7 8 9 10 11 12,Celery
+cherries,US,6 7 8,Cherries
+cherry tomatoes,US,6 7 8,Tomatoes
+cherry tomatoes,NC,7 8 9 10,Cherry Tomatoes
+chives,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+chives,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+cilantro,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+cilantro,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+clementines,US,1 2 12,Oranges
+collard greens,US,1 2 3 4 5 9 10 11 12,Collard Greens
+collard greens,NC,1 2 3 4 5 6 7 8 9 10 11 12,Collards
+corn on the cob,US,6 7 8,Corn
+corn on the cob,NC,6 7 8 9,Sweet Corn
+cranberries,US,9 10 11,Cranberries
+cucumber,US,6 7 8,Cucumbers
+cucumber,NC,6 7 8 9 10 11,Cucumbers
+daikon radish,US,3 4 5 9 10 11,Radishes
+daikon radish,NC,4 5 6 10 11,Radishes
+delicata squash,US,1 2 9 10 11 12,Winter Squash
+dill,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+dill,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+eggplant,US,6 7 8,Eggplant
+eggplant,NC,6 7 8,Eggplant
+figs,NC,7 8 9,Figs
+fresh chiles,NC,6 7 8,Peppers
+fresh oregano,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+fresh oregano,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+fresno peppers,NC,6 7 8,Peppers
+garlic,US,3 4 5 6 7 8 9 10 11,Garlic
+garlic,NC,7 8,Garlic
+ginger,US,9 10 11,Ginger
+grapefruit,US,1 2 12,Grapefruit
+grapes,US,1 2 6 7 8 9 10 11 12,Grapes
+green beans,US,6 7 8 9 10 11,Green Beans
+green beans,NC,6 7 8 9,Snap Beans
+green bell pepper,US,6 7 8 9 10 11,Bell Peppers
+green bell pepper,NC,6 7 8,Peppers
+green cabbage,US,1 2 3 4 5 9 10 11 12,Cabbage
+green cabbage,NC,5 6 7 8 9 10 11 12,Cabbage
+habanero peppers,NC,6 7 8,Peppers
+honeydew melon,US,6 7 8,Honeydew Melon
+honeydew melon,NC,7 8,Honeydew Melons
+iceberg lettuce,US,3 4 5 9 10 11,Lettuce
+iceberg lettuce,NC,4 5 10 11,Lettuce
+jalapeno,NC,6 7 8,Peppers
+kabocha squash,US,1 2 9 10 11 12,Winter Squash
+kale,US,1 2 3 4 5 9 10 11 12,Kale
+kale,NC,5 6 10 11 12,Kale
+kiwi,US,1 2 3 4 5 9 10 11 12,Kiwifruit
+leeks,US,1 2 12,Leeks
+lemons,US,1 2 3 4 5 6 7 8 9 10 11 12,Lemons
+lime,US,1 2 3 4 5 6 7 8 9 10 11 12,Limes
+mango,US,6 7 8 9 10 11,Mangos
+mini sweet peppers,US,6 7 8 9 10 11,Bell Peppers
+mini sweet peppers,NC,6 7 8,Peppers
+mint,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+mint,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+mixed greens,US,3 4 5 9 10 11,Lettuce
+mixed greens,NC,4 5 10 11,Lettuce
+mushrooms,US,3 4 5 9 10 11,Mushrooms
+mushrooms,NC,3 4 5 6 9 10 11,Mushrooms
+mustard greens,NC,4 5 6 9 10 11 12,Mustard Greens
+napa cabbage,US,1 2 3 4 5 9 10 11 12,Cabbage
+napa cabbage,NC,5 6 10 11 12,Napa
+nectarines,US,6 7 8,Peaches
+nectarines,NC,7 8,Nectarines
+okra,US,6 7 8 9 10 11,Okra
+okra,NC,7 8,Okra
+onion,US,1 2 3 4 5 6 7 8 9 10 11 12,Onions
+onion,NC,6 7,Onions
+orange bell pepper,US,6 7 8 9 10 11,Bell Peppers
+orange bell pepper,NC,6 7 8,Peppers
+oranges,US,1 2 12,Oranges
+oyster mushrooms,US,3 4 5 9 10 11,Mushrooms
+oyster mushrooms,NC,3 4 5 6 9 10 11,Mushrooms
+parsley,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+parsley,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+parsnips,US,1 2 9 10 11 12,Parsnips
+peaches,US,6 7 8,Peaches
+peaches,NC,6 7 8 9,Peaches
+pears,US,1 2 6 7 8 9 10 11 12,Pears
+pears,NC,8 9 10,Pears
+pineapple,US,3 4 5 6 7 8,Pineapples
+plantains,US,1 2 3 4 5 6 7 8 9 10 11 12,Plantains
+plums,US,6 7 8,Plums
+plums,NC,6 7 8,Plums
+poblano peppers,NC,6 7 8,Peppers
+pomegranate,US,1 2 9 10 11 12,Pomegranates
+portobello mushrooms,US,3 4 5 9 10 11,Mushrooms
+portobello mushrooms,NC,3 4 5 6 9 10 11,Mushrooms
+potatoes,US,1 2 9 10 11 12,Potatoes
+potatoes,NC,6 7,Potatoes
+pumpkin,US,1 2 9 10 11 12,Pumpkin
+pumpkin,NC,9 10,Pumpkins
+radishes,US,3 4 5 9 10 11,Radishes
+radishes,NC,4 5 6 10 11,Radishes
+raspberries,US,6 7 8 9 10 11,Raspberries
+raspberries,NC,6 9 10,Raspberries
+red bell pepper,US,6 7 8 9 10 11,Bell Peppers
+red bell pepper,NC,6 7 8,Peppers
+red cabbage,US,1 2 3 4 5 9 10 11 12,Cabbage
+red cabbage,NC,5 6 7 8 9 10 11 12,Cabbage
+rhubarb,US,3 4 5,Rhubarb
+roma tomatoes,US,6 7 8,Tomatoes
+roma tomatoes,NC,6 7 8 9 10,Tomatoes/Tomatillos
+romaine lettuce,US,3 4 5 9 10 11,Lettuce
+romaine lettuce,NC,4 5 10 11,Romaine
+rosemary,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+rosemary,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+rutabaga,US,1 2 9 10 11 12,Rutabagas
+sage,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+sage,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+scallions,NC,6 7 8 9,Green Onions
+serrano peppers,NC,6 7 8,Peppers
+shiitake mushrooms,US,3 4 5 9 10 11,Mushrooms
+shiitake mushrooms,NC,3 4 5 6 9 10 11,Mushrooms
+shishito peppers,NC,6 7 8,Peppers
+snow peas,US,3 4 5 6 7 8 9 10 11,Peas
+snow peas,NC,5 6 10 11,Snow Peas
+spaghetti squash,US,1 2 9 10 11 12,Winter Squash
+spinach,US,3 4 5 9 10 11,Spinach
+spinach,NC,1 2 3 4 5 10 11 12,Spinach
+strawberries,US,3 4 5 6 7 8,Strawberries
+strawberries,NC,4 5 6,Strawberries
+sugar snap peas,US,3 4 5 6 7 8 9 10 11,Peas
+sugar snap peas,NC,5 6 10 11,Snow Peas
+sweet corn kernels,US,6 7 8,Corn
+sweet corn kernels,NC,6 7 8 9,Sweet Corn
+sweet potatoes,US,1 2 9 10 11 12,Sweet Potatoes & Yams
+sweet potatoes,NC,1 2 3 4 5 6 7 8 9 10 11 12,Sweet Potatoes
+swiss chard,US,1 2 3 4 5 9 10 11 12,Swiss Chard
+swiss chard,NC,3 4 5 6 7 8 9 10 11 12,Greens
+tangerines,US,1 2 12,Oranges
+tarragon,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+tarragon,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+thai chilies,NC,6 7 8,Peppers
+thyme,US,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+thyme,NC,1 2 3 4 5 6 7 8 9 10 11 12,Herbs
+tomatillos,US,6 7 8,Tomatillos
+tomatillos,NC,6 7 8 9 10,Tomatoes/Tomatillos
+tomatoes,US,6 7 8,Tomatoes
+tomatoes,NC,6 7 8 9 10,Tomatoes/Tomatillos
+turnips,US,1 2 3 4 5 9 10 11 12,Turnips
+turnips,NC,4 5 6 10 11 12,Turnips
+watermelon,US,6 7 8,Watermelon
+watermelon,NC,7 8,Watermelon
+yam,US,1 2 9 10 11 12,Sweet Potatoes & Yams
+yellow bell pepper,US,6 7 8 9 10 11,Bell Peppers
+yellow bell pepper,NC,6 7 8,Peppers
+yellow squash,US,6 7 8,Summer Squash
+yellow squash,NC,6 7 8 9,Squash - Yellow
+zucchini,US,6 7 8,Zucchini
+zucchini,NC,5 6 7 8 9,Zucchini

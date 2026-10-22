@@ -103,7 +103,7 @@ async def draft(
     """Draft the week's open dinners (TYL-65). Nothing is saved: the web app
     adds the picks the user accepts as normal plan entries."""
     try:
-        rows = await draft_pool(user_id, week_start)
+        found = await draft_pool(user_id, week_start)
     except StoreError as exc:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, "We couldn't load your recipes. Try again."
@@ -116,8 +116,10 @@ async def draft(
             favorite=r.get("favorite"),
             weeks_ago=r.get("weeks_ago"),
             cuisines=list(r.get("cuisines") or []),
+            in_season=list(r.get("in_season") or []),
+            out_of_season=int(r.get("out_of_season") or 0),
         )
-        for r in rows
+        for r in found.get("candidates") or []
     ]
     locked = [str(r) for r in body.locked]
     pool.sort(key=lambda c: (c.recipe_id not in locked, not c.due, c.weeks_ago is not None))
@@ -134,5 +136,6 @@ async def draft(
         exclude=[str(r) for r in body.exclude],
         on=week_start,
         store_id=store_id,
+        cook_with_seasons=bool(found.get("cook_with_seasons")),
     )
     return asdict(result)

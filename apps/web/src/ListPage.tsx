@@ -16,6 +16,7 @@ import {
 } from './list.ts'
 import { addDays, dollars, weekLabel, weekOf, type PlanCost } from './plan.ts'
 import { Link } from './router.tsx'
+import { seasonOf, type Seasons } from './seasons.ts'
 
 /** A place an item can be bought: the user's store, or one they added. */
 export interface Place {
@@ -36,6 +37,8 @@ export interface ListApi {
   places(): Promise<Place[]>
   /** Add a place of the user's own (a market stand, a bakery). */
   addPlace(name: string): Promise<Place>
+  /** What's in season where the user lives, to mark it (TYL-70). */
+  seasons(): Promise<Seasons>
 }
 
 /** A list with any changes still waiting to be sent applied, as the user
@@ -68,6 +71,18 @@ export function ListPage({
   const [editing, setEditing] = useState<string | null>(null)
   const [showRemoved, setShowRemoved] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [seasons, setSeasons] = useState<Seasons | null>(null)
+  // Marks only; the list works without them.
+  useEffect(() => {
+    let live = true
+    api.seasons().then(
+      (s) => live && setSeasons(s),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
 
   // Send any changes made offline, then bring the list up to date with the
   // plan, then reload it. Changes go first: otherwise the plan could drop an
@@ -163,6 +178,8 @@ export function ListPage({
     groups.set(key, [...(groups.get(key) ?? []), i])
   }
   const title = `Shopping list · week of ${weekLabel(week)}`
+  // The month the week mostly falls in, for what's in season (TYL-70).
+  const month = Number(addDays(week, 3).slice(5, 7))
 
   // Share the list as text, or copy it where sharing isn't available.
   async function share() {
@@ -195,6 +212,9 @@ export function ListPage({
           <span>
             {i.name}
             {i.amount && <span className="muted small"> · {i.amount}</span>}
+            {seasons && seasonOf(seasons, i.ingredientId, month) === 'in' && (
+              <span className="small in-season"> · in season</span>
+            )}
           </span>
         </label>
         {price?.cents != null && !i.checked && (

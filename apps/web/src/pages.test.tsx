@@ -120,6 +120,24 @@ describe('RecipePage', () => {
     ...fakeCookedApi(),
   })
 
+  it('says what’s in season in the recipe (TYL-70)', async () => {
+    const a = api({
+      ...BURRITOS,
+      ingredients: BURRITOS.ingredients.map((i, n) => ({
+        ...i,
+        ingredientId: n === 0 ? 'beans' : null,
+      })),
+    })
+    const month = new Date().getMonth() + 1
+    a.seasons.mockResolvedValue(
+      new Map([['beans', { name: 'refried beans', months: [month] }]]),
+    )
+    render(<RecipePage id={BURRITOS.id} api={a} />)
+    expect(
+      await screen.findByText('In season: refried beans'),
+    ).toBeInTheDocument()
+  })
+
   it('hearts the recipe and keeps how often it comes back (TYL-66)', async () => {
     const a = api(BURRITOS)
     render(<RecipePage id={BURRITOS.id} api={a} />)

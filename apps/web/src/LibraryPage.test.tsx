@@ -46,6 +46,7 @@ function fakeApi(recipes: SavedRecipe[] = []): LibraryApi & {
     savePage: vi.fn(async () => SAVED),
     saveText: vi.fn(async () => SAVED),
     remove: vi.fn(async () => {}),
+    seasons: vi.fn(async () => new Map()),
   }
 }
 

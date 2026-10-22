@@ -94,6 +94,7 @@ const library = (
   clearMyPrice: vi.fn(async () => {}),
   saveChoice: vi.fn(async () => {}),
   moveEntry: vi.fn(async () => {}),
+  resetSeasons: vi.fn(),
   draftWeek: vi.fn(async () => ({
     picks: [],
     totalCents: 0,
@@ -248,6 +249,19 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'This week' }),
     ).toBeInTheDocument()
     expect(window.location.pathname).toBe('/')
+    // A home zip may have been set: seasons are read again (TYL-70).
+    expect(api.resetSeasons).toHaveBeenCalled()
+  })
+
+  it('reads seasons again after preferences are saved (TYL-70)', async () => {
+    window.history.replaceState(null, '', '/settings')
+    const { auth } = fakeAuth(session)
+    const api = library()
+    render(<App auth={auth} libraryApi={() => api} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Save preferences' }),
+    )
+    await waitFor(() => expect(api.resetSeasons).toHaveBeenCalled())
   })
 
   it('doesn’t send anyone to setup when preferences fail to load', async () => {

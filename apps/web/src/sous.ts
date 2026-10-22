@@ -18,6 +18,8 @@ export interface IngredientLine {
   unit: string | null
   preparation: string | null
   isOptional: boolean
+  /** The ingredient it matched, if any (for seasons, TYL-70). */
+  ingredientId?: string | null
 }
 
 export interface RecipeDetail {
@@ -78,6 +80,7 @@ interface RecipeRow {
     unit: string | null
     preparation: string | null
     is_optional: boolean
+    ingredient_id?: string | null
   }[]
   diets: {
     diet_slug: string
@@ -106,7 +109,7 @@ export async function recipeDetail(
     .select(
       `id, title, source_url, source_note, servings, prep_minutes, cook_minutes, total_minutes,
        instructions, added_by, source:recipe_sources(name, license_name, license_url, attribution),
-       ingredients:recipe_ingredients(line_no, option_no, raw_text, section, name, quantity, quantity_max, unit, preparation, is_optional),
+       ingredients:recipe_ingredients(line_no, option_no, raw_text, section, name, quantity, quantity_max, unit, preparation, is_optional, ingredient_id),
        diets:recipe_diets(diet_slug, source, checks), cuisines:recipe_cuisines(cuisine_slug),
        favorite:user_favorite_recipes(frequency)`,
     )
@@ -152,6 +155,7 @@ export async function recipeDetail(
         unit: i.unit ?? null,
         preparation: i.preparation ?? null,
         isOptional: i.is_optional,
+        ingredientId: i.ingredient_id ?? null,
       })),
     // The publisher's own tags are only hints; show what the ingredients prove.
     diets: r.diets
@@ -350,6 +354,8 @@ export interface Preferences {
   favoriteCuisines: string[]
   favoriteIngredients: IngredientRef[]
   dislikedIngredients: IngredientRef[]
+  /** "Plan my week" leans harder on what's in season (TYL-70). */
+  cookWithSeasons: boolean
 }
 
 export const NO_PREFERENCES: Preferences = {
@@ -364,6 +370,7 @@ export const NO_PREFERENCES: Preferences = {
   favoriteCuisines: [],
   favoriteIngredients: [],
   dislikedIngredients: [],
+  cookWithSeasons: false,
 }
 
 /** Diet categories a user can mark as allergies or things to avoid. */
@@ -398,7 +405,7 @@ export async function loadPreferences(
     db
       .from('profiles')
       .select(
-        'allergens, avoid_categories, strict_may_contain, household_size, weekly_budget_cents, home_zip',
+        'allergens, avoid_categories, strict_may_contain, household_size, weekly_budget_cents, home_zip, cook_with_seasons',
       )
       .eq('user_id', userId)
       .maybeSingle(),
@@ -420,6 +427,7 @@ export async function loadPreferences(
     household_size: number
     weekly_budget_cents: number | null
     home_zip?: string | null
+    cook_with_seasons?: boolean | null
   } | null
   return {
     saved: !!p,
@@ -430,6 +438,7 @@ export async function loadPreferences(
     householdSize: p?.household_size ?? 1,
     weeklyBudgetCents: p?.weekly_budget_cents ?? null,
     homeZip: p?.home_zip ?? null,
+    cookWithSeasons: p?.cook_with_seasons ?? false,
     favoriteCuisines: (cuisines.data ?? []).map(
       (c: { cuisine_slug: string }) => c.cuisine_slug,
     ),
@@ -474,6 +483,7 @@ export async function savePreferences(
     household_size: p.householdSize,
     weekly_budget_cents: p.weeklyBudgetCents,
     home_zip: p.homeZip,
+    cook_with_seasons: p.cookWithSeasons,
   })
   if (profile.error) throw profile.error
   await replaceRows(db, 'user_diets', userId, 'diet_slug', p.diets)

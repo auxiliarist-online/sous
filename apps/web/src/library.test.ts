@@ -97,7 +97,12 @@ describe('savedRecipes', () => {
           source_url: 'https://blog.example/dal/',
           source_note: null,
           total_minutes: 30,
-          ingredients: [{ name: 'red lentils' }, { name: null }],
+          ingredients: [
+            { name: 'red lentils', ingredient_id: 'lentils', option_no: 1 },
+            // An alternative isn't one of its ingredients for seasons (TYL-70).
+            { name: 'yellow split peas', ingredient_id: 'peas', option_no: 2 },
+            { name: null },
+          ],
           source: { name: 'Example Blog' },
           diets: [
             { diet_slug: 'vegan', source: 'derived', checks: [] },
@@ -120,7 +125,8 @@ describe('savedRecipes', () => {
         totalMinutes: 30,
         savedAt: '2026-10-09T10:00:00Z',
         diets: [{ slug: 'vegan', checks: [] }],
-        ingredients: ['red lentils'],
+        ingredients: ['red lentils', 'yellow split peas'],
+        ingredientIds: ['lentils'],
         tags: ['weeknight'],
         cuisines: [],
         favorite: null,

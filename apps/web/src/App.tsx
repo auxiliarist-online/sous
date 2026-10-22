@@ -53,6 +53,7 @@ import {
 } from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { History, type HistoryApi } from './History.tsx'
+import { loadSeasons, type Seasons } from './seasons.ts'
 import { addFavorite, recentRecipes, setFavorite } from './favorites.ts'
 import {
   cookedEntries,
@@ -107,12 +108,25 @@ export type SousApi = LibraryApi &
   PlanApi &
   BrowseApi &
   FeedbackApi &
-  HistoryApi
+  HistoryApi & {
+    /** Forget the cached seasons: the home zip (the region) may have changed. */
+    resetSeasons(): void
+  }
 
 /** The real API for a signed-in session: Supabase under the user's
  *  row-level security, and the Sous API for what needs the server. */
 function liveApi(db: SupabaseClient, session: Session): SousApi {
   const userId = session.user.id
+  // Seasons change by the month, not the minute: loaded once per session (a
+  // failure isn't kept, so the next page tries again).
+  let seasonsLoad: Promise<Seasons> | null = null
+  const seasons = () => {
+    seasonsLoad ??= loadSeasons(db).catch((e: unknown) => {
+      seasonsLoad = null
+      throw e
+    })
+    return seasonsLoad
+  }
   return {
     list: () => savedRecipes(db),
     save: (url) => importRecipe(session, url),
@@ -150,6 +164,10 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     recentRecipes: (week, weeks) => recentRecipes(db, week, weeks),
     moveEntry: (id, week) => moveEntry(db, id, week),
     draftWeek: (week, options) => draftWeek(session, week, options),
+    seasons,
+    resetSeasons: () => {
+      seasonsLoad = null
+    },
     favoriteCuisines: () =>
       loadPreferences(db, userId).then((p) => p.favoriteCuisines),
     recipeFits: (ids) => recipeFits(db, ids),
@@ -357,6 +375,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
               email={session.user.email}
               onSaved={(p) => {
                 clearBrowseCache() // Find's ranking depends on preferences
+                api.resetSeasons() // the home zip decides the region's seasons
                 setPrefs(p)
               }}
               onSignOut={() => {
@@ -379,6 +398,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
               initial={prefs}
               onDone={(p) => {
                 clearBrowseCache()
+                api.resetSeasons() // the home zip decides the region's seasons
                 setPrefs(p)
                 navigate('/', true)
               }}
