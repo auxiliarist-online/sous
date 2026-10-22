@@ -114,6 +114,19 @@ describe('the pantry page (TYL-134)', () => {
     ).toHaveLength(1)
   })
 
+  it('leaves a kept staple a staple when it’s added as on hand too', async () => {
+    const api = pantryApi({ entries: [staple('salt', 'salt')] })
+    api.searchIngredients.mockResolvedValue([{ id: 'salt', name: 'salt' }])
+    render(<PantryPage api={api} />)
+    await userEvent.type(
+      await screen.findByLabelText(/add to have right now/),
+      'sa',
+    )
+    await userEvent.click(await screen.findByRole('button', { name: '+ salt' }))
+    expect(api.setPantry).not.toHaveBeenCalled()
+    expect(screen.getByRole('checkbox', { name: 'salt' })).toBeChecked()
+  })
+
   it('waits for one save before taking another tap on the same staple', async () => {
     const api = pantryApi({ entries: [staple('salt', 'salt')] })
     let finish!: () => void

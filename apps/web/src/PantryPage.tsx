@@ -117,6 +117,7 @@ export function PantryPage({
     next: { status: PantryStatus; kind: PantryKind } | null,
   ) {
     const before = byId.get(item.id)
+    // Swap this item's entry in what's shown, or take it out.
     const replace = (entry: PantryEntry | undefined) =>
       setEntries((all) => [
         ...(all ?? []).filter((e) => e.ingredientId !== item.id),
@@ -319,8 +320,9 @@ export function PantryPage({
         chosen={onHand.map((e) => ({ id: e.ingredientId, name: e.name }))}
         search={api.searchIngredients}
         onChange={(next) => {
+          // Only what isn't in the pantry yet: a staple stays a staple.
           for (const i of next)
-            if (!byId.has(i.id) || byId.get(i.id)?.kind !== 'on_hand')
+            if (!byId.has(i.id))
               void save(
                 { ...i, group: null },
                 { status: 'have', kind: 'on_hand' },

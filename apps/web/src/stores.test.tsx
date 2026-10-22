@@ -232,6 +232,33 @@ describe('Welcome', () => {
   })
 })
 
+describe('Welcome’s starter kits (TYL-135)', () => {
+  it('keeps only the kit items shown, after going back and changing cuisines', async () => {
+    const api = welcomeApi()
+    render(<Welcome api={api} initial={NO_PREFERENCES} onDone={vi.fn()} />)
+    const next = async () =>
+      userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+    await next() // allergies
+    await next() // cuisines
+    await userEvent.click(screen.getByRole('button', { name: 'Thai' }))
+    for (let i = 0; i < 4; i++) await next()
+    // Basics and Thai; olive oil unchecked.
+    await userEvent.click(screen.getByRole('checkbox', { name: 'olive oil' }))
+    expect(screen.getByRole('checkbox', { name: 'fish sauce' })).toBeChecked()
+    // Back to cuisines: Thai off, so fish sauce goes; then forward again.
+    for (let i = 0; i < 4; i++)
+      await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Thai' }))
+    for (let i = 0; i < 4; i++) await next()
+    expect(screen.queryByRole('checkbox', { name: 'fish sauce' })).toBeNull()
+    expect(
+      screen.getByRole('checkbox', { name: 'olive oil' }),
+    ).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
+    await waitFor(() => expect(api.keepStaples).toHaveBeenCalledWith(['salt']))
+  })
+})
+
 describe('Welcome when things fail', () => {
   it('can still be finished when the diet and cuisine lists fail', async () => {
     const api = welcomeApi()

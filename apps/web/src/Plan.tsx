@@ -240,7 +240,11 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
                     item.ingredientId!,
                     status,
                     // A pantry item is a staple; anything else, a one-off.
-                    pantryItems?.has(item.ingredientId!) ? 'staple' : 'on_hand',
+                    // Before the pantry list loads (or if it can't), the
+                    // catalog's own staple flag decides.
+                    (pantryItems?.has(item.ingredientId!) ?? item.staple)
+                      ? 'staple'
+                      : 'on_hand',
                   ),
                 "We couldn't update your pantry. Try again.",
               )

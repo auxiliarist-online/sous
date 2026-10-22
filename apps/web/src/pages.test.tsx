@@ -530,6 +530,38 @@ describe('Settings', () => {
     expect(a.pantryKits).toHaveBeenCalledTimes(1)
   })
 
+  it('starts a new kit offer over, all of it checked', async () => {
+    const a = api()
+    render(
+      <Settings
+        api={a}
+        email="cook@example.com"
+        onSaved={vi.fn()}
+        onSignOut={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    )
+    const save = () =>
+      userEvent.click(screen.getByRole('button', { name: 'Save preferences' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Thai' }))
+    await save()
+    await userEvent.click(
+      await screen.findByRole('checkbox', { name: 'fish sauce' }),
+    )
+    // Vegetarian off and saved, then on again: its kit is the new offer.
+    await userEvent.click(screen.getByRole('button', { name: 'Vegetarian' }))
+    await save()
+    await userEvent.click(screen.getByRole('button', { name: 'Vegetarian' }))
+    await save()
+    expect(
+      await screen.findByRole('checkbox', { name: 'ground cumin' }),
+    ).toBeChecked()
+    expect(screen.queryByRole('checkbox', { name: 'fish sauce' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Keep these 1' }),
+    ).toBeInTheDocument()
+  })
+
   it('lets the household size be cleared and retyped', async () => {
     const a = api()
     render(

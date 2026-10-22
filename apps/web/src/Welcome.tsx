@@ -44,8 +44,8 @@ export function Welcome({
   const [optionsFailed, setOptionsFailed] = useState(false)
   const [catalog, setCatalog] = useState<PantryItem[]>([])
   const [kits, setKits] = useState<Kit[]>([])
-  // What's checked in the starter kits; null until changed (all of them).
-  const [have, setHave] = useState<string[] | null>(null)
+  // What's been unchecked in the starter kits: everything else shown is kept.
+  const [unchecked, setUnchecked] = useState<string[]>([])
   // The kits are only kept if the user got to see them.
   const [sawKits, setSawKits] = useState(false)
   const [step, setStep] = useState(0)
@@ -83,7 +83,12 @@ export function Welcome({
   const last = TITLES.length - 1
   // The starter kits for the diets and cuisines chosen so far (TYL-135).
   const starter = kitItems(kitsFor(kits, prefs), catalog)
-  const checked = have ?? starter.flatMap((k) => k.items.map((i) => i.id))
+  // What's checked: what's shown, less what was unchecked. Going back and
+  // changing cuisines or diets hides some and shows new ones (pre-checked);
+  // only what's shown is kept.
+  const shown = starter.flatMap((k) => k.items.map((i) => i.id))
+  const checked = shown.filter((id) => !unchecked.includes(id))
+  // Go to a step, noting when the kits have been seen.
   const go = (to: number) => {
     if (to === last) setSawKits(true)
     setStep(to)
@@ -209,7 +214,12 @@ export function Welcome({
                 ]),
               )}
               checked={checked}
-              onChange={setHave}
+              onChange={(next) =>
+                setUnchecked((u) => [
+                  ...u.filter((id) => !shown.includes(id)),
+                  ...shown.filter((id) => !next.includes(id)),
+                ])
+              }
             />
           </>
         )

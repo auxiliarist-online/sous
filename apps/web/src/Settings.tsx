@@ -438,6 +438,8 @@ export function Settings({
       </p>
       {offer.length > 0 && (
         <KitOffer
+          // A new offer starts over, all of it checked.
+          key={offer.map((k) => k.kit).join(',')}
           kits={offer}
           names={Object.fromEntries(
             [...options.cuisines, ...options.diets].map((o) => [
