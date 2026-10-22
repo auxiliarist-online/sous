@@ -57,6 +57,8 @@ export interface PlanApi extends CookedApi, DraftApi {
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
   /** The user's favorite cuisine slugs, to suggest those first. */
   favoriteCuisines(): Promise<string[]>
+  /** Mark an ingredient in the pantry, as a staple or on hand; a null status
+   *  takes it out, so it's bought. */
   setPantry(
     ingredientId: string,
     status: PantryStatus | null,
