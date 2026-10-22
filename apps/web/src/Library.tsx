@@ -308,7 +308,7 @@ export function Library({
         )}
         {!!recipes?.length && (
           <RecipeList
-            recipes={filterRecipes(recipes, filter)}
+            recipes={filterRecipes(recipes, filter, inSeason)}
             onRemove={(r) => void remove(r)}
           />
         )}
@@ -643,7 +643,7 @@ function Filters({
             onClick={() =>
               onChange({
                 ...filter,
-                inSeason: filter.inSeason ? null : inSeason,
+                inSeason: !filter.inSeason,
               })
             }
           >

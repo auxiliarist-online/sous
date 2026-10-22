@@ -115,6 +115,19 @@ describe('SeasonCard', () => {
 })
 
 describe('the library’s In season filter', () => {
+  it('filters with the current in-season list, not one kept from before', async () => {
+    const { filterRecipes, NO_FILTER } = await import('./library.ts')
+    const recipes = [saved('r1', 'A', []), saved('r2', 'B', [])]
+    const on = { ...NO_FILTER, inSeason: true }
+    expect(
+      filterRecipes(recipes, on, new Set(['r1'])).map((r) => r.id),
+    ).toEqual(['r1'])
+    // A recipe saved since is in the new list, and shows.
+    expect(
+      filterRecipes(recipes, on, new Set(['r1', 'r2'])).map((r) => r.id),
+    ).toEqual(['r1', 'r2'])
+  })
+
   it('shows only recipes in season this month', async () => {
     const { Library } = await import('./Library.tsx')
     vi.useFakeTimers({ toFake: ['Date'] })

@@ -19,6 +19,7 @@ add its zip range to season_region(), and write a new migration.
 """
 
 import csv
+import re
 import sys
 from pathlib import Path
 
@@ -32,15 +33,20 @@ def sql_text(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
 
 
-def rows() -> list[dict[str, str]]:
-    """The checked rows of the data file: months 1-12, no duplicates."""
+def rows(path: Path = DATA) -> list[dict[str, str]]:
+    """The checked rows of the data file: ingredient names lower-cased (the
+    migration matches lower(name)), a region the table accepts ("US" or a
+    state's two letters), months 1-12, and no ingredient twice in a region."""
     out, seen, errors = [], set(), []
-    for n, r in enumerate(csv.DictReader(DATA.open(encoding="utf-8")), 2):
+    for n, r in enumerate(csv.DictReader(path.open(encoding="utf-8")), 2):
+        r = {**r, "ingredient": r["ingredient"].strip().lower(), "region": r["region"].strip()}
         key = (r["ingredient"], r["region"])
-        months = [int(m) for m in r["months"].split()]
         if key in seen:
             errors.append(f"line {n}: {key} twice")
-        if not months or any(m < 1 or m > 12 for m in months):
+        if not re.fullmatch(r"US|[A-Z]{2}", r["region"]):
+            errors.append(f"line {n}: bad region {r['region']!r}")
+        parts = r["months"].split()
+        if not parts or not all(p.isdigit() and 1 <= int(p) <= 12 for p in parts):
             errors.append(f"line {n}: bad months {r['months']!r}")
         seen.add(key)
         out.append(r)

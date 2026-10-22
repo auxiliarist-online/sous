@@ -108,7 +108,10 @@ export type SousApi = LibraryApi &
   PlanApi &
   BrowseApi &
   FeedbackApi &
-  HistoryApi
+  HistoryApi & {
+    /** Forget the cached seasons: the home zip (the region) may have changed. */
+    resetSeasons(): void
+  }
 
 /** The real API for a signed-in session: Supabase under the user's
  *  row-level security, and the Sous API for what needs the server. */
@@ -162,6 +165,9 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     moveEntry: (id, week) => moveEntry(db, id, week),
     draftWeek: (week, options) => draftWeek(session, week, options),
     seasons,
+    resetSeasons: () => {
+      seasonsLoad = null
+    },
     favoriteCuisines: () =>
       loadPreferences(db, userId).then((p) => p.favoriteCuisines),
     recipeFits: (ids) => recipeFits(db, ids),
@@ -369,6 +375,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
               email={session.user.email}
               onSaved={(p) => {
                 clearBrowseCache() // Find's ranking depends on preferences
+                api.resetSeasons() // the home zip decides the region's seasons
                 setPrefs(p)
               }}
               onSignOut={() => {
@@ -391,6 +398,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
               initial={prefs}
               onDone={(p) => {
                 clearBrowseCache()
+                api.resetSeasons() // the home zip decides the region's seasons
                 setPrefs(p)
                 navigate('/', true)
               }}
