@@ -230,7 +230,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
             <DraftWeek
               api={api}
               week={week}
-              planned={entries.length}
+              planned={dinners(entries)}
               onDone={() => {
                 setDrafting(false)
                 reload()
@@ -238,7 +238,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
               onCancel={() => setDrafting(false)}
             />
           ) : (
-            entries.length < 7 && (
+            dinners(entries) < 7 && (
               <button
                 type="button"
                 className="secondary plan-my-week"
@@ -835,6 +835,12 @@ function Entry({
       </details>
     </li>
   )
+}
+
+/** How many of the week's meals are dinners: a lunch doesn't fill a night
+ *  for "Plan my week" (TYL-65). An entry without a meal is a dinner. */
+function dinners(entries: PlanEntry[]): number {
+  return entries.filter((e) => !e.meal || e.meal === 'dinner').length
 }
 
 /** Why a suggestion sits where it does (TYL-66): a favorite that's due, or

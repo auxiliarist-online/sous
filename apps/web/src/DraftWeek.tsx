@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { dollars, formatQuantity, type WeekDraft } from './plan.ts'
 
 export interface DraftApi {
@@ -36,9 +36,11 @@ export function DraftWeek({
   const [draft, setDraft] = useState<WeekDraft | null>(null)
   const [locked, setLocked] = useState<string[]>([])
   const [excluded, setExcluded] = useState<string[]>([])
-  const [state, setState] = useState<'loading' | 'ready' | 'adding' | 'error'>(
-    'loading',
-  )
+  // Picks already added, so a retry after a failure doesn't add them twice.
+  const added = useRef<Set<string>>(new Set())
+  const [state, setState] = useState<
+    'loading' | 'ready' | 'adding' | 'error' | 'add-error'
+  >('loading')
 
   // Ask for a draft keeping `keep` and never picking `skip`.
   const run = useCallback(
@@ -88,11 +90,14 @@ export function DraftWeek({
   async function accept() {
     setState('adding')
     try {
-      for (const p of draft!.picks)
+      for (const p of draft!.picks) {
+        if (added.current.has(p.recipeId)) continue
         await api.addToPlan(week, p.recipeId, 1, null)
+        added.current.add(p.recipeId)
+      }
       onDone()
     } catch {
-      setState('error')
+      setState('add-error')
     }
   }
 
@@ -129,6 +134,14 @@ export function DraftWeek({
             className="link"
             onClick={() => void run(dinners, locked, excluded)}
           >
+            Try again
+          </button>
+        </p>
+      )}
+      {state === 'add-error' && (
+        <p role="alert" className="error">
+          We couldn't add them all.{' '}
+          <button type="button" className="link" onClick={() => void accept()}>
             Try again
           </button>
         </p>

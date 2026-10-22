@@ -77,6 +77,8 @@ export interface PlanEntry {
   /** The day it's planned for, or null for "some day this week". */
   day: string | null
   position: number
+  /** Which meal it is; null means dinner (TYL-65 counts dinners). */
+  meal: string | null
   /** Its main proteins ("poultry") and cuisines ("Italian"), for variety
    *  notes (TYL-66). */
   proteins: string[]
@@ -88,6 +90,7 @@ interface EntryRow {
   scale: number
   planned_for: string | null
   position: number
+  meal?: string | null
   recipe: {
     id: string
     title: string
@@ -112,7 +115,7 @@ export async function loadPlan(
   const { data, error } = await db
     .from('meal_plans')
     .select(
-      'entries:meal_plan_entries(id, scale, planned_for, position, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name))))',
+      'entries:meal_plan_entries(id, scale, planned_for, position, meal, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name))))',
     )
     .eq('week_start', weekStart)
     .maybeSingle()
@@ -129,6 +132,7 @@ export async function loadPlan(
       recipeServings: e.recipe!.servings,
       day: e.planned_for,
       position: e.position,
+      meal: e.meal ?? null,
       proteins: mainProteins(
         (e.recipe!.lines ?? [])
           .filter((l) => l.option_no === 1 && !l.is_optional && l.ingredient)

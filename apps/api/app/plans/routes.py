@@ -12,6 +12,7 @@ Adding, editing and copying plans happens in the web app, straight against
 Supabase under row-level security; pricing needs the API's unit conversions.
 """
 
+import asyncio
 from dataclasses import asdict
 from datetime import date
 from typing import Annotated, Any
@@ -122,7 +123,10 @@ async def draft(
     pool.sort(key=lambda c: (c.recipe_id not in locked, not c.due, c.weeks_ago is not None))
     pool = [c for c in pool if c.fit != "excluded"][:DRAFT_POOL]
     inputs, store_id = await _inputs(user_id, week_start, [c.recipe_id for c in pool])
-    result = draft_week(
+    # CPU work (scoring many weeks): off the event loop, so other requests
+    # aren't held up. draft_week keeps all its state per call.
+    result = await asyncio.to_thread(
+        draft_week,
         inputs,
         pool,
         dinners=body.dinners,

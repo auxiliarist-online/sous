@@ -198,6 +198,28 @@ class TestDraft:
         assert all("olive oil" not in p.reason for p in d.picks)
         assert d.leftovers == []
 
+    def test_only_dinners_count(self) -> None:
+        lunch = {
+            **recipe("lunch", ("beans", 1, "each")),
+            "id": "e1",
+            "candidate": False,
+            "meal": "lunch",
+        }
+        week = inputs(lunch, recipe("a", ("rice", 1, "cup")), recipe("b", ("beans", 1, "each")))
+        d = draft_week(week, pool("a", "b"), dinners=2, locked=[], exclude=[], on=MONDAY)
+        assert picked(d) == ["a", "b"]
+
+    def test_a_weekly_favorite_had_a_week_ago(self) -> None:
+        d = draft_week(
+            inputs(recipe("fav", ("beans", 1, "each"))),
+            [Candidate("fav", "Fav", "fits", favorite="weekly", weeks_ago=1)],
+            dinners=1,
+            locked=[],
+            exclude=[],
+            on=MONDAY,
+        )
+        assert d.picks[0].reason == "A favorite, last had 1 week ago"
+
     def test_says_what_is_left_over(self) -> None:
         d = draft_week(
             inputs(recipe("rice", ("rice", 1, "cup"))),

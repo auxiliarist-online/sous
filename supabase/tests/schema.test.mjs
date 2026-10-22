@@ -3580,5 +3580,22 @@ describe('plan draft pool (TYL-65)', () => {
       ),
       /permission denied|only callable/,
     )
+    // The week's entries say which meal they are, for counting dinners.
+    await as('authenticated', DRAFTER, () =>
+      db.query("select add_to_meal_plan('2026-10-19', $1, 1, null, 'lunch')", [
+        fresh,
+      ]),
+    )
+    const inputs = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        "select plan_cost_inputs($1, '2026-10-19') as r",
+        [DRAFTER],
+      )
+      return rows[0].r
+    })
+    assert.deepEqual(
+      inputs.entries.map((e) => e.meal),
+      ['lunch'],
+    )
   })
 })

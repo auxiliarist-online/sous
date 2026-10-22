@@ -54,6 +54,8 @@ class Candidate:
 
 @dataclass
 class Pick:
+    """A drafted dinner, why it was picked, and whether the user kept it."""
+
     recipe_id: str
     title: str
     reason: str
@@ -62,6 +64,8 @@ class Pick:
 
 @dataclass
 class Leftover:
+    """What's left of a package the week buys ("3 cup white rice")."""
+
     name: str
     quantity: float
     unit: str
@@ -69,6 +73,9 @@ class Leftover:
 
 @dataclass
 class Draft:
+    """What draft_week returns and the route sends: the picks, the week's
+    total against the budget, what's left over, and notes for the user."""
+
     picks: list[Pick]
     total_cents: int
     budget_cents: int | None
@@ -103,6 +110,8 @@ class Week:
         on: date,
         store_id: str | None,
     ) -> None:
+        """Split the inputs into what's planned and the candidates' lines, and
+        work out each candidate's main proteins."""
         self.inputs = inputs
         self.on = on
         self.store_id = store_id
@@ -132,6 +141,7 @@ class Week:
         return self._score(picks)[0]
 
     def _score(self, picks: frozenset[str]) -> tuple[float, PlanCost]:
+        """The (score, cost) of a set of picks, worked out once and memoized."""
         if picks in self._memo:
             return self._memo[picks]
         entries = [*self.planned] + [
@@ -183,11 +193,14 @@ def draft_week(
 ) -> Draft:
     """Draft the week's open dinners. `inputs` is plan_cost_inputs() with the
     pool as candidates; `locked` picks stay; `exclude` are never picked (a
-    swap). Planned meals count toward `dinners` and stay as they are."""
+    swap). Planned dinners count toward `dinners` and stay as they are."""
     week = Week(inputs, pool, on=on, store_id=store_id)
     planned_ids = {str(e["recipe_id"]) for e in week.planned}
     keep = [r for r in dict.fromkeys(locked) if r in week.pool and r not in planned_ids]
-    open_slots = max(0, dinners - len(week.planned) - len(keep))
+    # Only dinners count (an entry without a meal is one); a planned lunch
+    # stays in the week's cost but doesn't fill a night.
+    planned_dinners = [e for e in week.planned if (e.get("meal") or "dinner") == "dinner"]
+    open_slots = max(0, dinners - len(planned_dinners) - len(keep))
     eligible = [
         c.recipe_id
         for c in week.pool.values()
@@ -251,11 +264,10 @@ def reason(week: Week, picks: frozenset[str], recipe_id: str) -> str:
     ingredient it shares with another meal, or what it adds."""
     c = week.pool[recipe_id]
     if c.due:
-        return (
-            f"A favorite, last had {c.weeks_ago} weeks ago"
-            if c.weeks_ago
-            else "A favorite you haven't had lately"
-        )
+        if not c.weeks_ago:
+            return "A favorite you haven't had lately"
+        weeks = "week" if c.weeks_ago == 1 else "weeks"
+        return f"A favorite, last had {c.weeks_ago} {weeks} ago"
     without = {i.ingredient_id: i.cents for i in week.cost(picks - {recipe_id}).items}
     used = {
         line.get("ingredient_id")

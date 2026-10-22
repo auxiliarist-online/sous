@@ -356,6 +356,7 @@ const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
   recipeServings: 4,
   day: null,
   position: 0,
+  meal: null,
   proteins: [],
   cuisines: [],
   ...extra,
@@ -634,6 +635,35 @@ describe('plan my week (TYL-65)', () => {
     expect(
       await screen.findByRole('button', { name: 'Plan my week' }),
     ).toBeInTheDocument()
+  })
+
+  it('counts only dinners, and a retry doesn’t add a pick twice', async () => {
+    const api = fakeApi({ entries: [entry('1', { meal: 'lunch' })] })
+    api.addToPlan
+      .mockImplementationOnce(async () => void 0)
+      .mockImplementationOnce(async () => {
+        throw new Error('offline')
+      })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Plan my week' }),
+    )
+    // The lunch isn't a dinner already planned.
+    expect(screen.queryByText(/Counting the/)).toBeNull()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Add 2 to my week' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "We couldn't add them all.",
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() =>
+      expect(api.addToPlan.mock.calls.map((c) => c[1])).toEqual([
+        'a',
+        'b',
+        'b',
+      ]),
+    )
   })
 
   it('swaps one pick and keeps the rest; keeps what’s locked', async () => {
