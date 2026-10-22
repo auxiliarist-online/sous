@@ -1134,3 +1134,31 @@ label.button {
 .heart-mark {
   color: var(--color-secondary);
 }
+
+/* "Plan my week" (TYL-65). */
+.plan-my-week {
+  margin: 0.5rem 0;
+}
+
+.draft-picks {
+  list-style: none;
+  padding: 0;
+}
+
+.draft-picks li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.375rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--color-muted) 25%, transparent);
+}
+
+.draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}

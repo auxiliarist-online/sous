@@ -13,6 +13,7 @@ import {
   formatQuantity,
   isMonday,
   planCost,
+  draftWeek,
   saveChoice,
   scaledLine,
   weekDays,
@@ -24,6 +25,7 @@ import {
   type PlanCost,
   type PlanEntry,
   type Scale,
+  type WeekDraft,
 } from './plan.ts'
 import type { IngredientLine, RecipeDetail } from './sous.ts'
 import type { Cooked } from './cooked.ts'
@@ -354,6 +356,7 @@ const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
   recipeServings: 4,
   day: null,
   position: 0,
+  meal: null,
   proteins: [],
   cuisines: [],
   ...extra,
@@ -422,6 +425,28 @@ const COST: PlanCost = {
   ],
 }
 
+const DRAFT: WeekDraft = {
+  picks: [
+    {
+      recipeId: 'a',
+      title: 'Salsa',
+      reason: 'Uses the rest of the cilantro',
+      locked: false,
+    },
+    {
+      recipeId: 'b',
+      title: 'Tacos',
+      reason: 'Adds about $5 to the week',
+      locked: false,
+    },
+  ],
+  totalCents: 2400,
+  budgetCents: 6000,
+  overBudget: false,
+  leftovers: [{ name: 'white rice', quantity: 3, unit: 'cup' }],
+  notes: [],
+}
+
 function fakeApi({
   entries = [] as PlanEntry[],
   cost = COST,
@@ -431,6 +456,7 @@ function fakeApi({
   added = { budgetCents: null, totalCents: 0, recipes: {} } as AddedCosts,
   copied = 0,
   cooked = fakeCookedApi(),
+  draft = DRAFT,
 } = {}) {
   let current = entries
   const api = {
@@ -467,6 +493,12 @@ function fakeApi({
     ),
     clearMyPrice: vi.fn(async (_id: string, _store: string | null) => void 0),
     moveEntry: vi.fn(async (_id: string, _week: string) => void 0),
+    draftWeek: vi.fn(
+      async (
+        _week: string,
+        _o: { dinners: number; locked: string[]; exclude: string[] },
+      ) => draft,
+    ),
     saveChoice: vi.fn(
       async (_week: string, _key: string, _id: string) => void 0,
     ),
@@ -537,6 +569,146 @@ describe('cooked on the plan (TYL-68)', () => {
       'true',
     )
     expect(api.cookedEntries).toHaveBeenCalledWith(['1'])
+  })
+})
+
+describe('plan my week (TYL-65)', () => {
+  it('asks the API for a draft and reads it', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            picks: [
+              { recipe_id: 'a', title: 'Salsa', reason: 'Why', locked: true },
+            ],
+            total_cents: 900,
+            budget_cents: null,
+            over_budget: false,
+            leftovers: [],
+            notes: ['Only 1 of your saved recipes fit'],
+          }),
+        ),
+    )
+    const d = await draftWeek(
+      {} as Session,
+      WEEK,
+      {
+        dinners: 3,
+        locked: ['a'],
+        exclude: ['z'],
+      },
+      send,
+    )
+    expect(send).toHaveBeenCalledWith({}, `/plans/${WEEK}/draft`, {
+      method: 'POST',
+      body: JSON.stringify({ dinners: 3, locked: ['a'], exclude: ['z'] }),
+    })
+    expect(d.picks).toEqual([
+      { recipeId: 'a', title: 'Salsa', reason: 'Why', locked: true },
+    ])
+    expect(d.notes).toEqual(['Only 1 of your saved recipes fit'])
+  })
+
+  it('drafts the week with reasons, and adds it', async () => {
+    const api = fakeApi({ entries: [entry('1')] })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Plan my week' }),
+    )
+    expect(
+      await screen.findByText('· Uses the rest of the cilantro'),
+    ).toBeInTheDocument()
+    expect(api.draftWeek).toHaveBeenCalledWith(WEEK, {
+      dinners: 5,
+      locked: [],
+      exclude: [],
+    })
+    expect(
+      screen.getByText(/About \$24\.00 for the week of your \$60\.00 budget/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Left over: 3 cup white rice/)).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Add 2 to my week' }),
+    )
+    await waitFor(() => expect(api.addToPlan).toHaveBeenCalledTimes(2))
+    expect(api.addToPlan).toHaveBeenCalledWith(WEEK, 'a', 1, null)
+    expect(
+      await screen.findByRole('button', { name: 'Plan my week' }),
+    ).toBeInTheDocument()
+  })
+
+  it('a kept pick that’s swapped out isn’t kept any more', async () => {
+    const api = fakeApi({ entries: [] })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Plan my week' }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Keep Salsa' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Swap Salsa' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Draft again' }),
+    )
+    expect(api.draftWeek).toHaveBeenLastCalledWith(WEEK, {
+      dinners: 5,
+      locked: [],
+      exclude: ['a'],
+    })
+  })
+
+  it('counts only dinners, and a retry doesn’t add a pick twice', async () => {
+    const api = fakeApi({ entries: [entry('1', { meal: 'lunch' })] })
+    api.addToPlan
+      .mockImplementationOnce(async () => void 0)
+      .mockImplementationOnce(async () => {
+        throw new Error('offline')
+      })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Plan my week' }),
+    )
+    // The lunch isn't a dinner already planned.
+    expect(screen.queryByText(/Counting the/)).toBeNull()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Add 2 to my week' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "We couldn't add them all.",
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() =>
+      expect(api.addToPlan.mock.calls.map((c) => c[1])).toEqual([
+        'a',
+        'b',
+        'b',
+      ]),
+    )
+  })
+
+  it('swaps one pick and keeps the rest; keeps what’s locked', async () => {
+    const api = fakeApi({ entries: [] })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Plan my week' }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Swap Salsa' }),
+    )
+    expect(api.draftWeek).toHaveBeenLastCalledWith(WEEK, {
+      dinners: 5,
+      locked: ['b'],
+      exclude: ['a'],
+    })
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Keep Tacos' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Draft again' }))
+    expect(api.draftWeek).toHaveBeenLastCalledWith(WEEK, {
+      dinners: 5,
+      locked: ['b'],
+      exclude: ['a'],
+    })
   })
 })
 

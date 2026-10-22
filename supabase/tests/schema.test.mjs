@@ -3523,3 +3523,79 @@ describe('weights round 3 (TYL-60)', () => {
     assert.ok(units.every((u) => u.grams > 0 && u.source === 'usda'))
   })
 })
+
+describe('plan draft pool (TYL-65)', () => {
+  const DRAFTER = '00000000-0000-0000-0000-0000000000d4'
+
+  it('gives the API the user’s saved recipes with fit, rhythm and history', async () => {
+    await db.query('insert into auth.users (id) values ($1)', [DRAFTER])
+    const pork = await ingredient('pork', ['meat', 'pork'])
+    const fresh = await recipe('Draft fresh', [])
+    const had = await recipe('Draft had', [])
+    const porky = await recipe('Draft porky', [[pork]])
+    const unsaved = await recipe('Draft unsaved', [])
+    await db.query(
+      `insert into user_saved_recipes (user_id, recipe_id)
+       values ($1, $2), ($1, $3), ($1, $4)`,
+      [DRAFTER, fresh, had, porky],
+    )
+    await db.query(
+      "insert into profiles (user_id, avoid_categories) values ($1, '{pork}') on conflict (user_id) do update set avoid_categories = '{pork}'",
+      [DRAFTER],
+    )
+    await as('authenticated', DRAFTER, async () => {
+      await db.query(
+        "insert into user_favorite_recipes (recipe_id, frequency) values ($1, 'weekly')",
+        [fresh],
+      )
+      // Planned two weeks back, cooked last week.
+      await db.query("select add_to_meal_plan('2026-10-05', $1, 1)", [had])
+      await db.query(
+        "insert into cooked_meals (recipe_id, cooked_on) values ($1, '2026-10-14')",
+        [had],
+      )
+    })
+    const pool = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        "select plan_draft_pool($1, '2026-10-19') as p",
+        [DRAFTER],
+      )
+      return rows[0].p
+    })
+    const byTitle = Object.fromEntries(pool.map((c) => [c.title, c]))
+    assert.deepEqual(Object.keys(byTitle).sort(), [
+      'Draft fresh',
+      'Draft had',
+      'Draft porky',
+    ])
+    assert.equal(byTitle['Draft fresh'].favorite, 'weekly')
+    assert.equal(byTitle['Draft fresh'].weeks_ago, null)
+    assert.equal(byTitle['Draft had'].weeks_ago, 1)
+    assert.equal(byTitle['Draft porky'].fit, 'excluded')
+    assert.equal(byTitle['Draft fresh'].fit, 'fits')
+    assert.equal(unsaved in byTitle, false)
+    await assert.rejects(
+      as('authenticated', DRAFTER, () =>
+        db.query("select plan_draft_pool($1, '2026-10-19')", [DRAFTER]),
+      ),
+      /permission denied|only callable/,
+    )
+    // The week's entries say which meal they are, for counting dinners.
+    await as('authenticated', DRAFTER, () =>
+      db.query("select add_to_meal_plan('2026-10-19', $1, 1, null, 'lunch')", [
+        fresh,
+      ]),
+    )
+    const inputs = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        "select plan_cost_inputs($1, '2026-10-19') as r",
+        [DRAFTER],
+      )
+      return rows[0].r
+    })
+    assert.deepEqual(
+      inputs.entries.map((e) => e.meal),
+      ['lunch'],
+    )
+  })
+})

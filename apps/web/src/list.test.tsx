@@ -590,6 +590,7 @@ const entry = (id: string, day: string | null, title: string): PlanEntry => ({
   recipeServings: 4,
   day,
   position: 0,
+  meal: null,
   proteins: [],
   cuisines: [],
 })
