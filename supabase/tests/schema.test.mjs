@@ -3660,3 +3660,253 @@ describe('seasons (TYL-70)', () => {
     assert.equal(may.cook_with_seasons, false)
   })
 })
+
+describe('pantry: staples and on hand (TYL-133 to TYL-137)', () => {
+  const PAT = '00000000-0000-0000-0000-0000000000a1'
+  const SAM = '00000000-0000-0000-0000-0000000000a2'
+  const asPat = (sql, params) =>
+    as('authenticated', PAT, async () => (await db.query(sql, params)).rows)
+  const id = async (name) =>
+    (await db.query('select id from ingredients where name = $1', [name]))
+      .rows[0].id
+  // Monday of this week: out staples go on lists of weeks that aren't over.
+  const monday = (() => {
+    const d = new Date()
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
+    return d.toISOString().slice(0, 10)
+  })()
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1), ($2)', [PAT, SAM])
+  })
+
+  it('moves what was marked before: catalog staples stay staples, anything else is on hand', async () => {
+    // A database as it was before the pantry migration, with rows in it.
+    const old = new PGlite()
+    await old.exec(SUPABASE_STUB)
+    const files = (await readdir(migrationsDir))
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+    const at = files.indexOf('20261022030000_pantry.sql')
+    for (const file of files.slice(0, at))
+      await old.exec(await readFile(new URL(file, migrationsDir), 'utf8'))
+    await old.exec(`insert into auth.users (id) values ('${PAT}')`)
+    await old.query(
+      `insert into user_pantry (user_id, ingredient_id, status)
+       select $1, id, case name when 'cumin seeds' then 'out' else 'have' end
+       from ingredients where name in ('salt', 'cumin seeds', 'eggs')`,
+      [PAT],
+    )
+    for (const file of files.slice(at))
+      await old.exec(await readFile(new URL(file, migrationsDir), 'utf8'))
+    const { rows } = await old.query(
+      `select i.name, up.kind, up.status from user_pantry up
+       join ingredients i on i.id = up.ingredient_id order by i.name`,
+    )
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.kind, r.status]),
+      [
+        ['cumin seeds', 'staple', 'out'],
+        ['eggs', 'on_hand', 'have'],
+        ['salt', 'staple', 'have'],
+      ],
+    )
+    await old.close()
+  })
+
+  it('keeps on-hand entries "have", and each user’s pantry to themselves', async () => {
+    const spinach = await ingredient('spinach')
+    await asPat(
+      "insert into user_pantry (user_id, ingredient_id, status, kind) values ($1, $2, 'have', 'on_hand')",
+      [PAT, spinach],
+    )
+    await assert.rejects(
+      asPat("update user_pantry set status = 'out' where ingredient_id = $1", [
+        spinach,
+      ]),
+      /user_pantry_on_hand_is_have/,
+    )
+    const sams = await as('authenticated', SAM, async () => {
+      await db.query(
+        'insert into user_pantry_dismissed (ingredient_id) values ($1)',
+        [spinach],
+      )
+      return (await db.query('select * from user_pantry')).rows
+    })
+    assert.deepEqual(sams, [])
+    assert.deepEqual(await asPat('select * from user_pantry_dismissed'), [])
+  })
+
+  it('groups pantry items by aisle, and every kit is basics, a cuisine or a diet', async () => {
+    const { rows } = await db.query(
+      `select (select pantry_group from ingredients where name = 'garam masala') as garam,
+              (select count(*)::int from ingredients where pantry_group is not null) as grouped,
+              (select array_agg(distinct kit) from pantry_kits
+                where kit <> 'basics'
+                  and kit not in (select slug from cuisines)
+                  and kit not in (select slug from diets)) as unknown,
+              (select array_agg(i.name order by i.name) from pantry_kits k
+                join ingredients i on i.id = k.ingredient_id where k.kit = 'vegan') as vegan`,
+    )
+    assert.equal(rows[0].garam, 'spices')
+    assert.ok(rows[0].grouped > 200)
+    assert.equal(rows[0].unknown, null)
+    assert.ok(rows[0].vegan.includes('nutritional yeast'))
+    const anon = await as('anon', null, () =>
+      db.query(
+        "select count(*)::int as n from pantry_kits where kit = 'basics'",
+      ),
+    )
+    assert.ok(anon.rows[0].n > 10)
+  })
+
+  it('puts an out staple on this week’s list, and checking it off restocks it', async () => {
+    const cumin = await id('ground cumin')
+    const eggs = await ingredient('eggs')
+    await asPat(
+      "insert into user_pantry (user_id, ingredient_id, status, kind) values ($1, $2, 'out', 'staple')",
+      [PAT, cumin],
+    )
+    const sync = (week, items = []) =>
+      asPat('select sync_shopping_list($1, $2) as id', [
+        week,
+        JSON.stringify(items),
+      ])
+    const listed = (week) =>
+      asPat(
+        `select i.name, i.checked_at is not null as checked, i.id
+         from shopping_list_items i join shopping_lists l on l.id = i.shopping_list_id
+         where l.week_start = $1 order by i.name`,
+        [week],
+      )
+    await sync(monday, [
+      { ingredient_id: eggs, name: 'eggs', amount: '12', aisle: 'dairy_eggs' },
+    ])
+    // Synced again with no plan items: the out staple stays, the eggs go.
+    await sync(monday)
+    const items = await listed(monday)
+    assert.deepEqual(
+      items.map((i) => i.name),
+      ['ground cumin'],
+    )
+    // A week that's over doesn't get it.
+    await sync('2026-01-05')
+    assert.deepEqual(await listed('2026-01-05'), [])
+
+    const status = async () =>
+      (
+        await asPat('select status from user_pantry where ingredient_id = $1', [
+          cumin,
+        ])
+      )[0].status
+    await asPat(
+      'update shopping_list_items set checked_at = now() where id = $1',
+      [items[0].id],
+    )
+    assert.equal(await status(), 'have')
+    // A mis-tap undone: out again.
+    await asPat(
+      'update shopping_list_items set checked_at = null where id = $1',
+      [items[0].id],
+    )
+    assert.equal(await status(), 'out')
+    await asPat(
+      'update shopping_list_items set checked_at = now() where id = $1',
+      [items[0].id],
+    )
+    // Bought: it stays on the list, checked, and stays "have".
+    await sync(monday)
+    assert.deepEqual(
+      (await listed(monday)).map((i) => [i.name, i.checked]),
+      [['ground cumin', true]],
+    )
+    assert.equal(await status(), 'have')
+  })
+
+  it('suggests pantry items used in three planned or cooked recipes, not ones turned down', async () => {
+    const [fishSauce, turmeric, chicken] = [
+      await id('fish sauce'),
+      await id('turmeric'),
+      await ingredient('chicken thighs'),
+    ]
+    const dishes = []
+    for (const n of [1, 2, 3])
+      dishes.push(
+        await recipe(`Suggest dish ${n}`, [[fishSauce], [turmeric], [chicken]]),
+      )
+    await as('authenticated', SAM, async () => {
+      await db.query("select add_to_meal_plan('2026-10-12', $1, 1)", [
+        dishes[0],
+      ])
+      await db.query("select add_to_meal_plan('2026-10-19', $1, 1)", [
+        dishes[1],
+      ])
+      await db.query(
+        "insert into cooked_meals (recipe_id, cooked_on) values ($1, '2026-10-20')",
+        [dishes[2]],
+      )
+    })
+    const suggestions = async () =>
+      (
+        await as('authenticated', SAM, () =>
+          db.query('select pantry_suggestions() as s'),
+        )
+      ).rows[0].s
+    // Chicken isn't a pantry item; both pantry items are used three times.
+    assert.deepEqual(
+      (await suggestions()).map((s) => [s.name, s.recipes]),
+      [
+        ['fish sauce', 3],
+        ['turmeric', 3],
+      ],
+    )
+    await as('authenticated', SAM, async () => {
+      await db.query(
+        'insert into user_pantry_dismissed (ingredient_id) values ($1)',
+        [fishSauce],
+      )
+      await db.query(
+        "insert into user_pantry (user_id, ingredient_id, status) values ($1, $2, 'have')",
+        [SAM, turmeric],
+      )
+    })
+    assert.deepEqual(await suggestions(), [])
+  })
+
+  it('asks about on-hand items a cooked recipe used, never staples', async () => {
+    const [spinach, salt] = [await ingredient('spinach'), await id('salt')]
+    const saag = await recipe('Pantry saag', [[spinach], [salt]])
+    await asPat(
+      "insert into user_pantry (user_id, ingredient_id, status) values ($1, $2, 'have') on conflict do nothing",
+      [PAT, salt],
+    )
+    const [{ used }] = await asPat('select on_hand_in($1) as used', [saag])
+    assert.deepEqual(
+      used.map((u) => u.name),
+      ['spinach'],
+    )
+    const [{ none }] = await as(
+      'authenticated',
+      SAM,
+      async () =>
+        (await db.query('select on_hand_in($1) as none', [saag])).rows,
+    )
+    assert.deepEqual(none, [])
+  })
+
+  it('exports both kinds and the suggestions turned down', async () => {
+    const [{ data }] = await as(
+      'authenticated',
+      SAM,
+      async () => (await db.query('select export_my_data() as data')).rows,
+    )
+    assert.deepEqual(data.pantry_suggestions_declined, [
+      'fish sauce',
+      'spinach',
+    ])
+    assert.deepEqual(
+      data.pantry.map((p) => [p.ingredient, p.kind, p.status]),
+      [['turmeric', 'staple', 'have']],
+    )
+  })
+})

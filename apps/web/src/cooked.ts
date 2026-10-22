@@ -4,6 +4,8 @@
  * (their own rows only).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { PantryKind } from './pantry.ts'
+import type { PantryStatus } from './plan.ts'
 
 export type Rating = 'down' | 'up' | 'love'
 
@@ -52,6 +54,14 @@ export interface CookedApi {
   undoCooked(id: string): Promise<void>
   /** Make it a favorite unless it already is: what a ❤️ offers (TYL-66). */
   addFavorite(recipeId: string): Promise<void>
+  /** What's on hand that the recipe uses, to ask if it's used up (TYL-137). */
+  onHandIn(recipeId: string): Promise<{ ingredientId: string; name: string }[]>
+  /** Mark an ingredient in the pantry; null takes it out (it's used up). */
+  setPantry(
+    ingredientId: string,
+    status: PantryStatus | null,
+    kind?: PantryKind,
+  ): Promise<void>
 }
 
 interface Row {

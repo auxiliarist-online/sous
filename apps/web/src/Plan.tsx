@@ -28,6 +28,7 @@ import {
 import { CookedButton } from './Cooked.tsx'
 import { DraftWeek, type DraftApi } from './DraftWeek.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
+import type { PantryItem, PantryKind } from './pantry.ts'
 import { Link } from './router.tsx'
 import { isDue, RECENT_WEEKS, varietyNotes, type Recent } from './variety.ts'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
@@ -56,7 +57,16 @@ export interface PlanApi extends CookedApi, DraftApi {
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
   /** The user's favorite cuisine slugs, to suggest those first. */
   favoriteCuisines(): Promise<string[]>
-  setPantry(ingredientId: string, status: PantryStatus | null): Promise<void>
+  setPantry(
+    ingredientId: string,
+    status: PantryStatus | null,
+    kind?: PantryKind,
+  ): Promise<void>
+  /** Pantry-type ingredients, to ask about the ones a plan needs (TYL-136). */
+  pantryCatalog(): Promise<PantryItem[]>
+  /** Ingredients the user said not to ask about again. */
+  dismissedSuggestions(): Promise<string[]>
+  dismissSuggestion(ingredientId: string): Promise<void>
   /** The user's own price for an ingredient at a store (TYL-34). */
   setMyPrice(
     ingredientId: string,
@@ -93,6 +103,10 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const [clearing, setClearing] = useState(false)
   // "Plan my week" open (TYL-65).
   const [drafting, setDrafting] = useState(false)
+  // Pantry-type ingredients, and those not to ask about (TYL-136); null
+  // until loaded, and then nothing is asked.
+  const [pantryItems, setPantryItems] = useState<Set<string> | null>(null)
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
 
   const [version, setVersion] = useState(0)
   const reload = () => setVersion((v) => v + 1)
@@ -127,6 +141,22 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
       live = false
     }
   }, [api, week, version])
+
+  // Extra: what to ask about keeping. The plan works without it.
+  useEffect(() => {
+    let live = true
+    Promise.all([api.pantryCatalog(), api.dismissedSuggestions()]).then(
+      ([c, d]) => {
+        if (!live) return
+        setPantryItems(new Set(c.map((i) => i.id)))
+        setDismissed(new Set(d))
+      },
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
 
   async function change(action: () => Promise<unknown>, failure: string) {
     setBusy(true)
@@ -205,7 +235,13 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
             busy={busy}
             onPantry={(item, status) =>
               void change(
-                () => api.setPantry(item.ingredientId!, status),
+                () =>
+                  api.setPantry(
+                    item.ingredientId!,
+                    status,
+                    // A pantry item is a staple; anything else, a one-off.
+                    pantryItems?.has(item.ingredientId!) ? 'staple' : 'on_hand',
+                  ),
                 "We couldn't update your pantry. Try again.",
               )
             }
@@ -225,6 +261,30 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
               )
             }}
           />
+          {cost && cost !== 'error' && pantryItems && (
+            <KeepPrompt
+              items={cost.items.filter(
+                (i) =>
+                  i.buy &&
+                  i.ingredientId !== null &&
+                  i.pantry === null &&
+                  pantryItems.has(i.ingredientId) &&
+                  !dismissed.has(i.ingredientId),
+              )}
+              busy={busy}
+              onHave={(item) =>
+                void change(
+                  () => api.setPantry(item.ingredientId!, 'have', 'staple'),
+                  "We couldn't update your pantry. Try again.",
+                )
+              }
+              onBuy={(item) => {
+                setDismissed((d) => new Set([...d, item.ingredientId!]))
+                // Only a reminder: if it doesn't save, it's asked again later.
+                api.dismissSuggestion(item.ingredientId!).catch(() => {})
+              }}
+            />
+          )}
 
           {drafting ? (
             <DraftWeek
@@ -625,6 +685,60 @@ function BuyRow({
         </button>
       )}
     </li>
+  )
+}
+
+/** "Have it, or add to the list?" (TYL-136): pantry items the week needs
+ *  that the user hasn't said whether they keep. "Have it" makes it a staple;
+ *  "Add to the list" leaves it bought and stops asking. A few at a time. */
+function KeepPrompt({
+  items,
+  busy,
+  onHave,
+  onBuy,
+}: {
+  items: BuyItem[]
+  busy: boolean
+  onHave: (item: BuyItem) => void
+  onBuy: (item: BuyItem) => void
+}) {
+  if (items.length === 0) return null
+  return (
+    <div className="keep-prompt">
+      <p className="small">
+        Do you keep these? What you have is left off the list.
+      </p>
+      <ul aria-label="Do you keep these?">
+        {items.slice(0, 5).map((i) => (
+          <li key={i.ingredientId}>
+            <span>{i.name}</span>
+            <button
+              type="button"
+              className="chip"
+              disabled={busy}
+              aria-label={`I keep ${i.name}`}
+              onClick={() => onHave(i)}
+            >
+              Have it
+            </button>
+            <button
+              type="button"
+              className="link small"
+              disabled={busy}
+              aria-label={`Add ${i.name} to the list`}
+              onClick={() => onBuy(i)}
+            >
+              Add to the list
+            </button>
+          </li>
+        ))}
+      </ul>
+      {items.length > 5 && (
+        <p className="muted small">
+          And {items.length - 5} more. <Link to="/pantry">Your pantry</Link>
+        </p>
+      )}
+    </div>
   )
 }
 

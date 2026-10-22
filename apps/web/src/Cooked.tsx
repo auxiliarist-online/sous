@@ -37,6 +37,8 @@ export function CookedButton({
   const [noting, setNoting] = useState(false)
   const [note, setNote] = useState(initial?.note ?? '')
   const [favorited, setFavorited] = useState(false)
+  // On-hand items the recipe used, to ask about once it's cooked (TYL-137).
+  const [used, setUsed] = useState<{ ingredientId: string; name: string }[]>([])
 
   function update(next: Cooked | null) {
     setCooked(next)
@@ -56,11 +58,20 @@ export function CookedButton({
     }
   }
 
-  // Record the meal as cooked.
+  // Record the meal as cooked, then ask about what was on hand.
   const mark = () =>
-    run(async () =>
-      update(await api.markCooked({ recipeId, planEntryId, cookedOn, scale })),
-    )
+    run(async () => {
+      update(await api.markCooked({ recipeId, planEntryId, cookedOn, scale }))
+      // Only a question: if it can't load, nothing is asked.
+      api.onHandIn(recipeId).then(setUsed, () => {})
+    })
+
+  // "Used up the spinach?": one tap takes it out of the pantry.
+  const markUsedUp = (item: { ingredientId: string; name: string }) =>
+    run(async () => {
+      await api.setPantry(item.ingredientId, null)
+      setUsed((u) => u.filter((x) => x.ingredientId !== item.ingredientId))
+    })
 
   // Set a rating, or clear it by tapping the same one again.
   const rate = (rating: Rating) =>
@@ -93,6 +104,7 @@ export function CookedButton({
       await api.undoCooked(cooked!.id)
       update(null)
       setNote('')
+      setUsed([])
     })
 
   if (!cooked) {
@@ -166,6 +178,28 @@ export function CookedButton({
       >
         Undo
       </button>
+      {used.length > 0 && (
+        <span className="used-up">
+          {used.map((u) => (
+            <button
+              key={u.ingredientId}
+              type="button"
+              className="chip"
+              disabled={busy}
+              onClick={() => void markUsedUp(u)}
+            >
+              Used up the {u.name}?
+            </button>
+          ))}
+          <button
+            type="button"
+            className="link small"
+            onClick={() => setUsed([])}
+          >
+            Still have {used.length === 1 ? 'it' : 'them'}
+          </button>
+        </span>
+      )}
       {noting && (
         <form className="cooked-note" onSubmit={saveNote}>
           <label className="visually-hidden" htmlFor={`note-${cooked.id}`}>

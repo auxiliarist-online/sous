@@ -1,10 +1,19 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import {
+  kitItems,
+  kitsFor,
+  type Kit,
+  type PantryEntry,
+  type PantryItem,
+} from './pantry.ts'
+import { StarterKits } from './PantryKits.tsx'
 import { Link } from './router.tsx'
 import { StorePicker, type StoreApi } from './StorePicker.tsx'
 import {
   CATEGORIES,
   type IngredientRef,
   type Option,
+  NO_PREFERENCES,
   type Preferences,
 } from './sous.ts'
 
@@ -17,6 +26,12 @@ export interface SettingsApi extends StoreApi {
   exportMyData(): Promise<string>
   /** Delete the account and everything about the user (TYL-74). */
   deleteMyAccount(): Promise<void>
+  /** For offering a new cuisine's or diet's pantry kit (TYL-136). */
+  pantry(): Promise<PantryEntry[]>
+  pantryCatalog(): Promise<PantryItem[]>
+  pantryKits(): Promise<Kit[]>
+  /** Keep these as staples, all "have". */
+  keepStaples(ingredientIds: string[]): Promise<void>
 }
 
 function toggle(list: string[], value: string): string[] {
@@ -233,6 +248,10 @@ export function Settings({
     'idle',
   )
   const [loadError, setLoadError] = useState(false)
+  // The preferences as last saved, to see which cuisines and diets are new.
+  const [lastSaved, setLastSaved] = useState<Preferences>(NO_PREFERENCES)
+  // The kits of cuisines and diets just added, offered after saving.
+  const [offer, setOffer] = useState<{ kit: string; items: PantryItem[] }[]>([])
 
   useEffect(() => {
     let live = true
@@ -240,6 +259,7 @@ export function Settings({
       ([p, o]) => {
         if (!live) return
         setPrefs(p)
+        setLastSaved(p)
         setOptions(o)
       },
       () => live && setLoadError(true),
@@ -273,9 +293,34 @@ export function Settings({
       setPrefs(saved)
       setStatus('saved')
       onSaved(saved)
+      offerKits(saved)
     } catch {
       setStatus('error')
     }
+  }
+
+  // Offer the pantry kits of cuisines and diets added since the last save,
+  // without what's already in the pantry. Only an offer: nothing if it fails.
+  function offerKits(saved: Preferences) {
+    const added = {
+      diets: saved.diets.filter((d) => !lastSaved.diets.includes(d)),
+      favoriteCuisines: saved.favoriteCuisines.filter(
+        (c) => !lastSaved.favoriteCuisines.includes(c),
+      ),
+    }
+    setLastSaved(saved)
+    if (added.diets.length + added.favoriteCuisines.length === 0) return
+    Promise.all([api.pantryKits(), api.pantryCatalog(), api.pantry()]).then(
+      ([kits, catalog, pantry]) =>
+        setOffer(
+          kitItems(
+            kitsFor(kits, added).filter((k) => k.kit !== 'basics'),
+            catalog,
+            new Set(pantry.map((e) => e.ingredientId)),
+          ),
+        ),
+      () => {},
+    )
   }
 
   return (
@@ -391,6 +436,19 @@ export function Settings({
         {status === 'saved' && 'Saved.'}
         {status === 'error' && "We couldn't save your preferences. Try again."}
       </p>
+      {offer.length > 0 && (
+        <KitOffer
+          kits={offer}
+          names={Object.fromEntries(
+            [...options.cuisines, ...options.diets].map((o) => [
+              o.slug,
+              o.name,
+            ]),
+          )}
+          onKeep={(ids) => api.keepStaples(ids)}
+          onClose={() => setOffer([])}
+        />
+      )}
 
       <section className="account">
         <p className="muted small">
@@ -501,5 +559,56 @@ function Account({
         </p>
       )}
     </div>
+  )
+}
+
+/** "You added Thai: keep its staples?" (TYL-136): a new cuisine's or diet's
+ *  pantry kit, pre-checked, after saving preferences. */
+function KitOffer({
+  kits,
+  names,
+  onKeep,
+  onClose,
+}: {
+  kits: { kit: string; items: PantryItem[] }[]
+  names: Record<string, string>
+  onKeep: (ids: string[]) => Promise<void>
+  onClose: () => void
+}) {
+  const [checked, setChecked] = useState(() =>
+    kits.flatMap((k) => k.items.map((i) => i.id)),
+  )
+  const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle')
+  return (
+    <section className="kit-offer" aria-label="Pantry staples to keep">
+      <h3>Keep these in your pantry?</h3>
+      <p className="muted small">
+        Staples that go with what you just added. Uncheck what you don't keep.
+      </p>
+      <StarterKits
+        kits={kits}
+        names={names}
+        checked={checked}
+        onChange={setChecked}
+      />
+      <button
+        type="button"
+        disabled={status === 'saving' || checked.length === 0}
+        onClick={() => {
+          setStatus('saving')
+          onKeep(checked).then(onClose, () => setStatus('error'))
+        }}
+      >
+        {status === 'saving' ? 'Saving…' : `Keep these ${checked.length}`}
+      </button>{' '}
+      <button type="button" className="link" onClick={onClose}>
+        No thanks
+      </button>
+      {status === 'error' && (
+        <p role="alert" className="error small">
+          We couldn't save. Try again.
+        </p>
+      )}
+    </section>
   )
 }

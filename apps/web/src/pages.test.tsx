@@ -16,6 +16,7 @@ import {
   type RecipeDetail,
 } from './sous.ts'
 import { fakeCookedApi } from './cookedFake.ts'
+import { fakePantryApi } from './pantryFake.ts'
 
 const line = (
   lineNo: number,
@@ -484,6 +485,49 @@ describe('Settings', () => {
     chooseStore: vi.fn(async (_id: string) => {}),
     exportMyData: vi.fn(async () => '{"profile": null}'),
     deleteMyAccount: vi.fn(async () => {}),
+    ...fakePantryApi(),
+  })
+
+  it('offers a new cuisine’s pantry kit after saving, without what’s kept (TYL-136)', async () => {
+    const a = api()
+    // Already keeps olive oil, which is in the Thai kit too.
+    await a.keepStaples(['oil'])
+    render(
+      <Settings
+        api={a}
+        email="cook@example.com"
+        onSaved={vi.fn()}
+        onSignOut={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Thai' }))
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save preferences' }),
+    )
+    const offer = await screen.findByRole('region', {
+      name: 'Pantry staples to keep',
+    })
+    expect(
+      within(offer)
+        .getAllByRole('checkbox')
+        .map((c) => c.parentElement?.textContent),
+    ).toEqual(['fish sauce'])
+    await userEvent.click(
+      within(offer).getByRole('button', { name: 'Keep these 1' }),
+    )
+    expect(a.keepStaples).toHaveBeenLastCalledWith(['fish'])
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('region', { name: 'Pantry staples to keep' }),
+      ).toBeNull(),
+    )
+    // Saving again with nothing new offers nothing.
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save preferences' }),
+    )
+    await screen.findByText('Saved.')
+    expect(a.pantryKits).toHaveBeenCalledTimes(1)
   })
 
   it('lets the household size be cleared and retyped', async () => {
