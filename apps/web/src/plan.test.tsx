@@ -637,6 +637,26 @@ describe('plan my week (TYL-65)', () => {
     ).toBeInTheDocument()
   })
 
+  it('a kept pick that’s swapped out isn’t kept any more', async () => {
+    const api = fakeApi({ entries: [] })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Plan my week' }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Keep Salsa' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Swap Salsa' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Draft again' }),
+    )
+    expect(api.draftWeek).toHaveBeenLastCalledWith(WEEK, {
+      dinners: 5,
+      locked: [],
+      exclude: ['a'],
+    })
+  })
+
   it('counts only dinners, and a retry doesn’t add a pick twice', async () => {
     const api = fakeApi({ entries: [entry('1', { meal: 'lunch' })] })
     api.addToPlan

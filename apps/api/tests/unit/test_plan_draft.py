@@ -169,6 +169,11 @@ class TestDraft:
         assert picked(d) == ["b", "c"]
         assert [p.locked for p in d.picks] == [True, False]
 
+    def test_an_excluded_pick_is_never_kept(self) -> None:
+        week = inputs(*(recipe(r, ("beans", 1, "each")) for r in ("a", "b")))
+        d = draft_week(week, pool("a", "b"), dinners=1, locked=["a"], exclude=["a"], on=MONDAY)
+        assert picked(d) == ["b"]
+
     def test_planned_meals_count_and_stay(self) -> None:
         planned = {**recipe("planned", ("cilantro", 1, "each")), "id": "e1", "candidate": False}
         week = inputs(

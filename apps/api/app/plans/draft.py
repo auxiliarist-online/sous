@@ -196,7 +196,11 @@ def draft_week(
     swap). Planned dinners count toward `dinners` and stay as they are."""
     week = Week(inputs, pool, on=on, store_id=store_id)
     planned_ids = {str(e["recipe_id"]) for e in week.planned}
-    keep = [r for r in dict.fromkeys(locked) if r in week.pool and r not in planned_ids]
+    keep = [
+        r
+        for r in dict.fromkeys(locked)
+        if r in week.pool and r not in planned_ids and r not in exclude
+    ]
     # Only dinners count (an entry without a meal is one); a planned lunch
     # stays in the week's cost but doesn't fill a night.
     planned_dinners = [e for e in week.planned if (e.get("meal") or "dinner") == "dinner"]

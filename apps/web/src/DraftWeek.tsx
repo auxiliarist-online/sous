@@ -73,6 +73,8 @@ export function DraftWeek({
   function swap(recipeId: string) {
     const skip = [...excluded, recipeId]
     setExcluded(skip)
+    // A swapped-out pick isn't kept any more, or "Draft again" would bring it back.
+    setLocked((l) => l.filter((r) => r !== recipeId))
     const keep = draft!.picks
       .map((p) => p.recipeId)
       .filter((r) => r !== recipeId)
