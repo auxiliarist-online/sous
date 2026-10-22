@@ -482,6 +482,58 @@ export async function saveChoice(
   if (error) throw error
 }
 
+/** A "Plan my week" draft (TYL-65): picks for the open dinners, why each,
+ *  and what the week would cost and leave over. */
+export interface WeekDraft {
+  picks: { recipeId: string; title: string; reason: string; locked: boolean }[]
+  totalCents: number
+  budgetCents: number | null
+  overBudget: boolean
+  leftovers: { name: string; quantity: number; unit: string }[]
+  notes: string[]
+}
+
+/** Draft the week's open dinners. `locked` picks stay; `exclude` are never
+ *  picked (what Swap passes). Nothing is saved. */
+export async function draftWeek(
+  session: Session,
+  weekStart: string,
+  options: { dinners: number; locked: string[]; exclude: string[] },
+  send: typeof apiFetch = apiFetch,
+): Promise<WeekDraft> {
+  const resp = await send(session, `/plans/${weekStart}/draft`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+  if (!resp.ok) throw new Error(`draft: ${resp.status}`)
+  const body = (await resp.json()) as {
+    picks: {
+      recipe_id: string
+      title: string
+      reason: string
+      locked: boolean
+    }[]
+    total_cents: number
+    budget_cents: number | null
+    over_budget: boolean
+    leftovers: { name: string; quantity: number; unit: string }[]
+    notes: string[]
+  }
+  return {
+    picks: body.picks.map((p) => ({
+      recipeId: p.recipe_id,
+      title: p.title,
+      reason: p.reason,
+      locked: p.locked,
+    })),
+    totalCents: body.total_cents,
+    budgetCents: body.budget_cents,
+    overBudget: body.over_budget,
+    leftovers: body.leftovers,
+    notes: body.notes,
+  }
+}
+
 /** What adding a recipe at full size would add to the week (TYL-30). */
 export interface AddedCost {
   cents: number

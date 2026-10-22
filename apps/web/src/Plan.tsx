@@ -26,12 +26,13 @@ import {
   type Scale,
 } from './plan.ts'
 import { CookedButton } from './Cooked.tsx'
+import { DraftWeek, type DraftApi } from './DraftWeek.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
 import { Link } from './router.tsx'
 import { isDue, RECENT_WEEKS, varietyNotes, type Recent } from './variety.ts'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
-export interface PlanApi extends CookedApi {
+export interface PlanApi extends CookedApi, DraftApi {
   list(): Promise<SavedRecipe[]>
   recipe(id: string): Promise<RecipeDetail | null>
   plan(weekStart: string): Promise<PlanEntry[]>
@@ -90,6 +91,8 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [clearing, setClearing] = useState(false)
+  // "Plan my week" open (TYL-65).
+  const [drafting, setDrafting] = useState(false)
 
   const [version, setVersion] = useState(0)
   const reload = () => setVersion((v) => v + 1)
@@ -222,6 +225,30 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
               )
             }}
           />
+
+          {drafting ? (
+            <DraftWeek
+              api={api}
+              week={week}
+              planned={entries.length}
+              onDone={() => {
+                setDrafting(false)
+                reload()
+              }}
+              onCancel={() => setDrafting(false)}
+            />
+          ) : (
+            entries.length < 7 && (
+              <button
+                type="button"
+                className="secondary plan-my-week"
+                disabled={busy}
+                onClick={() => setDrafting(true)}
+              >
+                Plan my week
+              </button>
+            )
+          )}
 
           <VarietyNotes entries={entries} />
           {cookedFailed && entries.length > 0 && (
