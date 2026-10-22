@@ -33,6 +33,7 @@ def test_names_are_lower_cased_to_match(tmp_path: Path) -> None:
         "kale,US,1 x,Kale\n",  # not a month
         "kale,US,0 13,Kale\n",  # out of range
         "kale,US,,Kale\n",  # none
+        "   ,US,1 2,Kale\n",  # no ingredient name
     ],
 )
 def test_bad_rows_stop_the_build(tmp_path: Path, line: str) -> None:

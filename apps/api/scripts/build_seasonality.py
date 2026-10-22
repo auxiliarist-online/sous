@@ -34,13 +34,15 @@ def sql_text(s: str) -> str:
 
 
 def rows(path: Path = DATA) -> list[dict[str, str]]:
-    """The checked rows of the data file: ingredient names lower-cased (the
+    """The checked rows of the data file: an ingredient name, lower-cased (the
     migration matches lower(name)), a region the table accepts ("US" or a
     state's two letters), months 1-12, and no ingredient twice in a region."""
     out, seen, errors = [], set(), []
     for n, r in enumerate(csv.DictReader(path.open(encoding="utf-8")), 2):
         r = {**r, "ingredient": r["ingredient"].strip().lower(), "region": r["region"].strip()}
         key = (r["ingredient"], r["region"])
+        if not r["ingredient"]:
+            errors.append(f"line {n}: no ingredient name")
         if key in seen:
             errors.append(f"line {n}: {key} twice")
         if not re.fullmatch(r"US|[A-Z]{2}", r["region"]):
