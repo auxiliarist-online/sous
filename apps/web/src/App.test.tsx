@@ -8,6 +8,7 @@ import { NO_PREFERENCES, type Preferences } from './sous.ts'
 import type { Auth } from './auth.ts'
 import { fakeCookedApi } from './cookedFake.ts'
 import { fakePantryApi } from './pantryFake.ts'
+import { DEFAULT_VARIETY } from './variety.ts'
 
 type Listener = (event: string, session: Session | null) => void
 
@@ -104,6 +105,7 @@ const library = (
   })),
   ...fakeCookedApi(),
   ...fakePantryApi(),
+  variety: vi.fn(async () => DEFAULT_VARIETY),
   recipeFits: vi.fn(async () => ({})),
   searchCatalog: vi.fn(async () => []),
   saveToLibrary: vi.fn(async () => {}),

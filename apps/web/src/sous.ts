@@ -6,6 +6,7 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { apiFetch } from './auth.ts'
 import type { DietLabel } from './library.ts'
 import type { Frequency } from './variety.ts'
+import { DEFAULT_VARIETY, type VarietySettings } from './variety.ts'
 
 export interface IngredientLine {
   lineNo: number
@@ -356,6 +357,8 @@ export interface Preferences {
   dislikedIngredients: IngredientRef[]
   /** "Plan my week" leans harder on what's in season (TYL-70). */
   cookWithSeasons: boolean
+  /** How much to mix things up (TYL-66). */
+  variety: VarietySettings
 }
 
 export const NO_PREFERENCES: Preferences = {
@@ -371,6 +374,7 @@ export const NO_PREFERENCES: Preferences = {
   favoriteIngredients: [],
   dislikedIngredients: [],
   cookWithSeasons: false,
+  variety: DEFAULT_VARIETY,
 }
 
 /** Diet categories a user can mark as allergies or things to avoid. */
@@ -405,7 +409,7 @@ export async function loadPreferences(
     db
       .from('profiles')
       .select(
-        'allergens, avoid_categories, strict_may_contain, household_size, weekly_budget_cents, home_zip, cook_with_seasons',
+        'allergens, avoid_categories, strict_may_contain, household_size, weekly_budget_cents, home_zip, cook_with_seasons, mix_proteins, mix_cuisines, mix_styles, repeat_weeks',
       )
       .eq('user_id', userId)
       .maybeSingle(),
@@ -428,6 +432,10 @@ export async function loadPreferences(
     weekly_budget_cents: number | null
     home_zip?: string | null
     cook_with_seasons?: boolean | null
+    mix_proteins?: boolean | null
+    mix_cuisines?: boolean | null
+    mix_styles?: boolean | null
+    repeat_weeks?: number | null
   } | null
   return {
     saved: !!p,
@@ -439,6 +447,12 @@ export async function loadPreferences(
     weeklyBudgetCents: p?.weekly_budget_cents ?? null,
     homeZip: p?.home_zip ?? null,
     cookWithSeasons: p?.cook_with_seasons ?? false,
+    variety: {
+      proteins: p?.mix_proteins ?? DEFAULT_VARIETY.proteins,
+      cuisines: p?.mix_cuisines ?? DEFAULT_VARIETY.cuisines,
+      styles: p?.mix_styles ?? DEFAULT_VARIETY.styles,
+      repeatWeeks: p?.repeat_weeks ?? DEFAULT_VARIETY.repeatWeeks,
+    },
     favoriteCuisines: (cuisines.data ?? []).map(
       (c: { cuisine_slug: string }) => c.cuisine_slug,
     ),
@@ -484,6 +498,10 @@ export async function savePreferences(
     weekly_budget_cents: p.weeklyBudgetCents,
     home_zip: p.homeZip,
     cook_with_seasons: p.cookWithSeasons,
+    mix_proteins: p.variety.proteins,
+    mix_cuisines: p.variety.cuisines,
+    mix_styles: p.variety.styles,
+    repeat_weeks: p.variety.repeatWeeks,
   })
   if (profile.error) throw profile.error
   await replaceRows(db, 'user_diets', userId, 'diet_slug', p.diets)

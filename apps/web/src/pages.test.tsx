@@ -562,6 +562,41 @@ describe('Settings', () => {
     ).toBeInTheDocument()
   })
 
+  it('saves how much variety you want (TYL-66)', async () => {
+    const a = api()
+    render(
+      <Settings
+        api={a}
+        email="cook@example.com"
+        onSaved={vi.fn()}
+        onSignOut={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    )
+    const styles = await screen.findByRole('checkbox', {
+      name: /Mix up cooking styles/,
+    })
+    expect(styles).toBeChecked()
+    await userEvent.click(styles)
+    await userEvent.selectOptions(
+      screen.getByLabelText('Suggest a recipe again after'),
+      '0',
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save preferences' }),
+    )
+    expect(a.savePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variety: {
+          proteins: true,
+          cuisines: true,
+          styles: false,
+          repeatWeeks: 0,
+        },
+      }),
+    )
+  })
+
   it('lets the household size be cleared and retyped', async () => {
     const a = api()
     render(

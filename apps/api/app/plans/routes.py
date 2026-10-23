@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import current_user_id
 from app.plans.cost import added_costs, plan_cost
-from app.plans.draft import Candidate, draft_week
+from app.plans.draft import Candidate, Variety, draft_week
 from app.plans.live_prices import add_live_prices, no_store
 from app.plans.store import cost_inputs, draft_pool
 from app.recipes.store import StoreError
@@ -116,6 +116,7 @@ async def draft(
             favorite=r.get("favorite"),
             weeks_ago=r.get("weeks_ago"),
             cuisines=list(r.get("cuisines") or []),
+            tags=list(r.get("tags") or []),
             in_season=list(r.get("in_season") or []),
             out_of_season=int(r.get("out_of_season") or 0),
         )
@@ -137,5 +138,6 @@ async def draft(
         on=week_start,
         store_id=store_id,
         cook_with_seasons=bool(found.get("cook_with_seasons")),
+        variety=Variety.from_json(found.get("variety")),
     )
     return asdict(result)

@@ -604,6 +604,7 @@ const entry = (id: string, day: string | null, title: string): PlanEntry => ({
   meal: null,
   proteins: [],
   cuisines: [],
+  styles: [],
 })
 
 describe('Home', () => {

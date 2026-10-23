@@ -30,7 +30,14 @@ import { DraftWeek, type DraftApi } from './DraftWeek.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
 import type { PantryItem, PantryKind } from './pantry.ts'
 import { Link } from './router.tsx'
-import { isDue, RECENT_WEEKS, varietyNotes, type Recent } from './variety.ts'
+import {
+  DEFAULT_VARIETY,
+  isDue,
+  isRecent,
+  varietyNotes,
+  type Recent,
+  type VarietySettings,
+} from './variety.ts'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
 export interface PlanApi extends CookedApi, DraftApi {
@@ -57,6 +64,8 @@ export interface PlanApi extends CookedApi, DraftApi {
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
   /** The user's favorite cuisine slugs, to suggest those first. */
   favoriteCuisines(): Promise<string[]>
+  /** How much the user wants things mixed up (TYL-66). */
+  variety(): Promise<VarietySettings>
   /** Mark an ingredient in the pantry, as a staple or on hand; a null status
    *  takes it out, so it's bought. */
   setPantry(
@@ -109,6 +118,8 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   // until loaded, and then nothing is asked.
   const [pantryItems, setPantryItems] = useState<Set<string> | null>(null)
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  // The user's variety settings; the defaults until (or unless) they load.
+  const [variety, setVariety] = useState<VarietySettings>(DEFAULT_VARIETY)
 
   const [version, setVersion] = useState(0)
   const reload = () => setVersion((v) => v + 1)
@@ -144,9 +155,14 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
     }
   }, [api, week, version])
 
-  // Extra: what to ask about keeping. The plan works without it.
+  // Extra: what to ask about keeping, and the variety settings. The plan
+  // works without them.
   useEffect(() => {
     let live = true
+    api.variety().then(
+      (v) => live && setVariety(v),
+      () => {},
+    )
     Promise.all([api.pantryCatalog(), api.dismissedSuggestions()]).then(
       ([c, d]) => {
         if (!live) return
@@ -316,7 +332,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
             )
           )}
 
-          <VarietyNotes entries={entries} />
+          <VarietyNotes entries={entries} settings={variety} />
           {cookedFailed && entries.length > 0 && (
             <p className="small muted" role="status">
               We couldn't check what's been cooked.{' '}
@@ -447,6 +463,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
             week={week}
             version={version}
             busy={busy}
+            repeatWeeks={variety.repeatWeeks}
             onAdd={(r) =>
               void change(
                 () => api.addToPlan(week, r.id, 1),
@@ -965,17 +982,27 @@ function dinners(entries: PlanEntry[]): number {
 
 /** Why a suggestion sits where it does (TYL-66): a favorite that's due, or
  *  a recipe had lately. */
-function lately(r: SavedRecipe, recent: Recent): string | null {
+function lately(
+  r: SavedRecipe,
+  recent: Recent,
+  repeatWeeks: number,
+): string | null {
   const ago = recent[r.id]
   if (r.favorite && isDue(r.favorite, ago)) return '♥ due again'
-  if (ago === undefined || ago >= RECENT_WEEKS) return null
+  if (ago === undefined || !isRecent(ago, repeatWeeks)) return null
   if (ago === 0) return 'already this week'
   return ago === 1 ? 'had last week' : `had ${ago} weeks ago`
 }
 
 /** What the week repeats (TYL-66), said gently; the plan stays the user's. */
-function VarietyNotes({ entries }: { entries: PlanEntry[] }) {
-  const notes = varietyNotes(entries)
+function VarietyNotes({
+  entries,
+  settings,
+}: {
+  entries: PlanEntry[]
+  settings: VarietySettings
+}) {
+  const notes = varietyNotes(entries, settings)
   if (notes.length === 0) return null
   return (
     <p className="small notice" aria-label="Variety">
@@ -1124,6 +1151,7 @@ function AddRecipe({
   week,
   version,
   busy,
+  repeatWeeks,
   onAdd,
 }: {
   api: PlanApi
@@ -1131,6 +1159,8 @@ function AddRecipe({
   /** Changes whenever the plan does, so the costs are worked out again. */
   version: number
   busy: boolean
+  /** How many weeks before a recipe is suggested again (TYL-66). */
+  repeatWeeks: number
   onAdd: (r: SavedRecipe) => void
 }) {
   const [recipes, setRecipes] = useState<SavedRecipe[] | null>(null)
@@ -1208,7 +1238,7 @@ function AddRecipe({
   const place = (r: SavedRecipe) =>
     r.favorite && isDue(r.favorite, recent[r.id])
       ? 0
-      : recent[r.id] !== undefined && recent[r.id] < RECENT_WEEKS
+      : isRecent(recent[r.id], repeatWeeks)
         ? 2
         : 1
   const shown = filterRecipes(recipes, { ...NO_FILTER, query }).sort(
@@ -1283,10 +1313,10 @@ function AddRecipe({
                         *
                       </span>
                     )}
-                    {lately(r, recent) && (
+                    {lately(r, recent, repeatWeeks) && (
                       <span className="muted small">
                         {' '}
-                        · {lately(r, recent)}
+                        · {lately(r, recent, repeatWeeks)}
                       </span>
                     )}
                   </span>

@@ -7,7 +7,15 @@ import { fakeCookedApi } from './cookedFake.ts'
 import { FavoriteControl } from './Favorite.tsx'
 import { addFavorite, recentRecipes, setFavorite } from './favorites.ts'
 import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
-import { isDue, mainProteins, varietyNotes, weeksAgo } from './variety.ts'
+import {
+  cookingStyles,
+  DEFAULT_VARIETY,
+  isDue,
+  isRecent,
+  mainProteins,
+  varietyNotes,
+  weeksAgo,
+} from './variety.ts'
 
 describe('variety (TYL-66)', () => {
   it('finds a recipe’s main proteins at the meat and seafood counter', () => {
@@ -175,5 +183,52 @@ describe('a ❤️ after cooking', () => {
     )
     expect(api.addFavorite).toHaveBeenCalledWith('r1')
     expect(await screen.findByText('In your favorites')).toBeInTheDocument()
+  })
+})
+
+describe('variety settings and cooking styles (TYL-66)', () => {
+  it('reads cooking styles from titles and tags, as the planner does', () => {
+    expect(cookingStyles('Weeknight Chicken Stir-Fry')).toEqual(['stir-fry'])
+    expect(cookingStyles('Lentil Curry Soup')).toEqual(['soup', 'curry'])
+    expect(cookingStyles('Sunday dinner', ['soup'])).toEqual(['soup'])
+    expect(cookingStyles('Pastrami sandwich')).toEqual([])
+  })
+
+  it('notes a third night of one style, and only what the user wants mixed up', () => {
+    const pasta = (day: string) => ({
+      day,
+      proteins: ['poultry'],
+      cuisines: ['Italian'],
+      styles: ['pasta'],
+    })
+    const week = [pasta('2026-10-19'), pasta('2026-10-20'), pasta('2026-10-21')]
+    expect(varietyNotes(week)).toEqual([
+      '3 dinners with poultry this week',
+      '3 pasta nights this week',
+      'Italian 3 days in a row',
+    ])
+    expect(
+      varietyNotes(week, {
+        ...DEFAULT_VARIETY,
+        proteins: false,
+        cuisines: false,
+      }),
+    ).toEqual(['3 pasta nights this week'])
+    expect(
+      varietyNotes(week, {
+        proteins: false,
+        cuisines: false,
+        styles: false,
+        repeatWeeks: 3,
+      }),
+    ).toEqual([])
+  })
+
+  it('holds a recipe back for the user’s repeat window, or not at all', () => {
+    expect(isRecent(2)).toBe(true)
+    expect(isRecent(3)).toBe(false)
+    expect(isRecent(2, 2)).toBe(false)
+    expect(isRecent(0, 0)).toBe(false)
+    expect(isRecent(undefined, 8)).toBe(false)
   })
 })

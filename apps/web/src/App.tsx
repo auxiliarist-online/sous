@@ -178,6 +178,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     },
     favoriteCuisines: () =>
       loadPreferences(db, userId).then((p) => p.favoriteCuisines),
+    variety: () => loadPreferences(db, userId).then((p) => p.variety),
     recipeFits: (ids) => recipeFits(db, ids),
     searchCatalog: (q, offset) => searchCatalog(db, q, offset),
     saveToLibrary: (id) => saveToLibrary(db, userId, id),
