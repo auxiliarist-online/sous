@@ -1015,7 +1015,9 @@ describe('ingredient parsing', () => {
       'select count(*)::int as n from ingredient_aliases',
     )
     // Seed migration + more_ingredients + everyday_ingredients (TYL-60).
-    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6 + 9 + 3) // + ingredients_from_recipes + ponzu_powdered_milk + croutons_crostini_nondairy_milk + canned_legume_cups
+    // + ingredients_from_recipes + ponzu_powdered_milk + croutons_crostini_nondairy_milk
+    // + canned_legume_cups + ingredients_round_4 (TYL-60), less the 4 it moved.
+    assert.equal(rows[0].n, 159 + 283 + 235 + 322 + 6 + 9 + 3 + 584 - 4)
     assert.equal(await match(['fettuccine pasta']), await ingredientId('pasta'))
     // TYL-102: "3 cups cooked beans" is bought canned, not dried.
     assert.equal(
@@ -2072,8 +2074,8 @@ describe('ingredient weights and the everyday list (TYL-60)', () => {
        where i.name in ('jicama', 'gouda', 'halibut', 'wasabi', 'cream of tartar')
          and i.sold_by is not null`,
     )
-    // halibut was already an alias, so it isn't a new ingredient.
-    assert.equal(rows[0].n, 4)
+    // halibut was an alias then; it's an ingredient of its own since round 4.
+    assert.equal(rows[0].n, 5)
   })
 })
 
@@ -2824,7 +2826,7 @@ describe('package estimates (TYL-61)', () => {
        )`,
       [names],
     )
-    assert.equal(names.length, 556)
+    assert.equal(names.length, 688)
     assert.deepEqual(rows, [])
   })
 
@@ -3959,5 +3961,54 @@ describe('variety settings (TYL-66)', () => {
       ),
       /repeat_weeks/,
     )
+  })
+})
+
+describe('ingredients round 4 (TYL-60)', () => {
+  it('adds what recipes ask for, with aliases, packaging, a price and weights', async () => {
+    const { rows } = await db.query(`
+      select i.name, i.sold_by, i.grams_per_cup, i.grams_per_each, i.pantry_group,
+             exists (select 1 from prices p where p.ingredient_id = i.id) as priced,
+             (select match_ingredient(array['sushi rice'])) = (select id from ingredients where name = 'short-grain rice') as sushi
+      from ingredients i where i.name in ('short-grain rice', 'vanilla bean', 'chaat masala')
+      order by i.name`)
+    assert.deepEqual(
+      rows.map((r) => [r.name, r.sold_by, r.priced, r.pantry_group]),
+      [
+        ['chaat masala', 'package', true, 'spices'],
+        ['short-grain rice', 'package', true, 'grains'],
+        ['vanilla bean', 'package', true, 'baking'],
+      ],
+    )
+    assert.equal(Number(rows[1].grams_per_cup), 200)
+    assert.equal(Number(rows[2].grams_per_each), 3)
+    assert.ok(rows[0].sushi)
+  })
+
+  it('matches new wordings to existing ingredients, and moved aliases to their own', async () => {
+    const match = async (name) =>
+      (
+        await db.query(
+          'select i.name from ingredients i where i.id = match_ingredient($1)',
+          [[name]],
+        )
+      ).rows[0]?.name
+    assert.equal(await match('catsup'), 'ketchup')
+    assert.equal(await match('tumeric'), 'turmeric')
+    assert.equal(await match('halibut'), 'halibut')
+    const { rows } = await db.query(
+      "select count(*)::int as n from ingredient_aliases where alias in ('halibut', 'palm sugar', 'chana dal', 'malt vinegar')",
+    )
+    assert.equal(rows[0].n, 0)
+  })
+
+  it('weighs what USDA doesn’t, by hand: a bay leaf, a cup of curry paste', async () => {
+    const { rows } = await db.query(
+      "select name, grams_per_cup, grams_per_each from ingredients where name in ('bay leaves', 'powdered milk', 'thai red curry paste') order by name",
+    )
+    assert.equal(Number(rows[0].grams_per_each), 0.2)
+    // A hand cup weight wins over USDA's (120 g is regular, not instant).
+    assert.equal(Number(rows[1].grams_per_cup), 68)
+    assert.equal(Number(rows[2].grams_per_cup), 260)
   })
 })
