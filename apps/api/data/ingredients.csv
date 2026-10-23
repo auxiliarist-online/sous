@@ -101,7 +101,7 @@ lamb,meat_seafood,meat,,ground lamb|lamb chops|leg of lamb|lamb shoulder
 salmon,meat_seafood,fish,,salmon fillets|salmon fillet
 cod,meat_seafood,fish,,cod fillets
 tilapia,meat_seafood,fish,,tilapia fillets
-white fish,meat_seafood,fish,,white fish fillets|halibut|haddock
+white fish,meat_seafood,fish,,white fish fillets|haddock
 smoked salmon,meat_seafood,fish,,lox
 shrimp,meat_seafood,shellfish,,prawns|large shrimp|raw shrimp|frozen shrimp
 scallops,meat_seafood,shellfish,,sea scallops
@@ -396,7 +396,7 @@ unsweetened chocolate,pantry,,dairy,baking chocolate|unsweetened baking chocolat
 white chocolate chips,pantry,dairy,,white chocolate
 almond extract,pantry,tree_nut,alcohol,
 corn syrup,pantry,,,light corn syrup
-coconut sugar,pantry,,,palm sugar
+coconut sugar,pantry,,,
 turbinado sugar,pantry,,,raw sugar|demerara sugar
 instant espresso,pantry,,,espresso powder|instant coffee
 tomato puree,pantry,,,tomato purée|passata
@@ -535,7 +535,7 @@ tapioca starch,pantry,,,
 potato starch,pantry,,,potato flour
 arrowroot,pantry,,,arrowroot starch|arrowroot powder
 matzo meal,pantry,gluten,,matzah meal
-split peas,pantry,,,toor dal|moong dal|moong dhal|chana dal|yellow split peas|green split peas
+split peas,pantry,,,toor dal|moong dal|moong dhal|yellow split peas|green split peas
 golden syrup,pantry,,,light treacle
 jaggery,international,,,gur|panela|piloncillo
 vanilla sugar,pantry,,,
@@ -559,3 +559,135 @@ powdered milk,pantry,dairy,,dry milk|nonfat dry milk|milk powder|dried milk
 croutons,pantry,gluten,dairy|egg,crouton|seasoned croutons
 crostini,bakery,gluten,,crostini toasts
 non-dairy milk,dairy_eggs,,tree_nut|soy|gluten,nondairy milk|non dairy milk|dairy-free milk|plant milk|plant-based milk
+applesauce,pantry,,,unsweetened applesauce|apple sauce
+cherry pie filling,pantry,,,canned cherry pie filling
+milk chocolate,pantry,dairy,soy,milk chocolate chips|milk chocolate bar
+chocolate sprinkles,pantry,,dairy|soy,sprinkles|chocolate jimmies
+vanilla bean,spices,,,vanilla beans|vanilla pod|vanilla pod and bean
+brownie mix,pantry,gluten,dairy|egg|soy,brownie squares
+rye flour,pantry,gluten,,dark rye flour
+buckwheat flour,pantry,,,buckwheat
+millet flour,pantry,,,ragi (finger millet)|finger millet flour
+sorghum flour,pantry,,,jowar flour
+teff flour,pantry,,,teff
+spelt flour,pantry,gluten,,spelt|raw spelt flour
+vital wheat gluten,pantry,gluten,,gluten flour|vital wheat gluten flour|wheat gluten
+wheat germ,pantry,gluten,,toasted wheat germ
+wheat bran,pantry,gluten,,natural wheat bran|bran
+lemon extract,pantry,,alcohol,lemon flavoring
+orange extract,pantry,,alcohol,orange flavoring
+simple syrup,pantry,,,sugar syrup
+glucose syrup,pantry,,,liquid glucose|glucose
+marshmallow creme,pantry,,egg,marshmallow fluff|marshmallow cream
+pancake mix,pantry,gluten,dairy|egg,complete pancake mix|pancake and waffle mix
+custard powder,pantry,,,checkers custard powder
+cornflakes,pantry,,,corn flakes|cornflake cereal
+puffed rice cereal,pantry,,,rice krispies|puffed cereal|rice cereal|crisp rice cereal
+psyllium husk,pantry,,,psyllium husk powder|psyllium
+gum arabic,pantry,,,food-grade gum arabic|acacia gum
+pectin,pantry,,,fruit pectin|powdered pectin
+caramel sauce,pantry,dairy,,caramel topping|salted caramel sauce
+rock sugar,international,,,rock candy sugar|yellow rock sugar
+palm sugar,international,,,gula jawa|gula jawa (indonesian palm sugar)|diluted gula jawa (palm sugar)|gula melaka|coconut palm sugar
+stevia,pantry,,,sugar substitute|stevia extract
+matzo,bakery,gluten,,matzah|matzos
+short-grain rice,pantry,,,sushi rice|japanese-style short grain rice|round rice|valencian rice|paella rice|bomba rice|short-grain non-parboiled rice|prepared sushi rice
+glutinous rice,international,,,sticky rice|sweet rice|black glutinous rice|prepared steamed sweet rice
+urad dal,international,,,skinless white urad dal|urad dhal (black gram)|black gram|skinless black gram (urad dal)|split and husked urad dal (dhuli urad)|urad dhal
+chana dal,international,,,chana dhal|channa dhal (split chick-peas)|split chickpeas|kadalai paruppu
+mung beans,pantry,,,green mung beans|whole mung beans
+dried fava beans,pantry,,,dried broad beans
+dried soybeans,pantry,soy,,soybeans
+cranberry beans,pantry,,,borlotti beans|roman beans
+baked beans,pantry,,pork|meat,canned baked beans
+shirataki noodles,international,,,konjac noodles|miracle noodles
+textured vegetable protein,pantry,soy,,tvp|dried tvp (textured vegetable protein)|soy chunks
+injera,bakery,,,leftover injera
+cornbread,bakery,gluten|dairy|egg,,cornbread mix
+chili sauce,pantry,,,chilli sauce|heinz chili sauce
+thousand island dressing,pantry,egg,,thousand island
+sweet and sour sauce,pantry,,,sweet-and-sour sauce|sweet & sour sauce
+mango chutney,international,,,fruit chutney|mango pickle chutney
+shrimp paste,international,shellfish,,terasi|trassi|belacan|bagoong alamang|terasi (fermented shrimp paste)|terasi shrimp paste|petis shrimp paste|trassi (shrimp paste)|bagoong alamang (shrimp paste)|terasi (shrimp paste)
+guacamole,produce,,,prepared guacamole
+chinese black vinegar,international,,,chinkiang vinegar|black vinegar|sweet black vinegar
+champagne vinegar,pantry,,,champagne wine vinegar
+malt vinegar,pantry,gluten,,brown vinegar
+yeast extract,pantry,,,marmite|vegemite
+truffle oil,pantry,,,white truffle oil|black truffle oil
+walnut oil,pantry,tree_nut,,roasted walnut oil
+hazelnut oil,pantry,tree_nut,,roasted hazelnut oil
+almond oil,pantry,tree_nut,,sweet almond oil
+mustard oil,international,,,mustard seed oil
+kecap manis,international,soy|gluten,,sweet soy sauce|ketjap manis
+doenjang,international,soy,,korean soybean paste|soybean paste
+steak sauce,pantry,,,hp bold steak sauce|a1 sauce|a.1. steak sauce|hp sauce
+sofrito,international,,,recaito|sofrito sauce
+ginger-garlic paste,international,,,ginger garlic paste|garlic-ginger paste|ginger and garlic paste
+chaat masala,spices,,,chat masala
+panch phoron,spices,,,panch puran|panch phoran|bengali five spice
+anise seeds,spices,,,anise seed|aniseed|whole anise seed
+nigella seeds,spices,,,kalonji|black onion seeds|onion roasted seeds|nigella
+annatto seeds,spices,,,achiote|achiote (annatto) seeds|achiote (annatto)|annatto|onoto seeds|achiote seeds
+jerk seasoning,spices,,,jamaican jerk seasoning|jerk spice
+amchur,spices,,,amchoor|amchur (dried green mango) powder|amchoor (dry mango powder)|green mango powder|mango powder
+ajwain,spices,,,carom seeds (ajwain)|carom seeds|ajowan
+juniper berries,spices,,,dried juniper berries
+savory,spices,,,summer savory|winter savory|dried savory
+baharat,spices,,,baharat spice blend
+shichimi togarashi,spices,,,togarashi|togarashi pepper powder|seven spice
+dill seeds,spices,,,dill seed
+candlenuts,international,tree_nut,,kemiri|kimiri (candlenuts)|candle nuts
+katsuobushi,international,fish,,bonito flakes|dried bonito flakes
+kombu,international,,,dried kelp|dried sea kelp|kelp
+shrimp crackers,international,shellfish,,prawn crackers|krupuk
+corn husks,international,,,dried corn husks|hojas para tamales
+potash,international,,,potash (kanwa)|kanwa|akanwu
+locust beans,international,,,iru|daddawa|fermented locust beans (iru)|fermented locust beans (daddawa)|daddawa (fermented locust bean)|locusts beans|ogiri|ogiri igbo|ogiri okpei
+cassava leaves,produce,,,fresh cassava leaves|pondu|saka saka
+bitterleaf,produce,,,bitter leaf|bitter leaves|onugbu
+scent leaves,produce,,,scent leaf|nchanwu|efirin|african basil
+utazi leaves,produce,,,utazi
+ugu leaves,produce,,,pumpkin leaves|fluted pumpkin leaves|fresh pumpkin leaves|ikong ubong (ugu leaves)|fresh pumpkin leaves (muboora)
+jute leaves,produce,,,ewedu leaves|ewedu|molokhia|fresh jute mallow (molokhia) leaves|fresh jute (lalo) leaves
+salam leaves,produce,,,indonesian bay leaves|daun salam
+banana blossom,produce,,,banana flower|banana blossoms
+grape leaves,pantry,,,grape leaves in brine|vine leaves|fresh grape leaves
+chervil,produce,,,fresh chervil
+sorrel,produce,,,fresh sorrel|sorrel leaves
+culantro,produce,,,culantro (recao)|culantro leaves|recao|sawtooth coriander
+bitter melon,produce,,,bitter gourd|karela
+taro root,produce,,,dasheen
+durian,produce,,,frozen durian
+parsley root,produce,,,parsley roots|hamburg parsley
+turmeric root,produce,,,fresh turmeric|fresh turmeric root
+fiddleheads,produce,,,fiddlehead ferns
+lotus root,produce,,,renkon
+chayote,produce,,,chayote squash|mirliton|christophene
+yardlong beans,produce,,,long beans|chinese long beans
+alfalfa sprouts,produce,,,alfalfa
+calamansi,produce,,,kalamansi|calamondin
+quince,produce,,,quinces
+passion fruit,produce,,,passion fruits|passionfruit
+fava beans,produce,,,fresh broad (fava) beans|broad beans|fresh fava beans
+escarole,produce,,,fresh escarole
+pepperoncini,pantry,,,pepperoncini peppers|hot cherry peppers (jarred ones with oil)
+chicken livers,meat_seafood,poultry|meat,,chicken liver|liver
+veal shank,meat_seafood,meat,,osso buco|veal shin|veal hind shank
+oxtail,meat_seafood,meat,,ox tail|beef oxtail
+beef bones,meat_seafood,meat,,soup bones|marrow bones|beef with bones|extra beef bones|veal marrow bones|veal shin bones
+chicken bones,meat_seafood,poultry|meat,,chicken carcasses|chicken carcass|chicken backs|chicken frames
+pork chops,meat_seafood,pork|meat,,bone-in pork rib chops|pork loin chops|bone-in pork chops
+halibut,meat_seafood,fish,,halibut fillet|halibut fillets|halibut steaks
+whole duck,meat_seafood,poultry|meat,,whole pekin duckling|duck|duckling|duck meat
+duck fat,meat_seafood,poultry|meat,,rendered duck fat
+whipped topping,frozen,dairy,,cool whip|frozen whipped topping|nondairy whipped topping|imitation whipped topping|non-dairy whipped topping
+cream of celery soup,pantry,dairy,gluten,condensed cream of celery soup|canned cream of celery soup
+black tea,beverages,,,tea leaves|black tea leaves|loose-leaf tea|loose leaf tea|tea bags|earl grey tea|earl grey tea leaves|brewed black tea|loose chai tea leaves|assam tea
+cranberry juice,beverages,,,cranberry juice cocktail
+pineapple juice,beverages,,,canned pineapple juice|unsweetened pineapple juice
+peach nectar,beverages,,,peach juice
+frozen orange juice concentrate,frozen,,,orange juice concentrate|frozen orange juice
+vermouth,beverages,alcohol,,dry vermouth|sweet vermouth|extra-dry white vermouth
+orange liqueur,beverages,alcohol,,triple sec|cointreau|grand marnier|orange-flavored liqueur|curacao
+cocktail bitters,beverages,alcohol,,aromatic bitters|angostura bitters|bitters
