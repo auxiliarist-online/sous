@@ -465,7 +465,7 @@ export function Settings({
           }
         >
           <option value={0}>Any time: I don't mind repeats</option>
-          {[1, 2, 3, 4, 6, 8].map((n) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
             <option key={n} value={n}>
               {n === 1 ? '1 week' : `${n} weeks`}
             </option>

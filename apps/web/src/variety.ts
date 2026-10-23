@@ -95,6 +95,7 @@ export function varietyNotes(
   settings: VarietySettings = DEFAULT_VARIETY,
 ): string[] {
   const notes: string[] = []
+  // How many of the week's dinners have each value ("poultry", "pasta").
   const count = (pick: (e: (typeof entries)[number]) => string[]) => {
     const counts = new Map<string, number>()
     for (const e of entries)

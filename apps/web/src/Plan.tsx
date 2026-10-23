@@ -1197,17 +1197,17 @@ function AddRecipe({
   }, [api])
 
   // Ordering only, so it can fail quietly. Long enough back for a monthly
-  // favorite's rhythm.
+  // favorite's rhythm and the user's repeat window.
   useEffect(() => {
     let live = true
-    api.recentRecipes(week, 5).then(
+    api.recentRecipes(week, Math.max(5, repeatWeeks)).then(
       (r) => live && setRecent(r),
       () => {},
     )
     return () => {
       live = false
     }
-  }, [api, week, version])
+  }, [api, week, version, repeatWeeks])
 
   // What each would add; without it the list still works, just without costs.
   useEffect(() => {

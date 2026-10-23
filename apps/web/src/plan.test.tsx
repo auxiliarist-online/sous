@@ -1563,6 +1563,14 @@ describe('variety on the plan (TYL-66)', () => {
     )
   })
 
+  it('looks back as far as the repeat window when ordering suggestions', async () => {
+    const api = fakeApi({ variety: { ...DEFAULT_VARIETY, repeatWeeks: 8 } })
+    render(<PlanPage api={api} week={WEEK} />)
+    await waitFor(() =>
+      expect(api.recentRecipes).toHaveBeenLastCalledWith(WEEK, 8),
+    )
+  })
+
   it('says nothing when the user doesn’t mind', async () => {
     const api = fakeApi({
       entries: pastas,
