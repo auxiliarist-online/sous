@@ -4004,9 +4004,11 @@ describe('ingredients round 4 (TYL-60)', () => {
 
   it('weighs what USDA doesn’t, by hand: a bay leaf, a cup of curry paste', async () => {
     const { rows } = await db.query(
-      "select name, grams_per_cup, grams_per_each from ingredients where name in ('bay leaves', 'thai red curry paste') order by name",
+      "select name, grams_per_cup, grams_per_each from ingredients where name in ('bay leaves', 'powdered milk', 'thai red curry paste') order by name",
     )
     assert.equal(Number(rows[0].grams_per_each), 0.2)
-    assert.equal(Number(rows[1].grams_per_cup), 260)
+    // A hand cup weight wins over USDA's (120 g is regular, not instant).
+    assert.equal(Number(rows[1].grams_per_cup), 68)
+    assert.equal(Number(rows[2].grams_per_cup), 260)
   })
 })

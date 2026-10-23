@@ -428,9 +428,7 @@ from (values
   ('yellow bell pepper', null, 186.0),
   ('yellow mustard', 249.0, null),
   ('yellow squash', 127.0, null),
-  ('zucchini', 124.0, 196.0),
-  ('croutons', 30.0, null),
-  ('powdered milk', 120.0, null)
+  ('zucchini', 124.0, 196.0)
 ) as v(name, grams_per_cup, grams_per_each)
 where lower(i.name) = v.name;
 

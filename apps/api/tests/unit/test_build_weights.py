@@ -56,3 +56,11 @@ def test_hand_cup_and_each_weights_fill_what_usda_lacks() -> None:
     # A cup isn't stored as a unit of its own; a bunch is.
     units_part = sql[sql.index("-- Ingredient-specific units") :]
     assert "'cup'" not in units_part and "('cilantro', 'bunch', 60, 'hand')" in units_part
+
+
+def test_a_hand_cup_weight_wins_over_usdas() -> None:
+    rows = [{"name": "powdered milk", "grams_per_cup": "120.0", "grams_per_each": ""}]
+    units = [{"ingredient": "powdered milk", "unit": "cup", "grams": "68", "source": "hand"}]
+    sql = migration(rows, units)
+    assert "120.0" not in sql
+    assert "('powdered milk', 68)" in sql

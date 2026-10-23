@@ -218,11 +218,15 @@ def migration(rows: list[dict[str, str]], units: list[dict[str, str]]) -> str:
     # A hand weight for "one" corrects USDA's (a habanero isn't a medium
     # chili), so USDA's isn't used for those.
     hand_each = {u["ingredient"] for u in units if u["unit"] == "each" and u["source"] == "hand"}
+    # A hand cup weight likewise corrects USDA's (nonfat dry milk, not instant).
+    hand_cup = {u["ingredient"] for u in units if u["unit"] == "cup" and u["source"] == "hand"}
     values = ",\n".join(
-        f"  ({sql_text(r['name'])}, {r['grams_per_cup'] or 'null'}, "
+        f"  ({sql_text(r['name'])}, "
+        f"{'null' if r['name'] in hand_cup else r['grams_per_cup'] or 'null'}, "
         f"{'null' if r['name'] in hand_each else r['grams_per_each'] or 'null'})"
         for r in rows
-        if r["grams_per_cup"] or (r["grams_per_each"] and r["name"] not in hand_each)
+        if (r["grams_per_cup"] and r["name"] not in hand_cup)
+        or (r["grams_per_each"] and r["name"] not in hand_each)
     )
     each = ",\n".join(
         f"  ({sql_text(u['ingredient'])}, {u['grams']})"
