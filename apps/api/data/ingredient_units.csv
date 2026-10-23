@@ -1,13 +1,28 @@
 ingredient,unit,grams,source
+adobo seasoning,cup,160,hand
+alfalfa sprouts,cup,33,hand
+almond flour,cup,96,hand
 american cheese,slice,28,usda
+ancho chile powder,cup,128,hand
+applesauce,cup,255,hand
+arrowroot,cup,128,hand
 arugula,leaf,2,usda
+asafoetida,cup,96,hand
 asparagus,bunch,450,hand
 asparagus,spear,16,usda
 bacon,slice,28,usda
+bacon fat,cup,205,hand
 baguette,slice,25,hand
+baked beans,cup,254,hand
+banana blossom,each,400,hand
+banana leaves,each,30,hand
 basil,bunch,30,hand
 basil,leaf,0.5,usda
+bay leaves,each,0.2,hand
 bay leaves,leaf,0.2,hand
+bitter melon,each,200,hand
+black pepper,each,0.05,hand
+black tea,each,2.3,hand
 bok choy,head,840,usda
 bok choy,leaf,14,usda
 broccoli,bunch,608,usda
@@ -16,63 +31,132 @@ broccoli,stalk,151,usda
 broccoli rabe,bunch,450,hand
 broccoli rabe,stalk,19,usda
 broccolini,bunch,200,hand
+buckwheat flour,cup,120,hand
 butter,stick,113,hand
 butter lettuce,head,163,usda
 butter lettuce,leaf,7.5,usda
+cajun seasoning,cup,100,hand
+calamansi,each,15,hand
 canned pineapple,slice,47,usda
 cantaloupe,wedge,69,usda
+caramel sauce,cup,310,hand
+cardamom,each,0.15,hand
 carrots,slice,3,usda
 carrots,strip,4,usda
+cashews,each,1.5,hand
+cassava flour,cup,130,hand
 catfish,fillet,159,usda
 cauliflower,head,588,usda
 celery,bunch,450,hand
 celery,rib,40,hand
 celery,stalk,40,usda
 celery,strip,4,usda
+chana dal,cup,200,hand
+chayote,each,200,hand
 cheddar cheese,slice,28,usda
 cheese,slice,28,usda
+cherry pie filling,cup,300,hand
 cherry tomatoes,slice,20,usda
 cherry tomatoes,wedge,31,usda
+chicken,cup,140,hand
+chicken,each,1600,hand
+chicken wings,each,90,hand
+chili sauce,cup,280,hand
+chinese five spice,cup,100,hand
+chipotle peppers in adobo,cup,240,hand
+chipotle peppers in adobo,each,10,hand
+chipotle powder,cup,128,hand
 chives,bunch,25,hand
+chocolate sprinkles,cup,180,hand
+chocolate syrup,cup,300,hand
 chorizo,link,60,usda
 ciabatta,slice,30,hand
 cilantro,bunch,60,hand
 cilantro,sprig,2.2,usda
+cinnamon,each,2.6,hand
 cinnamon,stick,2.6,hand
+citric acid,cup,192,hand
+coconut yogurt,cup,245,hand
+cocoyam,each,300,hand
+cod,each,170,hand
 cod,fillet,231,usda
 colby jack,slice,28,usda
 collard greens,bunch,250,hand
 corn on the cob,ear,102,usda
+cornbread,each,65,hand
+cornflakes,cup,28,hand
+cranberry beans,cup,190,hand
+cream cheese,each,227,hand
+cream of celery soup,cup,250,hand
+creme fraiche,cup,240,hand
+croutons,cup,30,hand
 cucumber,slice,7,usda
 cucumber,stick,9,usda
+culantro,bunch,30,hand
 curry leaves,bunch,10,hand
 curry leaves,sprig,1,hand
+custard powder,cup,128,hand
 dill,bunch,30,hand
 dill,sprig,0.2,usda
 dill pickles,slice,7,usda
 dill pickles,spear,35,usda
+dried fava beans,cup,150,hand
+dried fish,each,50,hand
+dried soybeans,cup,186,hand
+duck breast,each,300,hand
+duck fat,cup,205,hand
+durian,cup,243,hand
 endive,head,513,usda
+escarole,each,400,hand
+fava beans,cup,150,hand
 fennel,bulb,234,usda
 feta,wedge,38,usda
+firm tofu,each,396,hand
+fish,cup,140,hand
+fish,each,500,hand
 fontina,slice,28,usda
 fresh oregano,bunch,15,hand
 fresh oregano,sprig,0.5,hand
+frozen mixed vegetables,cup,135,hand
 frozen peaches,slice,15.5,usda
 garlic,clove,3,usda
 garlic,each,50,hand
 garlic,head,50,hand
+garlic salt,cup,288,hand
+ginger,each,25,hand
 ginger,slice,2.2,usda
+ginger-garlic paste,cup,270,hand
+glucose syrup,cup,330,hand
+glutinous rice,cup,200,hand
+golden syrup,cup,340,hand
+graham crackers,cup,84,hand
+graham crackers,each,14,hand
+grape leaves,each,4,hand
+gravy,cup,238,hand
 green bell pepper,strip,2.7,usda
 green cabbage,head,908,usda
 green cabbage,leaf,23,usda
+grits,cup,156,hand
+ground cloves,each,0.1,hand
 gruyere,slice,28,usda
+guacamole,cup,240,hand
 habanero peppers,each,9,hand
+halibut,each,170,hand
+ham,cup,140,hand
 ham,slice,28,usda
+ham hock,each,450,hand
 honeydew melon,wedge,125,usda
+hot dogs,each,45,hand
+ice,cup,140,hand
+ice,each,25,hand
 iceberg lettuce,head,539,usda
 iceberg lettuce,leaf,8,usda
+injera,each,125,hand
 italian sausage,link,101,usda
+italian seasoning,cup,48,hand
+jaggery,cup,190,hand
 jicama,slice,6,usda
+kaffir lime leaves,each,0.3,hand
 kaffir lime leaves,leaf,0.3,hand
 kale,bunch,200,hand
 kohlrabi,slice,16,usda
@@ -80,29 +164,68 @@ leeks,slice,6,usda
 lemon juice,wedge,5.9,usda
 lemongrass,stalk,40,hand
 lemons,wedge,7,usda
+lotus root,each,300,hand
+mace,each,0.2,hand
+mango chutney,cup,320,hand
+maraschino cherries,cup,150,hand
+maraschino cherries,each,5,hand
 margarine,stick,113,hand
+marshmallow creme,cup,90,hand
+masa harina,cup,114,hand
+mascarpone,cup,230,hand
+matzo,each,28,hand
+matzo meal,cup,120,hand
+milk chocolate,cup,170,hand
+millet flour,cup,119,hand
 mint,bunch,30,hand
 mint,leaf,0.1,usda
 mixed greens,head,360,usda
 mixed greens,leaf,4.8,usda
 monterey jack,slice,28,usda
 mozzarella,slice,28.3,usda
+msg,cup,192,hand
 muenster,slice,28,usda
+mung beans,cup,207,hand
 mushrooms,slice,6,usda
 mustard greens,bunch,250,hand
 nori,sheet,2.6,usda
+nutmeg,each,7,hand
+nutritional yeast,cup,60,hand
+okra,each,12,hand
 okra,pod,11.9,usda
+old bay seasoning,cup,104,hand
 onion,slice,14,usda
+oranges,cup,180,hand
+palm sugar,cup,200,hand
+pancake mix,cup,120,hand
 pandan leaves,bunch,30,hand
+paneer,cup,130,hand
 parsley,bunch,60,hand
 parsley,sprig,1,usda
+parsley root,each,60,hand
+parsnips,each,170,hand
+passion fruit,each,18,hand
+pecorino romano,cup,100,hand
+pepperoncini,each,5,hand
+pie crust,each,260,hand
 pineapple,slice,175,usda
+pork chops,each,250,hand
+pork loin,each,1100,hand
+pork tenderloin,each,500,hand
+potato starch,cup,160,hand
+powdered milk,cup,68,hand
 provolone,slice,28,usda
+psyllium husk,cup,100,hand
+puffed rice cereal,cup,28,hand
+quince,each,250,hand
+rabbit,each,1300,hand
 radicchio,leaf,8,usda
 radishes,slice,1,usda
 red cabbage,head,839,usda
 red cabbage,leaf,23,usda
 rhubarb,stalk,51,usda
+roasted red peppers,cup,150,hand
+rock sugar,cup,200,hand
 roma tomatoes,slice,20,usda
 roma tomatoes,wedge,31,usda
 romaine lettuce,head,626,usda
@@ -110,32 +233,73 @@ romaine lettuce,leaf,6,usda
 rosemary,bunch,15,hand
 rosemary,sprig,1,hand
 rye bread,slice,32,usda
+rye flour,cup,102,hand
+saffron,each,0.002,hand
 sage,bunch,15,hand
+salam leaves,each,0.3,hand
+salmon,each,170,hand
 salmon,fillet,396,usda
 sausage,link,101,usda
 scallions,bunch,100,hand
 sea bass,fillet,129,usda
+seasoned salt,cup,288,hand
+shallots,each,40,hand
+shiitake mushrooms,cup,70,hand
+short-grain rice,cup,200,hand
+shrimp,cup,150,hand
+shrimp,each,15,hand
 snapper,fillet,218,usda
+sofrito,cup,240,hand
+sorghum flour,cup,121,hand
 sourdough bread,slice,50,hand
+spelt flour,cup,120,hand
 spinach,bunch,340,usda
 spinach,leaf,10,usda
+star anise,each,0.5,hand
+steak,each,280,hand
+sweet and sour sauce,cup,280,hand
 sweet corn kernels,ear,102,usda
 swiss chard,bunch,300,hand
 swiss chard,leaf,48,usda
 swiss cheese,slice,28,usda
+tamarind paste,cup,300,hand
+tapioca starch,cup,120,hand
+taro root,cup,130,hand
+taro root,each,300,hand
 tarragon,bunch,15,hand
+teff flour,cup,135,hand
+textured vegetable protein,cup,85,hand
+thai chilies,each,2,hand
+thai red curry paste,cup,260,hand
 thyme,bunch,15,hand
 thyme,sprig,0.8,hand
 tilapia,fillet,116,usda
 tomatoes,slice,20,usda
 tomatoes,wedge,31,usda
 trout,fillet,79,usda
+turbinado sugar,cup,202,hand
+turkey,cup,140,hand
+turkey,each,5500,hand
+turmeric root,each,10,hand
 turnips,slice,15,usda
+urad dal,cup,200,hand
+vanilla bean,each,3,hand
+veal shank,each,500,hand
+vital wheat gluten,cup,150,hand
+walnuts,each,4,hand
 watercress,bunch,120,hand
 watercress,sprig,2.5,usda
 watermelon,wedge,286,usda
+wheat bran,cup,58,hand
+wheat germ,cup,115,hand
+whipped topping,cup,75,hand
 white bread,slice,29,usda
 white fish,fillet,231,usda
+whole chicken,each,1600,hand
+whole duck,each,2300,hand
+whole grain mustard,cup,250,hand
 whole wheat bread,slice,32,usda
+xanthan gum,cup,144,hand
+yam,each,500,hand
 yellow bell pepper,strip,5.2,usda
 zucchini,slice,9.9,usda
