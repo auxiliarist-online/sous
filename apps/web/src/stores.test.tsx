@@ -14,6 +14,7 @@ import {
   type NearbyStore,
 } from './stores.ts'
 import { Welcome, type WelcomeApi } from './Welcome.tsx'
+import { fakePantryApi } from './pantryFake.ts'
 
 const ARCTIC: NearbyStore = {
   locationId: '09700181',
@@ -157,11 +158,7 @@ function welcomeApi(): WelcomeApi & Record<string, ReturnType<typeof vi.fn>> {
     searchIngredients: vi.fn(async () => []),
     exportMyData: vi.fn(async () => '{"profile": null}'),
     deleteMyAccount: vi.fn(async () => {}),
-    pantryStaples: vi.fn(async () => [
-      { id: 'salt', name: 'salt' },
-      { id: 'oil', name: 'olive oil' },
-    ]),
-    setPantry: vi.fn(async () => {}),
+    ...fakePantryApi(),
   } as unknown as WelcomeApi & Record<string, ReturnType<typeof vi.fn>>
 }
 
@@ -192,13 +189,14 @@ describe('Welcome', () => {
         name: 'Shop at Harris Teeter - Arctic Avenue',
       }),
     )
-    await next() // pantry
+    await next() // pantry: Basics, and the Thai and vegetarian kits
     expect(screen.getByText('Step 7 of 7')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'olive oil' }))
-    expect(screen.getByRole('button', { name: 'olive oil' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByRole('group', { name: 'Thai' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: 'Vegetarian' }),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'olive oil' }))
+    expect(screen.getByRole('checkbox', { name: 'salt' })).toBeChecked()
     await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
 
     await waitFor(() => expect(onDone).toHaveBeenCalled())
@@ -211,8 +209,7 @@ describe('Welcome', () => {
         homeZip: '23451',
       }),
     )
-    expect(api.setPantry).toHaveBeenCalledWith('oil', 'have')
-    expect(api.setPantry).toHaveBeenCalledTimes(1)
+    expect(api.keepStaples).toHaveBeenCalledWith(['salt', 'fish', 'cumin'])
     expect(api.chooseStore).toHaveBeenCalledWith('09700181')
   })
 
@@ -230,6 +227,35 @@ describe('Welcome', () => {
     expect(
       await screen.findByText("We couldn't save. Try again."),
     ).toBeInTheDocument()
+    // Skipped before the kits: none kept.
+    expect(api.keepStaples).toHaveBeenCalledWith([])
+  })
+})
+
+describe('Welcome’s starter kits (TYL-135)', () => {
+  it('keeps only the kit items shown, after going back and changing cuisines', async () => {
+    const api = welcomeApi()
+    render(<Welcome api={api} initial={NO_PREFERENCES} onDone={vi.fn()} />)
+    const next = async () =>
+      userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+    await next() // allergies
+    await next() // cuisines
+    await userEvent.click(screen.getByRole('button', { name: 'Thai' }))
+    for (let i = 0; i < 4; i++) await next()
+    // Basics and Thai; olive oil unchecked.
+    await userEvent.click(screen.getByRole('checkbox', { name: 'olive oil' }))
+    expect(screen.getByRole('checkbox', { name: 'fish sauce' })).toBeChecked()
+    // Back to cuisines: Thai off, so fish sauce goes; then forward again.
+    for (let i = 0; i < 4; i++)
+      await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Thai' }))
+    for (let i = 0; i < 4; i++) await next()
+    expect(screen.queryByRole('checkbox', { name: 'fish sauce' })).toBeNull()
+    expect(
+      screen.getByRole('checkbox', { name: 'olive oil' }),
+    ).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
+    await waitFor(() => expect(api.keepStaples).toHaveBeenCalledWith(['salt']))
   })
 })
 
@@ -249,7 +275,7 @@ describe('Welcome when things fail', () => {
   it('saves the pantry before marking setup done', async () => {
     const api = welcomeApi()
     const order: string[] = []
-    vi.mocked(api.setPantry).mockImplementation(async () => {
+    vi.mocked(api.keepStaples).mockImplementation(async () => {
       order.push('pantry')
     })
     vi.mocked(api.savePreferences).mockImplementation(async () => {
@@ -259,20 +285,20 @@ describe('Welcome when things fail', () => {
     for (let i = 0; i < 6; i++) {
       await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     }
-    await userEvent.click(await screen.findByRole('button', { name: 'salt' }))
+    await screen.findByRole('checkbox', { name: 'salt' })
     await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
     await waitFor(() => expect(order).toEqual(['pantry', 'preferences']))
   })
 
   it('doesn’t end setup when the pantry can’t be saved', async () => {
     const api = welcomeApi()
-    vi.mocked(api.setPantry).mockRejectedValue(new Error('nope'))
+    vi.mocked(api.keepStaples).mockRejectedValue(new Error('nope'))
     const onDone = vi.fn()
     render(<Welcome api={api} initial={NO_PREFERENCES} onDone={onDone} />)
     for (let i = 0; i < 6; i++) {
       await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     }
-    await userEvent.click(await screen.findByRole('button', { name: 'salt' }))
+    await screen.findByRole('checkbox', { name: 'salt' })
     await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
     expect(
       await screen.findByText("We couldn't save. Try again."),

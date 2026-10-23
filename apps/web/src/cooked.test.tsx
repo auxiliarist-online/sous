@@ -166,6 +166,54 @@ describe('CookedButton', () => {
   })
 })
 
+describe('Cooked it and what was on hand (TYL-137)', () => {
+  it('asks whether on-hand items were used up, and one tap takes each out', async () => {
+    const api = fakeCookedApi()
+    api.onHandIn.mockResolvedValue([
+      { ingredientId: 'spinach', name: 'spinach' },
+      { ingredientId: 'feta', name: 'feta' },
+    ])
+    render(
+      <CookedButton
+        api={api}
+        recipeId="r1"
+        title="Saag"
+        cookedOn="2026-10-14"
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Cooked Saag' }))
+    expect(api.onHandIn).toHaveBeenCalledWith('r1')
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Used up the spinach?' }),
+    )
+    expect(api.setPantry).toHaveBeenCalledWith('spinach', null)
+    expect(
+      screen.queryByRole('button', { name: 'Used up the spinach?' }),
+    ).toBeNull()
+    // Ignoring the question keeps the rest.
+    await userEvent.click(screen.getByRole('button', { name: 'Still have it' }))
+    expect(
+      screen.queryByRole('button', { name: 'Used up the feta?' }),
+    ).toBeNull()
+    expect(api.setPantry).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks nothing when nothing on hand was used', async () => {
+    const api = fakeCookedApi()
+    render(
+      <CookedButton
+        api={api}
+        recipeId="r1"
+        title="Dal"
+        cookedOn="2026-10-14"
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Cooked Dal' }))
+    await screen.findByRole('group', { name: 'Rate Dal' })
+    expect(screen.queryByRole('button', { name: /Used up/ })).toBeNull()
+  })
+})
+
 describe('History', () => {
   it('lists what was cooked, with ratings and notes', async () => {
     const api = fakeCookedApi(

@@ -30,6 +30,7 @@ import {
 import type { IngredientLine, RecipeDetail } from './sous.ts'
 import type { Cooked } from './cooked.ts'
 import { fakeCookedApi } from './cookedFake.ts'
+import { fakePantryApi } from './pantryFake.ts'
 
 describe('weeks', () => {
   it('starts on Monday', () => {
@@ -456,6 +457,7 @@ function fakeApi({
   added = { budgetCents: null, totalCents: 0, recipes: {} } as AddedCosts,
   copied = 0,
   cooked = fakeCookedApi(),
+  pantry = fakePantryApi(),
   draft = DRAFT,
 } = {}) {
   let current = entries
@@ -480,9 +482,6 @@ function fakeApi({
     recipeFits: vi.fn(async () => fits),
     addedCosts: vi.fn(async (_w: string, _ids: string[]) => added),
     favoriteCuisines: vi.fn(async () => favorites),
-    setPantry: vi.fn(
-      async (_id: string, _status: 'have' | 'out' | null) => void 0,
-    ),
     setMyPrice: vi.fn(
       async (
         _id: string,
@@ -503,6 +502,7 @@ function fakeApi({
       async (_week: string, _key: string, _id: string) => void 0,
     ),
     ...cooked,
+    ...pantry,
   } satisfies PlanApi
   return api
 }
@@ -1044,11 +1044,15 @@ describe('PlanPage', () => {
     await userEvent.click(
       screen.getByRole('button', { name: 'I need salt, put it on the list' }),
     )
-    expect(api.setPantry).toHaveBeenCalledWith('i-salt', null)
+    expect(api.setPantry).toHaveBeenCalledWith('i-salt', null, 'on_hand')
     await userEvent.click(
       screen.getByRole('button', { name: 'I have white rice already' }),
     )
-    expect(api.setPantry).toHaveBeenCalledWith('i-white rice', 'have')
+    expect(api.setPantry).toHaveBeenCalledWith(
+      'i-white rice',
+      'have',
+      'on_hand',
+    )
     await waitFor(() => expect(api.planCost).toHaveBeenCalledTimes(3))
   })
 
@@ -1496,5 +1500,49 @@ describe('PlanPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       "We couldn't load your plan.",
     )
+  })
+})
+
+describe('pantry items the plan needs (TYL-136)', () => {
+  const rice = fakePantryApi({
+    catalog: [{ id: 'i-white rice', name: 'white rice', group: 'grains' }],
+  })
+
+  it('asks whether you keep a pantry item the week needs', async () => {
+    const api = fakeApi({ entries: [entry('1')], pantry: rice })
+    render(<PlanPage api={api} week={WEEK} />)
+    const ask = await screen.findByRole('list', { name: 'Do you keep these?' })
+    // Carrots aren't a pantry item; salt is already marked.
+    expect(within(ask).getAllByRole('listitem')).toHaveLength(1)
+    await userEvent.click(
+      within(ask).getByRole('button', { name: 'I keep white rice' }),
+    )
+    expect(api.setPantry).toHaveBeenCalledWith('i-white rice', 'have', 'staple')
+  })
+
+  it('stops asking once it’s left on the list', async () => {
+    const pantry = fakePantryApi({
+      catalog: [{ id: 'i-white rice', name: 'white rice', group: 'grains' }],
+    })
+    const api = fakeApi({ entries: [entry('1')], pantry })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Add white rice to the list' }),
+    )
+    expect(api.dismissSuggestion).toHaveBeenCalledWith('i-white rice')
+    expect(
+      screen.queryByRole('list', { name: 'Do you keep these?' }),
+    ).toBeNull()
+  })
+
+  it('makes a pantry item marked from the buy list a staple', async () => {
+    const api = fakeApi({ entries: [entry('1')], pantry: rice })
+    render(<PlanPage api={api} week={WEEK} />)
+    await screen.findByRole('list', { name: 'Do you keep these?' })
+    await userEvent.click(await screen.findByText(/What you'll buy/))
+    await userEvent.click(
+      screen.getByRole('button', { name: 'I have white rice already' }),
+    )
+    expect(api.setPantry).toHaveBeenCalledWith('i-white rice', 'have', 'staple')
   })
 })

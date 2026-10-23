@@ -7,6 +7,7 @@ import type { SousApi } from './App.tsx'
 import { NO_PREFERENCES, type Preferences } from './sous.ts'
 import type { Auth } from './auth.ts'
 import { fakeCookedApi } from './cookedFake.ts'
+import { fakePantryApi } from './pantryFake.ts'
 
 type Listener = (event: string, session: Session | null) => void
 
@@ -57,13 +58,11 @@ const library = (
   chooseStore: vi.fn(async () => {}),
   exportMyData: vi.fn(async () => '{}'),
   deleteMyAccount: vi.fn(async () => {}),
-  pantryStaples: vi.fn(async () => []),
   syncList: vi.fn(async () => 'list-1'),
   loadList: vi.fn(async () => null),
   sendListOp: vi.fn(async () => {}),
   places: vi.fn(async () => []),
   addPlace: vi.fn(async (name: string) => ({ id: 'p', name })),
-  pantry: vi.fn(async () => []),
   sendFeedback: vi.fn(async () => {}),
   plan: vi.fn(async () => []),
   addToPlan: vi.fn(async () => {}),
@@ -104,8 +103,8 @@ const library = (
     notes: [],
   })),
   ...fakeCookedApi(),
+  ...fakePantryApi(),
   recipeFits: vi.fn(async () => ({})),
-  setPantry: vi.fn(async () => {}),
   searchCatalog: vi.fn(async () => []),
   saveToLibrary: vi.fn(async () => {}),
   setTags: vi.fn(async () => {}),

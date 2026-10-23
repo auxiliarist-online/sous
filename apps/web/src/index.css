@@ -1180,3 +1180,105 @@ label.button {
 .season-name {
   text-transform: capitalize;
 }
+
+/* The pantry (TYL-134): a search, then aisle groups of checkbox rows big
+   enough to tap, each kept staple with its "Out" toggle. */
+.pantry-group {
+  border-top: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
+.pantry-group summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.pantry-group ul,
+.pantry-suggestions,
+.keep-prompt ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pantry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.pantry-row label.check {
+  margin: 0;
+  align-items: center;
+  flex: 1;
+}
+
+.pantry-row button.chip[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--color-secondary) 15%, transparent);
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+}
+
+/* Suggestions, the plan's "Do you keep these?" and "Used up the spinach?":
+   a question with its answers beside it. */
+.pantry-suggestions li,
+.keep-prompt li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
+}
+
+.pantry-suggestions li span,
+.keep-prompt li span {
+  flex: 1 1 12rem;
+}
+
+.keep-prompt,
+.kit-card,
+.kit-offer {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.used-up {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+}
+
+/* Starter kits (TYL-135): one fieldset per kit, two columns of checkboxes
+   where there's room. */
+.starter-kits fieldset.kit {
+  border: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.starter-kits legend {
+  padding: 0;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+@media (min-width: 480px) {
+  .starter-kits fieldset.kit {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1rem;
+  }
+
+  .starter-kits legend {
+    grid-column: 1 / -1;
+  }
+}

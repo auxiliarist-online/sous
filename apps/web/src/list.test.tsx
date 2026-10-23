@@ -20,7 +20,6 @@ import {
   type ListState,
 } from './list.ts'
 import { ListPage, type ListApi } from './ListPage.tsx'
-import { PantryPage, type PantryApi } from './PantryPage.tsx'
 import type { BuyItem, PlanCost, PlanEntry } from './plan.ts'
 import { fakeCookedApi } from './cookedFake.ts'
 
@@ -672,82 +671,5 @@ describe('Home', () => {
     expect(
       screen.getByRole('link', { name: 'Plan this week' }),
     ).toHaveAttribute('href', '/plan')
-  })
-})
-
-describe('PantryPage', () => {
-  it('marks the staples you have, and other things used up', async () => {
-    const api: PantryApi = {
-      pantry: vi.fn(async () => [
-        { ingredientId: 'oil', name: 'olive oil', status: 'have' as const },
-        { ingredientId: 'rice', name: 'rice', status: 'have' as const },
-      ]),
-      pantryStaples: vi.fn(async () => [
-        { id: 'salt', name: 'salt' },
-        { id: 'oil', name: 'olive oil' },
-      ]),
-      setPantry: vi.fn(async () => {}),
-    }
-    render(<PantryPage api={api} />)
-    expect(
-      await screen.findByRole('button', { name: 'olive oil' }),
-    ).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'salt' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'salt' }))
-    expect(api.setPantry).toHaveBeenCalledWith('salt', 'have')
-    await userEvent.click(screen.getByRole('button', { name: 'olive oil' }))
-    expect(api.setPantry).toHaveBeenCalledWith('oil', null)
-    await userEvent.click(
-      screen.getByRole('button', { name: "I'm out of rice" }),
-    )
-    expect(api.setPantry).toHaveBeenCalledWith('rice', null)
-  })
-
-  it('waits for one save before taking another tap on the same staple', async () => {
-    let finish!: () => void
-    const api: PantryApi = {
-      pantry: vi.fn(async () => []),
-      pantryStaples: vi.fn(async () => [{ id: 'salt', name: 'salt' }]),
-      setPantry: vi.fn(() => new Promise<void>((r) => (finish = r))),
-    }
-    render(<PantryPage api={api} />)
-    await userEvent.click(await screen.findByRole('button', { name: 'salt' }))
-    const salt = screen.getByRole('button', { name: 'salt' })
-    expect(salt).toHaveAttribute('aria-pressed', 'true')
-    expect(salt).toBeDisabled()
-    finish()
-    await waitFor(() => expect(salt).toBeEnabled())
-  })
-
-  it('keeps the pantry on screen and puts back only what failed to save', async () => {
-    const api: PantryApi = {
-      pantry: vi.fn(async () => []),
-      pantryStaples: vi.fn(async () => [
-        { id: 'salt', name: 'salt' },
-        { id: 'oil', name: 'olive oil' },
-      ]),
-      setPantry: vi.fn(async (id: string) => {
-        if (id === 'salt') throw new Error('nope')
-      }),
-    }
-    render(<PantryPage api={api} />)
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'olive oil' }),
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'salt' }))
-    expect(
-      await screen.findByText("That didn't save. Try again."),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'salt' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    )
-    expect(screen.getByRole('button', { name: 'olive oil' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
   })
 })

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { PantryStatus } from './plan.ts'
+import { kitItems, kitsFor, type Kit, type PantryItem } from './pantry.ts'
+import { StarterKits } from './PantryKits.tsx'
 import {
   ChipGroup,
   HouseholdFields,
@@ -9,18 +10,8 @@ import {
 import { StorePicker } from './StorePicker.tsx'
 import { CATEGORIES, type Option, type Preferences } from './sous.ts'
 
-export interface WelcomeApi extends SettingsApi {
-  /** Common staples, offered as quick taps. */
-  pantryStaples(): Promise<{ id: string; name: string }[]>
-  setPantry(ingredientId: string, status: PantryStatus | null): Promise<void>
-}
-
-/** The list with the value added, or taken out if it's there. */
-function toggle(list: string[], value: string): string[] {
-  return list.includes(value)
-    ? list.filter((v) => v !== value)
-    : [...list, value]
-}
+/** Setup needs what Preferences does, the pantry's kits included. */
+export type WelcomeApi = SettingsApi
 
 const TITLES = [
   'How do you eat?',
@@ -51,8 +42,12 @@ export function Welcome({
     cuisines: Option[]
   } | null>(null)
   const [optionsFailed, setOptionsFailed] = useState(false)
-  const [staples, setStaples] = useState<{ id: string; name: string }[]>([])
-  const [have, setHave] = useState<string[]>([])
+  const [catalog, setCatalog] = useState<PantryItem[]>([])
+  const [kits, setKits] = useState<Kit[]>([])
+  // What's been unchecked in the starter kits: everything else shown is kept.
+  const [unchecked, setUnchecked] = useState<string[]>([])
+  // The kits are only kept if the user got to see them.
+  const [sawKits, setSawKits] = useState(false)
   const [step, setStep] = useState(0)
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle')
 
@@ -68,9 +63,13 @@ export function Welcome({
         setOptionsFailed(true)
       },
     )
-    // Only for the last step; it's skipped if they don't load.
-    api.pantryStaples().then(
-      (s) => live && setStaples(s),
+    // Only for the last step; it's empty if they don't load.
+    Promise.all([api.pantryCatalog(), api.pantryKits()]).then(
+      ([c, k]) => {
+        if (!live) return
+        setCatalog(c)
+        setKits(k)
+      },
       () => {},
     )
     return () => {
@@ -82,13 +81,25 @@ export function Welcome({
 
   const set = (patch: Partial<Preferences>) => setPrefs({ ...prefs, ...patch })
   const last = TITLES.length - 1
+  // The starter kits for the diets and cuisines chosen so far (TYL-135).
+  const starter = kitItems(kitsFor(kits, prefs), catalog)
+  // What's checked: what's shown, less what was unchecked. Going back and
+  // changing cuisines or diets hides some and shows new ones (pre-checked);
+  // only what's shown is kept.
+  const shown = starter.flatMap((k) => k.items.map((i) => i.id))
+  const checked = shown.filter((id) => !unchecked.includes(id))
+  // Go to a step, noting when the kits have been seen.
+  const go = (to: number) => {
+    if (to === last) setSawKits(true)
+    setStep(to)
+  }
 
   // Save what's been chosen (all of it, or the defaults when skipping).
   async function finish(chosen: Preferences, pantryHave: string[]) {
     setStatus('saving')
     try {
       // The pantry first: saving preferences is what ends setup.
-      for (const id of pantryHave) await api.setPantry(id, 'have')
+      await api.keepStaples(pantryHave)
       const saved = { ...chosen, saved: true }
       await api.savePreferences(saved)
       onDone(saved)
@@ -191,23 +202,25 @@ export function Welcome({
         return (
           <>
             <p className="muted small">
-              Tap the ones you have and they're left off your shopping list.
-              Anything else a recipe needs gets bought.
+              Staples you always keep are left off your shopping list. Here's
+              what kitchens like yours usually have: uncheck what you don't.
             </p>
-            <div className="chips" aria-label="Pantry staples">
-              {staples.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className="chip"
-                  aria-pressed={have.includes(s.id)}
-                  onClick={() => setHave(toggle(have, s.id))}
-                >
-                  {have.includes(s.id) && <span aria-hidden="true">✓ </span>}
-                  {s.name}
-                </button>
-              ))}
-            </div>
+            <StarterKits
+              kits={starter}
+              names={Object.fromEntries(
+                [...options.cuisines, ...options.diets].map((o) => [
+                  o.slug,
+                  o.name,
+                ]),
+              )}
+              checked={checked}
+              onChange={(next) =>
+                setUnchecked((u) => [
+                  ...u.filter((id) => !shown.includes(id)),
+                  ...shown.filter((id) => !next.includes(id)),
+                ])
+              }
+            />
           </>
         )
       default:
@@ -235,23 +248,19 @@ export function Welcome({
       {current(step)}
       <div className="welcome-nav">
         {step > 0 && (
-          <button
-            type="button"
-            className="link"
-            onClick={() => setStep(step - 1)}
-          >
+          <button type="button" className="link" onClick={() => go(step - 1)}>
             Back
           </button>
         )}
         {step < last ? (
-          <button type="button" onClick={() => setStep(step + 1)}>
+          <button type="button" onClick={() => go(step + 1)}>
             Next
           </button>
         ) : (
           <button
             type="button"
             disabled={status === 'saving'}
-            onClick={() => void finish(prefs, have)}
+            onClick={() => void finish(prefs, sawKits ? checked : [])}
           >
             {status === 'saving' ? 'Saving…' : 'Finish'}
           </button>
@@ -261,7 +270,7 @@ export function Welcome({
         type="button"
         className="link small"
         disabled={status === 'saving'}
-        onClick={() => void finish(prefs, have)}
+        onClick={() => void finish(prefs, sawKits ? checked : [])}
       >
         Skip the rest; you can change all of this in Preferences
       </button>

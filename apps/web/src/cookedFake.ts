@@ -1,5 +1,7 @@
 import { vi } from 'vitest'
 import type { Cooked, CookedApi, CookedSummary, HistoryItem } from './cooked.ts'
+import type { PantryKind } from './pantry.ts'
+import type { PantryStatus } from './plan.ts'
 import type { Seasons } from './seasons.ts'
 import type { Frequency, Recent } from './variety.ts'
 
@@ -66,5 +68,18 @@ export function fakeCookedApi(
       async (_recipeId: string, _frequency: Frequency | null) => {},
     ),
     recentRecipes: vi.fn(async (_week: string, _weeks: number) => recent),
+    // Nothing on hand unless a test says so (TYL-137).
+    onHandIn: vi.fn(
+      async (
+        _recipeId: string,
+      ): Promise<{ ingredientId: string; name: string }[]> => [],
+    ),
+    setPantry: vi.fn(
+      async (
+        _ingredientId: string,
+        _status: PantryStatus | null,
+        _kind?: PantryKind,
+      ) => {},
+    ),
   } satisfies CookedApi & Record<string, unknown>
 }

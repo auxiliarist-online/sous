@@ -27,7 +27,6 @@ import {
   addToPlan,
   copyPlan,
   isMonday,
-  loadPantry,
   loadPlan,
   addedCosts,
   clearMyPrice,
@@ -39,7 +38,6 @@ import {
   recipeFits,
   removeEntry,
   removeEntries,
-  setPantry,
   updateEntry,
   weekOf,
 } from './plan.ts'
@@ -54,6 +52,17 @@ import {
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { History, type HistoryApi } from './History.tsx'
 import { loadSeasons, type Seasons } from './seasons.ts'
+import {
+  dismissedSuggestions,
+  dismissSuggestion,
+  keepStaples,
+  loadPantry,
+  onHandIn,
+  pantryCatalog,
+  pantryKits,
+  pantrySuggestions,
+  setPantry,
+} from './pantry.ts'
 import { addFavorite, recentRecipes, setFavorite } from './favorites.ts'
 import {
   cookedEntries,
@@ -78,7 +87,6 @@ import {
   deleteMyAccount,
   exportMyData,
   myStore,
-  pantryStaples,
   storesNear,
 } from './stores.ts'
 import { Welcome, type WelcomeApi } from './Welcome.tsx'
@@ -174,14 +182,20 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     searchCatalog: (q, offset) => searchCatalog(db, q, offset),
     saveToLibrary: (id) => saveToLibrary(db, userId, id),
     setTags: (id, tags) => setTags(db, id, tags),
-    setPantry: (ingredientId, status) =>
-      setPantry(db, userId, ingredientId, status),
+    setPantry: (ingredientId, status, kind) =>
+      setPantry(db, userId, ingredientId, status, kind),
+    keepStaples: (ids) => keepStaples(db, userId, ids),
+    pantryCatalog: () => pantryCatalog(db),
+    pantryKits: () => pantryKits(db),
+    pantrySuggestions: () => pantrySuggestions(db),
+    dismissedSuggestions: () => dismissedSuggestions(db),
+    dismissSuggestion: (id) => dismissSuggestion(db, userId, id),
+    onHandIn: (recipeId) => onHandIn(db, recipeId),
     storesNear: (zip) => storesNear(session, zip),
     myStore: () => myStore(session),
     chooseStore: (locationId) => chooseStore(session, locationId),
     exportMyData: () => exportMyData(db),
     deleteMyAccount: () => deleteMyAccount(db),
-    pantryStaples: () => pantryStaples(db),
     syncList: (week, items) => syncList(db, week, items),
     loadList: (week) => loadList(db, week),
     sendListOp: (op) => sendOp(db, op),
@@ -367,7 +381,9 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
           {at.page === 'list' && (
             <ListPage key={week} api={api} week={week} user={session.user.id} />
           )}
-          {at.page === 'pantry' && <PantryPage api={api} />}
+          {at.page === 'pantry' && (
+            <PantryPage api={api} prefs={prefs ?? undefined} />
+          )}
           {at.page === 'history' && <History api={api} />}
           {at.page === 'settings' && (
             <Settings

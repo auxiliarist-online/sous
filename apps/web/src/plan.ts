@@ -238,58 +238,10 @@ export async function recipeFits(
   )
 }
 
-// ---------- the pantry (start of TYL-49) ----------
-
-/** What the user has marked on hand or out, with names. */
-export async function loadPantry(
-  db: SupabaseClient,
-): Promise<{ ingredientId: string; name: string; status: PantryStatus }[]> {
-  const { data, error } = await db
-    .from('user_pantry')
-    .select('status, ingredient:ingredients(id, name)')
-  if (error) throw error
-  return (
-    data as unknown as {
-      status: PantryStatus
-      ingredient: { id: string; name: string } | null
-    }[]
-  ).flatMap((r) =>
-    r.ingredient
-      ? [
-          {
-            ingredientId: r.ingredient.id,
-            name: r.ingredient.name,
-            status: r.status,
-          },
-        ]
-      : [],
-  )
-}
-
 export type StoreStatus =
   'store' | 'not_chosen' | 'none_nearby' | 'unavailable' | 'unknown'
 
 export type PantryStatus = 'have' | 'out'
-
-/** Record what the user has on hand; null forgets it, so it's bought
- *  (TYL-88: nothing is assumed on hand). */
-export async function setPantry(
-  db: SupabaseClient,
-  userId: string,
-  ingredientId: string,
-  status: PantryStatus | null,
-): Promise<void> {
-  const { error } = status
-    ? await db
-        .from('user_pantry')
-        .upsert({ user_id: userId, ingredient_id: ingredientId, status })
-    : await db
-        .from('user_pantry')
-        .delete()
-        .eq('user_id', userId)
-        .eq('ingredient_id', ingredientId)
-  if (error) throw error
-}
 
 // ---------- cost ----------
 

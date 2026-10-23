@@ -25,6 +25,8 @@ erDiagram
     users ||--o{ user_disliked_ingredients : ""
     users ||--o{ user_saved_recipes : ""
     users ||--o{ user_pantry_staples : ""
+    users ||--o{ user_pantry : ""
+    users ||--o{ user_pantry_dismissed : ""
 
     store_chains ||--o{ stores : ""
     store_chains ||--o{ store_products : sells
@@ -214,7 +216,8 @@ Users get three kinds of control (TYL-32):
 ### Buying and the pantry (TYL-15, TYL-18, TYL-49)
 
 - Each ingredient says how it's bought (`apps/api/data/packaging.csv`, turned into a migration by `scripts/build_packaging.py`): `sold_by = 'package'` with a typical `package_quantity` and `package_unit` (a 15 oz can, a 2 lb bag, a bunch, one lemon), or `'loose'`, bought by the amount needed (produce by the pound, meat from the counter). `pantry_staple` marks things most kitchens keep (salt, oil, spices).
-- `user_pantry` is the start of the pantry tracker: per user and ingredient, `have` (on hand, don't buy) or `out` (buy it). With no row, staples count as on hand and everything else is bought.
+- `user_pantry` is the user's pantry (TYL-133, designed in TYL-97): per user and ingredient, a `kind` and a `status`. A **staple** (`kind = 'staple'`) is something they always keep, `have` until they mark it `out`. An out staple goes on the shopping list of any week that isn't over (`sync_shopping_list()`), and checking it off there marks it `have` again (trigger `shopping_list_items_restock`). **On hand** (`kind = 'on_hand'`) is a one-off, like half a bag of spinach: always `have`, removed by hand or after "Cooked it" asks whether it was used up (`on_hand_in()`). Anything `have` is left off the buy list; with no row, an ingredient is bought (TYL-88: nothing is assumed).
+- Pantry-type ingredients have an aisle group (`ingredients.pantry_group`: spices, oils and vinegars, baking, sauces, grains, cans, broths, nuts) and belong to starter kits (`pantry_kits`: `basics`, a cuisine's slug or a diet's slug), both from `apps/api/data/pantry.csv` via `scripts/build_pantry.py`. `pantry_suggestions()` offers pantry items used in three or more of the recipes the user planned or cooked; `user_pantry_dismissed` holds the suggestions they turned down (also used by the plan page's "Do you keep these?").
 - `GET /api/plans/{week}/cost` prices the week like a shopping trip. `plan_cost_inputs()` (service role only) returns the entries, their ingredient lines, how each ingredient is bought, the user's pantry and the prices that apply to them. `app/plans/cost.py` adds each ingredient up across the week (each recipe at its size), rounds packaged ones up to whole packages (an unknown amount, like "salt to taste", buys one), prices loose ones by the amount, and skips what's on hand. It returns the list of items with what to buy, the leftover from the last package, and the price.
 
 - Some ingredients aren't bought on their own (TYL-61): `buy_as` and `buy_ratio` (grams of what's bought per gram of the ingredient, from `apps/api/data/bought_as.csv`) turn 5 egg yolks into 250 g of eggs, added to the eggs item.

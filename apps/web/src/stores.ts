@@ -106,17 +106,3 @@ export async function deleteMyAccount(db: SupabaseClient): Promise<void> {
   const { error } = await db.rpc('delete_my_account')
   if (error) throw error
 }
-
-/** Common pantry staples (salt, oil, spices...), by name: quick taps for
- *  "what do you have?". */
-export async function pantryStaples(
-  db: SupabaseClient,
-): Promise<{ id: string; name: string }[]> {
-  const { data, error } = await db
-    .from('ingredients')
-    .select('id, name')
-    .eq('pantry_staple', true)
-    .order('name')
-  if (error) throw error
-  return data as { id: string; name: string }[]
-}

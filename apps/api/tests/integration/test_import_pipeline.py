@@ -291,6 +291,20 @@ def test_a_planned_week_is_priced_from_the_database(
     assert by_name["salt"].buy is False
     assert (cost.total_cents, cost.budget_cents, cost.estimated) == (300, 6000, False)
 
+    # TYL-133: lentils on hand aren't bought either; salt marked out is.
+    db.execute(
+        "insert into user_pantry (user_id, ingredient_id, status, kind)"
+        " values (%s, %s, 'have', 'on_hand')",
+        [user, lentils[0]],
+    )
+    db.execute(
+        "update user_pantry set status = 'out' where user_id = %s and kind = 'staple'", [user]
+    )
+    inputs = db.execute("select plan_cost_inputs(%s, '2026-10-12')", [user]).fetchone()
+    assert inputs is not None
+    again = {i.name: i for i in plan_cost(inputs[0], on=date(2026, 10, 12)).items}
+    assert (again["lentils"].buy, again["salt"].buy) == (False, True)
+
 
 def test_a_wikibooks_recipe_is_stored_in_full_and_published(db: psycopg.Connection) -> None:
     from app.recipes.wikibooks import parse

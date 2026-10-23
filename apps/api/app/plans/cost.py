@@ -8,8 +8,10 @@ double size), then bought the way it's sold:
 * loose: just the amount needed (carrots by the pound, meat from the counter).
 
 The user's pantry decides what's already on hand: only what they've marked
-"have" is left off (TYL-88). Nothing is assumed, staples included, so the
-list never quietly skips something the user doesn't have.
+"have" is left off (TYL-88), whether a staple they keep or something on hand
+this week (TYL-133). A staple marked out is bought. Nothing is assumed,
+staples included, so the list never quietly skips something the user doesn't
+have.
 
 Each recipe's share of the week (TYL-30) splits every item's cost among the
 recipes that use it, by how much each uses, so the shares add up to the total.
