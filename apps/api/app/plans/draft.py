@@ -18,14 +18,15 @@ from typing import Any
 from app.plans.cost import Item, PlanCost, _cost
 from app.plans.options import settle
 
-# How a draft is scored, in cents: a cent spent counts 1. Variety is all but a
-# rule (only a too-small pool breaks it); favorites come back on their rhythm
-# unless that costs a lot more; what was just had waits its turn.
+# How a draft is scored, in cents: a cent spent counts 1. Variety is a rule:
+# its penalty outweighs any week's cost, so only a pool too small to keep it
+# breaks it (and those weeks still compare by cost). Favorites come back on
+# their rhythm unless that costs a lot more; what was just had waits its turn.
 WASTE_WEIGHT = 0.5  # a cent of food left in a package
 OVER_BUDGET_WEIGHT = 5  # each cent over the budget
-REPEAT_PROTEIN = 5000  # each dinner past two with the same main protein
-REPEAT_CUISINE = 5000  # each dinner past two of the same cuisine
-REPEAT_STYLE = 5000  # each dinner past two of the same cooking style
+REPEAT_PROTEIN = 10_000_000  # each dinner past two with the same main protein
+REPEAT_CUISINE = 10_000_000  # each dinner past two of the same cuisine
+REPEAT_STYLE = 10_000_000  # each dinner past two of the same cooking style
 FAVORITE_DUE = 1500  # a favorite back on its rhythm (a bonus)
 RECENT = 2000  # a recipe had lately (Variety.repeat_weeks) that isn't a favorite due
 # Seasons (TYL-70): a little for each seasonal item in season, a little against

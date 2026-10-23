@@ -432,3 +432,19 @@ class TestVariety:
         assert len(seen["fav-4"]) >= 2 and all(3 <= g <= 5 for g in gaps("fav-4"))
         # Nothing else comes back within three weeks.
         assert all(g >= 3 for r in others for g in gaps(r))
+
+
+def test_keeps_variety_even_when_breaking_it_is_much_cheaper() -> None:
+    # A third chicken dinner would save $195; the pricey steak keeps the rule.
+    week = inputs(
+        *(recipe(f"chicken-{n}", ("chicken", 1, "each")) for n in range(3)),
+        recipe("steak", ("steak", 1, "each")),
+    )
+    week["prices"] = [
+        *[p for p in week["prices"] if p["ingredient_id"] != "steak"],
+        price("steak", 200_00, 1, "each"),
+    ]
+    ids = ["chicken-0", "chicken-1", "chicken-2", "steak"]
+    d = draft_week(week, pool(*ids), dinners=3, locked=[], exclude=[], on=MONDAY)
+    assert "steak" in picked(d)
+    assert not d.notes
