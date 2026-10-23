@@ -4,12 +4,13 @@ makes the week best, then swap picks for better ones until none helps.
 
 A week is better when it costs less (as the shopping trip is priced: whole
 packages, the pantry), wastes less (what's left in the packages bought), stays
-in the budget, mixes up proteins and cuisines (TYL-66), brings back favorites
-that are due, and cooks with the seasons (TYL-70). Recipes that break the
-user's rules are never picked.
+in the budget, mixes up proteins, cuisines and cooking styles as much as the
+user wants (TYL-66), brings back favorites that are due, and cooks with the
+seasons (TYL-70). Recipes that break the user's rules are never picked.
 """
 
 import math
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -17,15 +18,17 @@ from typing import Any
 from app.plans.cost import Item, PlanCost, _cost
 from app.plans.options import settle
 
-# How a draft is scored, in cents: a cent spent counts 1. Variety is all but a
-# rule (only a too-small pool breaks it); favorites come back on their rhythm
-# unless that costs a lot more; what was just had waits its turn.
+# How a draft is scored, in cents: a cent spent counts 1. Variety is a rule:
+# its penalty outweighs any week's cost, so only a pool too small to keep it
+# breaks it (and those weeks still compare by cost). Favorites come back on
+# their rhythm unless that costs a lot more; what was just had waits its turn.
 WASTE_WEIGHT = 0.5  # a cent of food left in a package
 OVER_BUDGET_WEIGHT = 5  # each cent over the budget
-REPEAT_PROTEIN = 5000  # each dinner past two with the same main protein
-REPEAT_CUISINE = 5000  # each dinner past two of the same cuisine
+REPEAT_PROTEIN = 10_000_000  # each dinner past two with the same main protein
+REPEAT_CUISINE = 10_000_000  # each dinner past two of the same cuisine
+REPEAT_STYLE = 10_000_000  # each dinner past two of the same cooking style
 FAVORITE_DUE = 1500  # a favorite back on its rhythm (a bonus)
-RECENT = 2000  # a recipe had in the last 3 weeks that isn't a favorite due
+RECENT = 2000  # a recipe had lately (Variety.repeat_weeks) that isn't a favorite due
 # Seasons (TYL-70): a little for each seasonal item in season, a little against
 # each out of season; "Cook with the seasons" turns both up.
 IN_SEASON = 150  # per item, up to SEASON_CAP of them
@@ -33,10 +36,62 @@ OUT_OF_SEASON = 200  # per item
 SEASON_CAP = 3
 SEASONS_UP = 3
 MAX_SAME = 2
-RECENT_WEEKS = 3
 FAVORITE_WEEKS = {"weekly": 1, "biweekly": 2, "monthly": 4}
 # Proteins as variety counts them (pork isn't counted as red meat too).
 PROTEINS = ("poultry", "meat", "pork", "fish", "shellfish")
+# How proteins are named in notes.
+PROTEIN_NAMES = {
+    "poultry": "poultry",
+    "meat": "red meat",
+    "pork": "pork",
+    "fish": "fish",
+    "shellfish": "shellfish",
+}
+# Cooking styles, from a recipe's title or the user's tags. Keep in step with
+# STYLES in apps/web/src/variety.ts.
+STYLES = {
+    "soup": r"soups?|stews?|chowders?|bisques?|chili",
+    "pasta": r"pastas?|spaghetti|penne|linguine|fettuccine|rigatoni|lasagnas?|macaroni|orzo"
+    r"|ravioli|tortellini|gnocchi",
+    "stir-fry": r"stir[- ]?fr(?:y|ies|ied)",
+    "sheet pan": r"sheet[- ]pan|traybakes?",
+    "curry": r"curry|curries|masala|korma|vindaloo",
+    "taco": r"tacos?|burritos?|quesadillas?|enchiladas?|fajitas?",
+    "salad": r"salads?",
+    "casserole": r"casseroles?|gratins?",
+}
+_STYLE_RES = {k: re.compile(rf"\b(?:{v})\b", re.IGNORECASE) for k, v in STYLES.items()}
+
+
+def cooking_styles(title: str, tags: list[str] | None = None) -> list[str]:
+    """A recipe's cooking styles ("soup", "pasta"), from its title and the
+    user's tags on it; none when neither says."""
+    text = " ".join([title, *(tags or [])])
+    return [k for k, r in _STYLE_RES.items() if r.search(text)]
+
+
+@dataclass
+class Variety:
+    """How much variety the user wants (Preferences, "Variety"): mix up main
+    proteins, cuisines and cooking styles (at most MAX_SAME dinners of each a
+    week), and how many weeks before a recipe comes back (0: don't mind).
+    Favorites come back at their own rhythm either way."""
+
+    proteins: bool = True
+    cuisines: bool = True
+    styles: bool = True
+    repeat_weeks: int = 3
+
+    @classmethod
+    def from_json(cls, d: dict[str, Any] | None) -> "Variety":
+        """The settings as plan_draft_pool() sends them; defaults for any missing."""
+        d = d or {}
+        return cls(
+            proteins=bool(d.get("proteins", True)),
+            cuisines=bool(d.get("cuisines", True)),
+            styles=bool(d.get("styles", True)),
+            repeat_weeks=int(d.get("repeat_weeks", 3)),
+        )
 
 
 @dataclass
@@ -50,6 +105,9 @@ class Candidate:
     weeks_ago: int | None = None
     cuisines: list[str] = field(default_factory=list)
     proteins: list[str] = field(default_factory=list)
+    # The user's tags on it, and the cooking styles they and the title name.
+    tags: list[str] = field(default_factory=list)
+    styles: list[str] = field(default_factory=list)
     # Its seasonal produce in season the week planned, and how many aren't.
     in_season: list[str] = field(default_factory=list)
     out_of_season: int = 0
@@ -120,9 +178,10 @@ class Week:
         on: date,
         store_id: str | None,
         seasons: float = 1,
+        variety: Variety | None = None,
     ) -> None:
         """Split the inputs into what's planned and the candidates' lines, and
-        work out each candidate's main proteins."""
+        work out each candidate's main proteins and cooking styles."""
         self.inputs = inputs
         self.on = on
         self.store_id = store_id
@@ -135,10 +194,18 @@ class Week:
         self.pool = {c.recipe_id: c for c in pool if c.recipe_id in self.lines}
         for c in self.pool.values():
             c.proteins = main_proteins(self.lines[c.recipe_id]["lines"], self.info)
-        # What's planned counts toward variety too.
+            c.styles = cooking_styles(c.title, c.tags)
+        # What's planned counts toward variety too: its proteins from its
+        # lines, its cuisines and styles when it's a saved recipe.
         self.planned_proteins = [
             p for e in self.planned for p in main_proteins(e["lines"], self.info)
         ]
+        planned_saved = [
+            self.pool[str(e["recipe_id"])] for e in self.planned if str(e["recipe_id"]) in self.pool
+        ]
+        self.planned_cuisines = [x for c in planned_saved for x in c.cuisines]
+        self.planned_styles = [x for c in planned_saved for x in c.styles]
+        self.variety = variety or Variety()
         self.budget: int | None = inputs.get("budget_cents")
         self.seasons = seasons
         self._memo: dict[frozenset[str], tuple[float, PlanCost]] = {}
@@ -165,21 +232,82 @@ class Week:
         if self.budget is not None and cost.total_cents > self.budget:
             score += OVER_BUDGET_WEIGHT * (cost.total_cents - self.budget)
         chosen = [self.pool[r] for r in picks]
-        proteins = self.planned_proteins + [p for c in chosen for p in c.proteins]
-        for p in set(proteins):
-            score += REPEAT_PROTEIN * max(0, proteins.count(p) - MAX_SAME)
-        cuisines = [x for c in chosen for x in c.cuisines]
-        for x in set(cuisines):
-            score += REPEAT_CUISINE * max(0, cuisines.count(x) - MAX_SAME)
+        for weight, counts in (
+            (REPEAT_PROTEIN, self.proteins(picks)),
+            (REPEAT_CUISINE, self.cuisines(picks)),
+            (REPEAT_STYLE, self.styles(picks)),
+        ):
+            score += weight * sum(max(0, n - MAX_SAME) for n in counts.values())
         for c in chosen:
             if c.due:
                 score -= FAVORITE_DUE
-            elif c.weeks_ago is not None and c.weeks_ago < RECENT_WEEKS:
+            elif self.recent(c):
                 score += RECENT
             score -= self.seasons * IN_SEASON * min(SEASON_CAP, len(c.in_season))
             score += self.seasons * OUT_OF_SEASON * c.out_of_season
         self._memo[picks] = (score, cost)
         return score, cost
+
+    def proteins(self, picks: frozenset[str]) -> dict[str, int]:
+        """How many dinners have each main protein, planned and picked; none
+        counted when the user doesn't mind."""
+        if not self.variety.proteins:
+            return {}
+        return _count(self.planned_proteins + [p for r in picks for p in self.pool[r].proteins])
+
+    def cuisines(self, picks: frozenset[str]) -> dict[str, int]:
+        """How many dinners are of each cuisine, planned and picked."""
+        if not self.variety.cuisines:
+            return {}
+        return _count(self.planned_cuisines + [x for r in picks for x in self.pool[r].cuisines])
+
+    def styles(self, picks: frozenset[str]) -> dict[str, int]:
+        """How many dinners are of each cooking style, planned and picked."""
+        if not self.variety.styles:
+            return {}
+        return _count(self.planned_styles + [x for r in picks for x in self.pool[r].styles])
+
+    def recent(self, c: Candidate) -> bool:
+        """Had too lately to suggest again (a favorite that's due isn't)."""
+        return c.weeks_ago is not None and c.weeks_ago < self.variety.repeat_weeks
+
+    def broken(self, picks: frozenset[str]) -> list[str]:
+        """The variety rules the picks still break, as notes: only a pool too
+        small to keep them does that. Rules the user's own planned meals break
+        alone aren't the draft's to mention."""
+        notes = []
+        for counts, picked, say in (
+            (
+                self.proteins(picks),
+                {p for r in picks for p in self.pool[r].proteins},
+                "{n} dinners with {k}",
+            ),
+            (
+                self.cuisines(picks),
+                {x for r in picks for x in self.pool[r].cuisines},
+                "{n} {k} dinners",
+            ),
+            (self.styles(picks), {x for r in picks for x in self.pool[r].styles}, "{n} {k} nights"),
+        ):
+            notes += [
+                say.format(n=n, k=PROTEIN_NAMES.get(k, k))
+                for k, n in sorted(counts.items())
+                if n > MAX_SAME and k in picked
+            ]
+        notes += [
+            f"{self.pool[r].title} again so soon"
+            for r in sorted(picks)
+            if not self.pool[r].due and self.recent(self.pool[r])
+        ]
+        return notes
+
+
+def _count(xs: list[str]) -> dict[str, int]:
+    """How many times each value appears."""
+    out: dict[str, int] = {}
+    for x in xs:
+        out[x] = out.get(x, 0) + 1
+    return out
 
 
 def waste(items: list[Item]) -> float:
@@ -205,12 +333,18 @@ def draft_week(
     on: date,
     store_id: str | None = None,
     cook_with_seasons: bool = False,
+    variety: Variety | None = None,
 ) -> Draft:
     """Draft the week's open dinners. `inputs` is plan_cost_inputs() with the
     pool as candidates; `locked` picks stay; `exclude` are never picked (a
     swap). Planned dinners count toward `dinners` and stay as they are."""
     week = Week(
-        inputs, pool, on=on, store_id=store_id, seasons=SEASONS_UP if cook_with_seasons else 1
+        inputs,
+        pool,
+        on=on,
+        store_id=store_id,
+        seasons=SEASONS_UP if cook_with_seasons else 1,
+        variety=variety,
     )
     planned_ids = {str(e["recipe_id"]) for e in week.planned}
     keep = [
@@ -262,6 +396,13 @@ def draft_week(
             break
 
     final = frozenset(picks)
+    broken = week.broken(final)
+    if broken:
+        notes.append(
+            "Not enough of your saved recipes fit to mix things up more: "
+            + "; ".join(broken)
+            + ". Save a few more to vary it."
+        )
     cost = week.cost(final)
     over = week.budget is not None and cost.total_cents > week.budget
     if over and week.budget is not None:

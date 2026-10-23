@@ -31,6 +31,7 @@ import type { IngredientLine, RecipeDetail } from './sous.ts'
 import type { Cooked } from './cooked.ts'
 import { fakeCookedApi } from './cookedFake.ts'
 import { fakePantryApi } from './pantryFake.ts'
+import { DEFAULT_VARIETY } from './variety.ts'
 
 describe('weeks', () => {
   it('starts on Monday', () => {
@@ -360,6 +361,7 @@ const entry = (id: string, extra: Partial<PlanEntry> = {}): PlanEntry => ({
   meal: null,
   proteins: [],
   cuisines: [],
+  styles: [],
   ...extra,
 })
 
@@ -459,6 +461,7 @@ function fakeApi({
   cooked = fakeCookedApi(),
   pantry = fakePantryApi(),
   draft = DRAFT,
+  variety = DEFAULT_VARIETY,
 } = {}) {
   let current = entries
   const api = {
@@ -482,6 +485,7 @@ function fakeApi({
     recipeFits: vi.fn(async () => fits),
     addedCosts: vi.fn(async (_w: string, _ids: string[]) => added),
     favoriteCuisines: vi.fn(async () => favorites),
+    variety: vi.fn(async () => variety),
     setMyPrice: vi.fn(
       async (
         _id: string,
@@ -1544,5 +1548,37 @@ describe('pantry items the plan needs (TYL-136)', () => {
       screen.getByRole('button', { name: 'I have white rice already' }),
     )
     expect(api.setPantry).toHaveBeenCalledWith('i-white rice', 'have', 'staple')
+  })
+})
+
+describe('variety on the plan (TYL-66)', () => {
+  const pastas = ['1', '2', '3'].map((n) =>
+    entry(n, { title: `Penne ${n}`, styles: ['pasta'] }),
+  )
+
+  it('notes a third pasta night', async () => {
+    render(<PlanPage api={fakeApi({ entries: pastas })} week={WEEK} />)
+    expect(await screen.findByLabelText('Variety')).toHaveTextContent(
+      '3 pasta nights this week',
+    )
+  })
+
+  it('looks back as far as the repeat window when ordering suggestions', async () => {
+    const api = fakeApi({ variety: { ...DEFAULT_VARIETY, repeatWeeks: 8 } })
+    render(<PlanPage api={api} week={WEEK} />)
+    await waitFor(() =>
+      expect(api.recentRecipes).toHaveBeenLastCalledWith(WEEK, 8),
+    )
+  })
+
+  it('says nothing when the user doesn’t mind', async () => {
+    const api = fakeApi({
+      entries: pastas,
+      variety: { ...DEFAULT_VARIETY, styles: false },
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    await screen.findByRole('link', { name: 'Penne 1' })
+    await waitFor(() => expect(api.variety).toHaveBeenCalled())
+    expect(screen.queryByLabelText('Variety')).toBeNull()
   })
 })

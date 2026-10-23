@@ -4,7 +4,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { apiFetch } from './auth.ts'
 import type { IngredientLine } from './sous.ts'
-import { mainProteins } from './variety.ts'
+import { cookingStyles, mainProteins } from './variety.ts'
 
 // ---------- weeks ----------
 
@@ -83,6 +83,8 @@ export interface PlanEntry {
    *  notes (TYL-66). */
   proteins: string[]
   cuisines: string[]
+  /** Its cooking styles ("soup"), from its title and the user's tags. */
+  styles: string[]
 }
 
 interface EntryRow {
@@ -103,6 +105,7 @@ interface EntryRow {
         }[]
       | null
     cuisines?: { cuisine: { name: string } | null }[] | null
+    saved?: { tags: string[] | null }[] | null
   } | null
 }
 
@@ -115,7 +118,7 @@ export async function loadPlan(
   const { data, error } = await db
     .from('meal_plans')
     .select(
-      'entries:meal_plan_entries(id, scale, planned_for, position, meal, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name))))',
+      'entries:meal_plan_entries(id, scale, planned_for, position, meal, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name)), saved:user_saved_recipes(tags)))',
     )
     .eq('week_start', weekStart)
     .maybeSingle()
@@ -140,6 +143,11 @@ export async function loadPlan(
       ),
       cuisines: (e.recipe!.cuisines ?? []).flatMap((c) =>
         c.cuisine ? [c.cuisine.name] : [],
+      ),
+      // Only the user's own saved row is readable (row-level security).
+      styles: cookingStyles(
+        e.recipe!.title,
+        (e.recipe!.saved ?? []).flatMap((s) => s.tags ?? []),
       ),
     }))
     .sort((a, b) => a.position - b.position)

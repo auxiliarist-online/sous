@@ -3910,3 +3910,54 @@ describe('pantry: staples and on hand (TYL-133 to TYL-137)', () => {
     )
   })
 })
+
+describe('variety settings (TYL-66)', () => {
+  const VAL = '00000000-0000-0000-0000-0000000000a3'
+
+  it('sends Plan my week the user’s variety settings and their tags', async () => {
+    await db.query('insert into auth.users (id) values ($1)', [VAL])
+    const soup = await recipe('Variety soup', [])
+    await db.query(
+      `insert into user_saved_recipes (user_id, recipe_id, tags) values ($1, $2, '{weeknight}')`,
+      [VAL, soup],
+    )
+    const pool = async () =>
+      (
+        await as('service_role', null, () =>
+          db.query("select plan_draft_pool($1, '2026-10-19') as p", [VAL]),
+        )
+      ).rows[0].p
+    // No profile yet: the defaults.
+    const before = await pool()
+    assert.deepEqual(before.variety, {
+      proteins: true,
+      cuisines: true,
+      styles: true,
+      repeat_weeks: 3,
+    })
+    assert.deepEqual(
+      before.candidates.find((c) => c.title === 'Variety soup').tags,
+      ['weeknight'],
+    )
+    await as('authenticated', VAL, () =>
+      db.query(
+        `insert into profiles (user_id, mix_styles, repeat_weeks) values ($1, false, 0)`,
+        [VAL],
+      ),
+    )
+    assert.deepEqual((await pool()).variety, {
+      proteins: true,
+      cuisines: true,
+      styles: false,
+      repeat_weeks: 0,
+    })
+    await assert.rejects(
+      as('authenticated', VAL, () =>
+        db.query('update profiles set repeat_weeks = 9 where user_id = $1', [
+          VAL,
+        ]),
+      ),
+      /repeat_weeks/,
+    )
+  })
+})

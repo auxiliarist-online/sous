@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.auth import current_user_id
 from app.main import app
 from app.plans import routes
-from app.plans.draft import Candidate, Week, draft_week, waste
+from app.plans.draft import Candidate, Variety, Week, cooking_styles, draft_week, waste
 
 MONDAY = date(2026, 10, 19)
 
@@ -339,3 +339,112 @@ class TestRoute:
             assert client.post("/plans/2026-10-19/draft", json={"dinners": 15}).status_code == 422
         finally:
             app.dependency_overrides.clear()
+
+
+class TestVariety:
+    """TYL-66: proteins, cuisines and cooking styles mixed up as much as the
+    user wants, repeats held back, favorites on their rhythm."""
+
+    def test_reads_cooking_styles_from_titles_and_tags(self) -> None:
+        assert cooking_styles("Weeknight Chicken Stir-Fry") == ["stir-fry"]
+        assert cooking_styles("Spaghetti with Clams") == ["pasta"]
+        assert cooking_styles("Lentil Curry Soup") == ["soup", "curry"]
+        assert cooking_styles("Grandma's Sunday dinner", ["soup"]) == ["soup"]
+        # A word inside another isn't a style.
+        assert cooking_styles("Pastrami sandwich") == []
+
+    def test_mixes_up_cooking_styles(self) -> None:
+        week = inputs(
+            *(recipe(f"pasta-{n}", ("rice", 1, "cup")) for n in range(3)),
+            recipe("soup", ("beans", 1, "each")),
+        )
+        cands = [Candidate(f"pasta-{n}", f"Penne {n}", "fits") for n in range(3)]
+        cands.append(Candidate("soup", "Bean Soup", "fits"))
+        d = draft_week(week, cands, dinners=3, locked=[], exclude=[], on=MONDAY)
+        assert "soup" in picked(d)
+        assert not any("nights" in n for n in d.notes)
+
+    def test_lets_proteins_repeat_when_the_user_doesnt_mind(self) -> None:
+        week = inputs(
+            *(recipe(f"chicken-{n}", ("chicken", 1, "each")) for n in range(3)),
+            recipe("steak", ("steak", 1, "each")),
+        )
+        ids = ["chicken-0", "chicken-1", "chicken-2", "steak"]
+        relaxed = Variety(proteins=False)
+        d = draft_week(
+            week, pool(*ids), dinners=3, locked=[], exclude=[], on=MONDAY, variety=relaxed
+        )
+        assert picked(d) == ["chicken-0", "chicken-1", "chicken-2"]
+        assert not d.notes
+
+    def test_says_when_the_pool_is_too_small_to_mix_it_up(self) -> None:
+        week = inputs(*(recipe(f"chicken-{n}", ("chicken", 1, "each")) for n in range(3)))
+        ids = ["chicken-0", "chicken-1", "chicken-2"]
+        d = draft_week(week, pool(*ids), dinners=3, locked=[], exclude=[], on=MONDAY)
+        assert len(d.picks) == 3
+        assert any("3 dinners with poultry" in n for n in d.notes)
+
+    def test_how_long_before_a_recipe_comes_back(self) -> None:
+        week = inputs(recipe("again", ("beans", 1, "each")))
+        had = Candidate("again", "Again", "fits", weeks_ago=2)
+        assert Week(week, [had], on=MONDAY, store_id=None).recent(had)
+        assert not Week(
+            week, [had], on=MONDAY, store_id=None, variety=Variety(repeat_weeks=2)
+        ).recent(had)
+        assert not Week(
+            week, [had], on=MONDAY, store_id=None, variety=Variety(repeat_weeks=0)
+        ).recent(had)
+
+    def test_reads_the_settings_with_defaults(self) -> None:
+        assert Variety.from_json(None) == Variety()
+        assert Variety.from_json({"styles": False, "repeat_weeks": 5}) == Variety(
+            styles=False, repeat_weeks=5
+        )
+
+    def test_favorites_come_back_on_their_rhythm_over_eight_weeks(self) -> None:
+        others = [f"other-{n}" for n in range(12)]
+        favorites = {"fav-2": "biweekly", "fav-4": "monthly"}
+        ids = [*others, *favorites]
+        week = inputs(*(recipe(r, ("rice", 1, "cup")) for r in ids))
+        last: dict[str, int] = {}
+        seen: dict[str, list[int]] = {r: [] for r in ids}
+        for w in range(8):
+            cands = [
+                Candidate(
+                    r,
+                    r,
+                    "fits",
+                    favorite=favorites.get(r),
+                    weeks_ago=w - last[r] if r in last else None,
+                )
+                for r in ids
+            ]
+            d = draft_week(week, cands, dinners=3, locked=[], exclude=[], on=MONDAY)
+            for p in d.picks:
+                last[p.recipe_id] = w
+                seen[p.recipe_id].append(w)
+
+        def gaps(r: str) -> list[int]:
+            return [b - a for a, b in zip(seen[r], seen[r][1:], strict=False)]
+
+        # On schedule, give or take a week.
+        assert len(seen["fav-2"]) >= 3 and all(1 <= g <= 3 for g in gaps("fav-2"))
+        assert len(seen["fav-4"]) >= 2 and all(3 <= g <= 5 for g in gaps("fav-4"))
+        # Nothing else comes back within three weeks.
+        assert all(g >= 3 for r in others for g in gaps(r))
+
+
+def test_keeps_variety_even_when_breaking_it_is_much_cheaper() -> None:
+    # A third chicken dinner would save $195; the pricey steak keeps the rule.
+    week = inputs(
+        *(recipe(f"chicken-{n}", ("chicken", 1, "each")) for n in range(3)),
+        recipe("steak", ("steak", 1, "each")),
+    )
+    week["prices"] = [
+        *[p for p in week["prices"] if p["ingredient_id"] != "steak"],
+        price("steak", 200_00, 1, "each"),
+    ]
+    ids = ["chicken-0", "chicken-1", "chicken-2", "steak"]
+    d = draft_week(week, pool(*ids), dinners=3, locked=[], exclude=[], on=MONDAY)
+    assert "steak" in picked(d)
+    assert not d.notes

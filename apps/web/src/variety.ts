@@ -14,8 +14,52 @@ const PROTEINS: Record<string, string> = {
 
 /** At most this many dinners with the same main protein in a week… */
 export const MAX_SAME_PROTEIN = 2
-/** …and the same cuisine on at most this many days in a row. */
+/** …and the same cuisine on at most this many days in a row… */
 export const MAX_CUISINE_RUN = 2
+/** …and at most this many dinners of the same cooking style. */
+export const MAX_SAME_STYLE = 2
+
+/** How much variety the user wants (Preferences, "Variety"): mix up main
+ *  proteins, cuisines and cooking styles, and how many weeks before a recipe
+ *  is suggested again (0: don't mind). Favorites keep their own rhythm. */
+export interface VarietySettings {
+  proteins: boolean
+  cuisines: boolean
+  styles: boolean
+  repeatWeeks: number
+}
+
+export const DEFAULT_VARIETY: VarietySettings = {
+  proteins: true,
+  cuisines: true,
+  styles: true,
+  repeatWeeks: 3,
+}
+
+/** Cooking styles, read from a recipe's title or the user's tags. Keep in
+ *  step with STYLES in apps/api/app/plans/draft.py. */
+const STYLES: [string, RegExp][] = (
+  [
+    ['soup', 'soups?|stews?|chowders?|bisques?|chili'],
+    [
+      'pasta',
+      'pastas?|spaghetti|penne|linguine|fettuccine|rigatoni|lasagnas?|macaroni|orzo|ravioli|tortellini|gnocchi',
+    ],
+    ['stir-fry', 'stir[- ]?fr(?:y|ies|ied)'],
+    ['sheet pan', 'sheet[- ]pan|traybakes?'],
+    ['curry', 'curry|curries|masala|korma|vindaloo'],
+    ['taco', 'tacos?|burritos?|quesadillas?|enchiladas?|fajitas?'],
+    ['salad', 'salads?'],
+    ['casserole', 'casseroles?|gratins?'],
+  ] as const
+).map(([k, v]): [string, RegExp] => [k, new RegExp(`\\b(?:${v})\\b`, 'i')])
+
+/** A recipe's cooking styles ("soup", "pasta"), from its title and the
+ *  user's tags on it; none when neither says. */
+export function cookingStyles(title: string, tags: string[] = []): string[] {
+  const text = [title, ...tags].join(' ')
+  return STYLES.filter(([, re]) => re.test(text)).map(([k]) => k)
+}
 
 /** One required ingredient of a recipe, as variety reads it. */
 export interface ProteinSource {
@@ -39,19 +83,33 @@ export function mainProteins(ingredients: ProteinSource[]): string[] {
 }
 
 /** What the week repeats, as notes: "3 dinners with poultry this week",
- *  "Italian 3 days in a row". */
+ *  "Italian 3 days in a row", "3 pasta nights this week". Only for what the
+ *  user wants mixed up. */
 export function varietyNotes(
-  entries: { day: string | null; proteins: string[]; cuisines: string[] }[],
+  entries: {
+    day: string | null
+    proteins: string[]
+    cuisines: string[]
+    styles?: string[]
+  }[],
+  settings: VarietySettings = DEFAULT_VARIETY,
 ): string[] {
   const notes: string[] = []
-  const counts = new Map<string, number>()
-  for (const e of entries) {
-    for (const p of e.proteins) counts.set(p, (counts.get(p) ?? 0) + 1)
+  // How many of the week's dinners have each value ("poultry", "pasta").
+  const count = (pick: (e: (typeof entries)[number]) => string[]) => {
+    const counts = new Map<string, number>()
+    for (const e of entries)
+      for (const x of pick(e)) counts.set(x, (counts.get(x) ?? 0) + 1)
+    return counts
   }
-  for (const [p, n] of counts) {
-    if (n > MAX_SAME_PROTEIN)
-      notes.push(`${n} dinners with ${PROTEINS[p]} this week`)
-  }
+  if (settings.proteins)
+    for (const [p, n] of count((e) => e.proteins))
+      if (n > MAX_SAME_PROTEIN)
+        notes.push(`${n} dinners with ${PROTEINS[p]} this week`)
+  if (settings.styles)
+    for (const [s, n] of count((e) => e.styles ?? []))
+      if (n > MAX_SAME_STYLE) notes.push(`${n} ${s} nights this week`)
+  if (!settings.cuisines) return notes
   // Runs of the same cuisine on days that follow each other.
   const byDay = new Map<string, Set<string>>()
   for (const e of entries) {
@@ -119,6 +177,11 @@ export function isDue(
   return weeks === undefined || weeks >= WEEKS[frequency]
 }
 
-/** A recipe not suggested again so soon: planned or cooked within this many
- *  weeks, unless it's a favorite that's due. */
-export const RECENT_WEEKS = 3
+/** Had too lately to suggest again: planned or cooked within the user's
+ *  repeat window (Preferences, "Variety"). 0 weeks: they don't mind. */
+export function isRecent(
+  weeks: number | undefined,
+  repeatWeeks: number = DEFAULT_VARIETY.repeatWeeks,
+): boolean {
+  return weeks !== undefined && weeks < repeatWeeks
+}

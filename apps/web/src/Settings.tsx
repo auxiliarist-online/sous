@@ -416,6 +416,64 @@ export function Settings({
       </Section>
 
       <Section
+        title="Variety"
+        hint="For Plan my week and the notes on your plan. Favorites come back at their own rhythm, set on each recipe."
+      >
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={prefs.variety.proteins}
+            onChange={(e) =>
+              set({ variety: { ...prefs.variety, proteins: e.target.checked } })
+            }
+          />{' '}
+          Mix up proteins: no more than 2 chicken (or beef, or fish) dinners a
+          week
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={prefs.variety.cuisines}
+            onChange={(e) =>
+              set({ variety: { ...prefs.variety, cuisines: e.target.checked } })
+            }
+          />{' '}
+          Mix up cuisines: no more than 2 of the same a week
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={prefs.variety.styles}
+            onChange={(e) =>
+              set({ variety: { ...prefs.variety, styles: e.target.checked } })
+            }
+          />{' '}
+          Mix up cooking styles: no more than 2 soups, pastas or stir-fries a
+          week
+        </label>
+        <label htmlFor="repeat-weeks">Suggest a recipe again after</label>
+        <select
+          id="repeat-weeks"
+          value={prefs.variety.repeatWeeks}
+          onChange={(e) =>
+            set({
+              variety: {
+                ...prefs.variety,
+                repeatWeeks: Number(e.target.value),
+              },
+            })
+          }
+        >
+          <option value={0}>Any time: I don't mind repeats</option>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+            <option key={n} value={n}>
+              {n === 1 ? '1 week' : `${n} weeks`}
+            </option>
+          ))}
+        </select>
+      </Section>
+
+      <Section
         title="Where you shop"
         hint="Your store's prices, live, for what you plan to buy."
       >
