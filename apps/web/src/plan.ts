@@ -289,7 +289,9 @@ export interface BuyItem {
 export interface PlanChoice {
   /** The options' ingredient ids, sorted and joined: how a choice is saved. */
   key: string
-  /** The options that fit the user, each with what buying it adds. */
+  /** The options that fit the user, each with what buying it adds. Named as
+   *  the recipe does, with what's bought when that's something else:
+   *  "whipped cream (buy heavy cream)" (TYL-141). */
   options: { ingredientId: string; name: string; cents: number | null }[]
   /** The option bought, or null while it waits for the user. */
   chosen: string | null
@@ -371,7 +373,12 @@ export async function planCost(
     entries?: { entry_id: string; cents: number }[]
     choices?: {
       key: string
-      options: { ingredient_id: string; name: string; cents: number | null }[]
+      options: {
+        ingredient_id: string
+        name: string
+        cents: number | null
+        written?: string | null
+      }[]
       chosen: string | null
       reason: PlanChoice['reason']
       recipes: number
@@ -417,7 +424,7 @@ export async function planCost(
       key: c.key,
       options: c.options.map((o) => ({
         ingredientId: o.ingredient_id,
-        name: o.name,
+        name: o.written ? `${o.written} (buy ${o.name})` : o.name,
         cents: o.cents,
       })),
       chosen: c.chosen,

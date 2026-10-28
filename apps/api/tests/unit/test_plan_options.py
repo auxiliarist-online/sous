@@ -151,6 +151,20 @@ class TestSettle:
         # Milk is bought anyway, so it adds nothing; almond milk would add its carton.
         assert {o.name: o.cents for o in choice.options} == {"almond milk": 349, "milk": 0}
 
+    def test_options_are_named_as_the_recipe_does_when_bought_as_something_else(
+        self,
+    ) -> None:
+        # TYL-141: "whipped cream" is bought as heavy cream; "cow's milk" is milk.
+        lines = either()
+        lines[0]["name"] = "Whipped cream"
+        lines[1]["name"] = "whole milk"
+        cost = plan_cost(inputs(entry("a", lines)), on=MONDAY)
+        (choice,) = cost.choices
+        assert {o.name: o.written for o in choice.options} == {
+            "almond milk": "whipped cream",
+            "milk": None,
+        }
+
     def test_an_option_on_hand_is_used(self) -> None:
         week = inputs(entry("a", either()))
         week["ingredients"] = {**INGREDIENTS, MILK: {**INGREDIENTS[MILK], "pantry": "have"}}

@@ -1737,6 +1737,7 @@ describe('meal planner', () => {
         quantity: 2,
         unit: 'cup',
         raw_text: 'line',
+        name: null,
       },
     ])
     assert.equal(r.entries[0].scale, 2)

@@ -1,7 +1,8 @@
 -- The items users add to the shopping list themselves ("Wheat bread", "Eggs")
 -- get prices too (TYL-146). The API matches each one's name to an ingredient,
 -- as it does recipe lines, and passes the matches as p_extra, so their
--- ingredients and prices come back with the plan's. Otherwise as before.
+-- ingredients and prices come back with the plan's. Each line also brings its
+-- parsed name (TYL-141). Otherwise as before.
 drop function public.plan_cost_inputs(uuid, date, uuid[]);
 
 create function public.plan_cost_inputs(
@@ -36,7 +37,7 @@ begin
   -- which one is bought (TYL-98).
   lines as (
     select ri.recipe_id, ri.line_no, ri.option_no, ri.ingredient_id, ri.quantity, ri.unit,
-      ri.raw_text
+      ri.raw_text, ri.name
     from public.recipe_ingredients ri
     where (ri.recipe_id in (select recipe_id from entries)
            or ri.recipe_id in (select recipe_id from candidates))
@@ -87,7 +88,10 @@ begin
           select jsonb_agg(jsonb_build_object(
             'line_no', l.line_no, 'option_no', l.option_no,
             'ingredient_id', l.ingredient_id, 'quantity', l.quantity, 'unit', l.unit,
-            'raw_text', l.raw_text
+            'raw_text', l.raw_text,
+            -- The recipe's word for it ("whipped cream", bought as heavy cream),
+            -- to name an "or" line's options as the recipe does (TYL-141).
+            'name', l.name
           ) order by l.line_no, l.option_no)
           from lines l where l.recipe_id = e.recipe_id
         ), '[]')
