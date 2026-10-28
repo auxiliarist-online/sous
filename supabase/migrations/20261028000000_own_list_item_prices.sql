@@ -50,8 +50,12 @@ begin
     select i.buy_as from public.ingredients i
     where i.id in (select ingredient_id from lines) and i.buy_as is not null
     union
-    -- Items the user added to the list themselves (TYL-146), priced on the side.
+    -- Items the user added to the list themselves (TYL-146), priced on the
+    -- side, and what they're bought as.
     select unnest(p_extra)
+    union
+    select i.buy_as from public.ingredients i
+    where i.id = any(p_extra) and i.buy_as is not null
   )
   select jsonb_build_object(
     -- What the user rules out, as recipe_fit_for_user() reads it, to settle

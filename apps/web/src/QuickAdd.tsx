@@ -27,6 +27,8 @@ export function QuickAdd({
     'idle',
   )
 
+  // Add it to this week at full size, after asking if it breaks the user's
+  // diets or allergies.
   async function add() {
     setState('adding')
     try {

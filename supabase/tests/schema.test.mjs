@@ -1767,6 +1767,11 @@ describe('meal planner', () => {
 
   it('brings ingredients of items added to the list by hand (TYL-146)', async () => {
     const bread = await ingredient('whole wheat bread')
+    const loaf = await ingredient('bread loaf')
+    await db.query(
+      'update ingredients set buy_as = $1, buy_ratio = 1 where id = $2',
+      [bread, loaf],
+    )
     await db.query(
       `insert into prices (source, ingredient_id, price_cents, quantity, unit)
        values ('seed', $1, 349, 1, 'each')`,
@@ -1775,10 +1780,12 @@ describe('meal planner', () => {
     const r = await as('service_role', null, async () => {
       const { rows } = await db.query(
         'select plan_cost_inputs($1, $2, $3, $4) as r',
-        [DAVE, MONDAY, [], [bread]],
+        [DAVE, MONDAY, [], [loaf]],
       )
       return rows[0].r
     })
+    // What it's bought as comes too.
+    assert.ok(r.ingredients[loaf])
     assert.equal(r.ingredients[bread].name, 'whole wheat bread')
     assert.ok(r.prices.some((p) => p.ingredient_id === bread))
     // Not an entry: the plan's own cost is unchanged.
@@ -1791,6 +1798,10 @@ describe('meal planner', () => {
         [bread],
       ]),
       /only callable by the API/,
+    )
+    await db.query(
+      'update ingredients set buy_as = null, buy_ratio = null where id = $1',
+      [loaf],
     )
   })
 

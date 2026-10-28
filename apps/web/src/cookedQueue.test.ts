@@ -140,4 +140,22 @@ describe('Cooked it offline (TYL-120)', () => {
     })
     expect(pendingCooked('u')).toEqual([])
   })
+
+  it('ignores anything kept on the phone that isn’t a change it can send', async () => {
+    window.localStorage.setItem(
+      'sous:list-cooked:u',
+      JSON.stringify([
+        { kind: 'rate', id: 'a', patch: { rating: 'meh' } },
+        { kind: 'mark', cooked: { id: 7 } },
+        'junk',
+        { kind: 'undo', id: 'b' },
+      ]),
+    )
+    window.localStorage.setItem('sous:list-cooked-ids:u', '"not a map"')
+    expect(pendingCooked('u')).toEqual([{ kind: 'undo', id: 'b' }])
+    const s = server()
+    await flushCooked('u', s)
+    expect(s.undoCooked).toHaveBeenCalledWith('b')
+    expect(s.rateCooked).not.toHaveBeenCalled()
+  })
 })

@@ -26,14 +26,54 @@ const queueKey = (user: string) => `sous:list-cooked:${user}`
 // already marked cooked elsewhere): this phone's id -> the record's.
 const aliasKey = (user: string) => `sous:list-cooked-ids:${user}`
 
+/** The phone's id -> record map, or empty when what's kept isn't one. */
+function aliases(user: string): Record<string, string> {
+  const kept: unknown = read(aliasKey(user))
+  if (!kept || typeof kept !== 'object' || Array.isArray(kept)) return {}
+  return Object.fromEntries(
+    Object.entries(kept).filter(([, v]) => typeof v === 'string'),
+  ) as Record<string, string>
+}
+
 /** The record an id this phone made stands for. */
 function resolve(user: string, id: string): string {
-  return read<Record<string, string>>(aliasKey(user))?.[id] ?? id
+  return aliases(user)[id] ?? id
+}
+
+const RATINGS = new Set([null, 'down', 'up', 'love'])
+
+/** Whether something kept on the phone is a change this version can send
+ *  (storage can hold anything: an older app's, or a damaged one). */
+function isOp(x: unknown): x is CookedOp {
+  const op = x as Partial<Record<string, unknown>> | null
+  if (!op || typeof op !== 'object') return false
+  if (op.kind === 'mark') {
+    const c = op.cooked as Partial<Cooked> | null
+    return (
+      !!c &&
+      typeof c.id === 'string' &&
+      typeof c.recipeId === 'string' &&
+      typeof c.cookedOn === 'string' &&
+      typeof c.scale === 'number'
+    )
+  }
+  if (typeof op.id !== 'string') return false
+  if (op.kind === 'undo') return true
+  if (op.kind !== 'rate' || !op.patch || typeof op.patch !== 'object')
+    return false
+  const patch = op.patch as { rating?: unknown; note?: unknown }
+  return (
+    (patch.rating === undefined || RATINGS.has(patch.rating as never)) &&
+    (patch.note === undefined ||
+      patch.note === null ||
+      typeof patch.note === 'string')
+  )
 }
 
 /** Changes not yet sent. */
 export function pendingCooked(user: string): CookedOp[] {
-  return read<CookedOp[]>(queueKey(user)) ?? []
+  const kept: unknown = read(queueKey(user))
+  return Array.isArray(kept) ? kept.filter(isOp) : []
 }
 
 /** A plan entry's records with the unsent changes applied, as the user last
@@ -108,18 +148,18 @@ export function flushCooked(user: string, server: Server): Promise<number> {
     .then(async () => {
       const key = queueKey(user)
       for (;;) {
-        const [first, ...rest] = read<CookedOp[]>(key) ?? []
+        const [first, ...rest] = pendingCooked(user)
         if (!first) return 0
         try {
           const savedId = await send(user, server, first)
           const sentId = first.kind === 'mark' ? first.cooked.id : null
           if (savedId && sentId && savedId !== sentId)
             alias(user, sentId, savedId)
-          write(key, (read<CookedOp[]>(key) ?? []).slice(1))
+          write(key, pendingCooked(user).slice(1))
         } catch (err) {
           // The database won't take it, now or later: drop it, go on.
           if (isRefused(err)) {
-            write(key, (read<CookedOp[]>(key) ?? []).slice(1))
+            write(key, pendingCooked(user).slice(1))
             continue
           }
           return rest.length + 1
@@ -136,7 +176,7 @@ export function flushCooked(user: string, server: Server): Promise<number> {
 /** Note that a record this phone made is saved as another. */
 function alias(user: string, from: string, to: string) {
   const key = aliasKey(user)
-  write(key, { ...(read<Record<string, string>>(key) ?? {}), [from]: to })
+  write(key, { ...aliases(user), [from]: to })
 }
 
 /** Send a change now when nothing is waiting, or queue it behind what is,

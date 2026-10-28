@@ -83,6 +83,13 @@ export function ListPage({
   // and a price shown only for the names it was worked out for.
   const ownKey = JSON.stringify(list ? ownItems(list) : [])
   const [priced, setPriced] = useState<{ key: string; prices: OwnPrices }>()
+  // Bumped when the phone is back online, to price them again.
+  const [reconnected, setReconnected] = useState(0)
+  useEffect(() => {
+    const back = () => setReconnected((n) => n + 1)
+    window.addEventListener('online', back)
+    return () => window.removeEventListener('online', back)
+  }, [])
   const own = priced?.key === ownKey ? priced.prices : null
   useEffect(() => {
     let live = true
@@ -96,7 +103,7 @@ export function ListPage({
     return () => {
       live = false
     }
-  }, [api, week, ownKey])
+  }, [api, week, ownKey, reconnected])
   // Marks only; the list works without them.
   useEffect(() => {
     let live = true

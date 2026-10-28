@@ -104,10 +104,16 @@ async def own_items(
 ) -> dict[str, Any]:
     """Each item matched to an ingredient and priced as one package, with
     their total; an item that doesn't match is left unpriced (TYL-146)."""
+    # A few lookups at a time, not one connection per item.
+    gate = asyncio.Semaphore(8)
+
+    async def match(name: str) -> str | None:
+        """The ingredient a typed name matches, if any."""
+        async with gate:
+            return await match_ingredient(candidates_for(name))
+
     try:
-        matched = await asyncio.gather(
-            *(match_ingredient(candidates_for(i.name)) for i in body.items)
-        )
+        matched = await asyncio.gather(*(match(i.name) for i in body.items))
     except StoreError as exc:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, "We couldn't price your items. Try again."
@@ -126,9 +132,9 @@ async def own_items(
             ) from exc
         # Only the items' own ingredients, so live prices look up just those.
         inputs["entries"] = []
-        inputs["ingredients"] = {
-            k: v for k, v in inputs.get("ingredients", {}).items() if k in extra
-        }
+        found = inputs.get("ingredients", {})
+        keep = set(extra) | {found[e]["buy_as"] for e in extra if found.get(e, {}).get("buy_as")}
+        inputs["ingredients"] = {k: v for k, v in found.items() if k in keep}
         store_id = await add_live_prices(user_id, inputs)
     priced = price_own_items(
         [(i.id, m) for i, m in zip(body.items, matched, strict=True)],

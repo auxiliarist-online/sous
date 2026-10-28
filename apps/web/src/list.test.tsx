@@ -615,6 +615,31 @@ describe('ListPage', () => {
     ).toBeInTheDocument()
   })
 
+  it('prices your own items again when back online', async () => {
+    const api = listApi({
+      loadList: vi.fn(async () =>
+        state(
+          item('bread', {
+            ingredientId: null,
+            isManual: true,
+            position: 10_000,
+          }),
+        ),
+      ),
+      ownItemPrices: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({
+          totalCents: 349,
+          items: { bread: { cents: 349, estimated: false } },
+        }),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    await waitFor(() => expect(api.ownItemPrices).toHaveBeenCalledTimes(1))
+    window.dispatchEvent(new Event('online'))
+    expect(await screen.findByText('$3.49')).toBeInTheDocument()
+  })
+
   it('adds a place of the user’s own to buy something at', async () => {
     const api = listApi()
     render(<ListPage api={api} week={WEEK} user="u" />)

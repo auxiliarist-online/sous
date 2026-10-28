@@ -50,6 +50,21 @@ def test_a_loose_item_is_one_of_it() -> None:
     assert avocado.cents == 150
 
 
+def test_an_item_the_pantry_has_is_still_priced() -> None:
+    # Added to the list on purpose: it's being bought anyway.
+    given = inputs()
+    given["ingredients"][EGGS] = {**given["ingredients"][EGGS], "pantry": "have"}
+    [eggs] = price_own_items([("i1", EGGS)], given, on=MONDAY, store_id=None)
+    assert eggs.cents == 360
+
+
+def test_an_item_bought_as_another_is_priced_as_that() -> None:
+    given = inputs()
+    given["ingredients"]["yolks"] = {"name": "egg yolks", "buy_as": EGGS, "buy_ratio": 2.94}
+    [yolks] = price_own_items([("i1", "yolks")], given, on=MONDAY, store_id=None)
+    assert (yolks.ingredient_id, yolks.cents) == ("yolks", 360)
+
+
 def test_an_unmatched_item_is_left_unpriced() -> None:
     [thing] = price_own_items([("i1", None)], inputs(), on=MONDAY, store_id=None)
     assert (thing.ingredient_id, thing.cents) == (None, None)

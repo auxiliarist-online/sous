@@ -50,11 +50,18 @@ def price_own_items(
         out.append(own)
         if not ingredient_id or ingredient_id not in info:
             continue
+        # Priced as what it's bought as (egg yolks are bought as eggs).
+        bought = info[ingredient_id].get("buy_as")
+        target = bought if bought in info else ingredient_id
+        # Added on purpose, so it's bought even if the pantry says "have".
+        ingredients = {**info, target: {**info[target], "pantry": None}}
         # A package of it; one of a loose thing (an avocado), if it's counted.
-        loose = info[ingredient_id].get("sold_by") != "package"
-        line = {"ingredient_id": ingredient_id, "quantity": 1 if loose else None, "unit": "each"}
+        loose = ingredients[target].get("sold_by") != "package"
+        line = {"ingredient_id": target, "quantity": 1 if loose else None, "unit": "each"}
         entry = {"id": item_id, "scale": 1, "lines": [line]}
-        cost = _cost({**inputs, "entries": [entry]}, on=on, store_id=store_id)
+        cost = _cost(
+            {**inputs, "ingredients": ingredients, "entries": [entry]}, on=on, store_id=store_id
+        )
         priced = cost.items[0] if cost.items else None
         if priced is not None and priced.cents is not None:
             own.cents = priced.cents
