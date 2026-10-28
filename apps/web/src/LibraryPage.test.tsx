@@ -158,6 +158,24 @@ describe('Library', () => {
     ).toBeNull()
   })
 
+  it('lets a shared link be saved when the recipes can’t load, and offers a retry', async () => {
+    const api = fakeApi()
+    api.list.mockRejectedValueOnce(new Error('down'))
+    render(
+      <Library
+        api={api}
+        shared={{ url: 'https://example.com/stew', ingredients: null }}
+      />,
+    )
+    expect(
+      await screen.findByText(/We couldn't load your recipes/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save recipe' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText(/We couldn't load your recipes/)).toBeNull()
+  })
+
   it('saves a page from Save to Sous only when the user taps Save', async () => {
     const api = fakeApi()
     const page = {

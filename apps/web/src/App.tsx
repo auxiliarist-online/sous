@@ -194,10 +194,12 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     onHandIn: (recipeId) => onHandIn(db, recipeId),
     storesNear: (zip) => storesNear(session, zip),
     myStore: () => myStore(session),
+    // Choose the user's store; the home zip (the seasons' region) may have
+    // changed with it, so the seasons load again.
     chooseStore: async (locationId, zip) => {
-      await chooseStore(session, locationId, zip)
-      // The home zip (the seasons' region) may have changed with it.
+      const saved = await chooseStore(session, locationId, zip)
       seasonsLoad = null
+      return saved
     },
     exportMyData: () => exportMyData(db),
     deleteMyAccount: () => deleteMyAccount(db),
@@ -248,11 +250,13 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
     return defaultClient ? liveApi(defaultClient, session) : null
   }, [session, libraryApi])
 
-  // Once signed in, the Library shows the shared link; don't offer it again later.
+  // Once signed in, the Library shows the shared link; don't offer it again
+  // later. Moving on dismisses it too, signed in or not; until then it's kept
+  // through the sign-in round trip.
   useEffect(() => {
-    if (session && shared) clearShare()
-    if (session && sharedPage) clearPage()
-  }, [session, shared, sharedPage])
+    if ((session || movedOn) && arrivedShare) clearShare()
+    if ((session || movedOn) && arrivedPage) clearPage()
+  }, [session, movedOn, arrivedShare, arrivedPage])
 
   const userId = session?.user.id ?? null
   // Replays and errors are filed under the account's id (never its email).

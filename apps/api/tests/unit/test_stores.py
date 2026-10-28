@@ -85,6 +85,7 @@ def test_choosing_a_store_keeps_the_zip_it_was_found_by(
     seen = supabase(lambda r: httpx.Response(200, json=None))
     resp = client.put("/stores/mine", json={"location_id": "02900540", "zip": "23451"})
     assert resp.status_code == 200
+    assert resp.json()["home_zip_saved"] is True
     patch = next(r for r in seen if r.url.path.endswith("/profiles"))
     assert patch.method == "PATCH"
     assert patch.url.params["user_id"] == "eq.user-1"
@@ -103,10 +104,10 @@ def test_the_store_is_kept_even_if_the_zip_cant_be(client: TestClient, supabase:
         return httpx.Response(500 if r.url.path.endswith("/profiles") else 200, json=None)
 
     supabase(handler)
-    assert (
-        client.put("/stores/mine", json={"location_id": "02900540", "zip": "23451"}).status_code
-        == 200
-    )
+    resp = client.put("/stores/mine", json={"location_id": "02900540", "zip": "23451"})
+    assert resp.status_code == 200
+    # Said, so the app can tell the user the zip wasn't kept.
+    assert resp.json()["home_zip_saved"] is False
 
 
 def test_a_bad_zip_is_refused(client: TestClient) -> None:

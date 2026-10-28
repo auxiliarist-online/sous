@@ -194,9 +194,12 @@ export function Library({
   const confirmingShare =
     !!sharedUrl && !alreadySaved && url === sharedUrl && status.state === 'idle'
   // Until the saved recipes load, a shared link can't be told apart from one
-  // already saved; and one already saved isn't saved again.
+  // already saved; and one already saved isn't saved again. If they can't
+  // load, Save isn't held up (saving a link twice keeps one recipe).
   const holdShare =
-    !!sharedUrl && url === sharedUrl && (recipes === null || !!alreadySaved)
+    !!sharedUrl &&
+    url === sharedUrl &&
+    ((recipes === null && !listError) || !!alreadySaved)
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -303,7 +306,10 @@ export function Library({
         </Link>
         {listError && (
           <p className="error" role="alert">
-            We couldn't load your recipes.
+            We couldn't load your recipes.{' '}
+            <button type="button" className="link" onClick={refresh}>
+              Try again
+            </button>
           </p>
         )}
         {recipes === null && !listError && <p className="muted">Loading…</p>}

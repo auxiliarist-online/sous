@@ -78,14 +78,15 @@ export async function myStore(
     : null
 }
 
-/** Make a store from storesNear() the user's store. */
+/** Make a store from storesNear() the user's store. Says whether the home
+ *  zip was kept with it (the store is saved either way). */
 export async function chooseStore(
   session: Session,
   locationId: string,
   zip: string | null = null,
   send: typeof apiFetch = apiFetch,
-): Promise<void> {
-  await check(
+): Promise<{ homeZipSaved: boolean }> {
+  const resp = await check(
     await send(session, '/stores/mine', {
       method: 'PUT',
       // The zip it was found by is saved as the home zip too (TYL-145).
@@ -93,6 +94,10 @@ export async function chooseStore(
     }),
     "We couldn't save your store. Try again.",
   )
+  const body = (await resp.json().catch(() => null)) as {
+    home_zip_saved?: boolean
+  } | null
+  return { homeZipSaved: body?.home_zip_saved ?? true }
 }
 
 /** Everything Sous keeps about the user, as pretty-printed JSON. */

@@ -406,6 +406,27 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
+  it('forgets a share dismissed by moving on before signing in', async () => {
+    window.localStorage.setItem(
+      'sous:shared-url',
+      JSON.stringify({ url: 'https://example.com/tacos', ingredients: null }),
+    )
+    window.history.replaceState(null, '', '/')
+    const { auth } = fakeAuth(null)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    await screen.findByLabelText('Email')
+    // Kept through the sign-in round trip...
+    expect(window.localStorage.getItem('sous:shared-url')).not.toBeNull()
+    // ...but going elsewhere dismisses it.
+    await userEvent.click(
+      screen.getByRole('link', { name: 'What Sous keeps about you' }),
+    )
+    await waitFor(() =>
+      expect(window.localStorage.getItem('sous:shared-url')).toBeNull(),
+    )
+    window.history.replaceState(null, '', '/')
+  })
+
   it('shows the privacy page signed out', async () => {
     window.history.replaceState(null, '', '/privacy')
     const { auth } = fakeAuth(null)
