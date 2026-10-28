@@ -194,7 +194,11 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     onHandIn: (recipeId) => onHandIn(db, recipeId),
     storesNear: (zip) => storesNear(session, zip),
     myStore: () => myStore(session),
-    chooseStore: (locationId, zip) => chooseStore(session, locationId, zip),
+    chooseStore: async (locationId, zip) => {
+      await chooseStore(session, locationId, zip)
+      // The home zip (the seasons' region) may have changed with it.
+      seasonsLoad = null
+    },
     exportMyData: () => exportMyData(db),
     deleteMyAccount: () => deleteMyAccount(db),
     syncList: (week, items) => syncList(db, week, items),
@@ -229,8 +233,10 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
   const [arrivedPage] = useState(pendingPage)
   // A share is offered once, where it arrived: moving to another page means
   // it's been dealt with, so "/" goes back to the week (TYL-118). Noted
-  // during render (React's pattern for state from an earlier render).
-  const [sharedAt] = useState(() => window.location.pathname)
+  // during render (React's pattern for state from an earlier render). The
+  // arrival is `path` as first captured: pendingShare() has already
+  // rewritten the address bar from /share to /.
+  const [sharedAt] = useState(path)
   const [movedOn, setMovedOn] = useState(false)
   if (!movedOn && path !== sharedAt) setMovedOn(true)
   const shared = movedOn ? null : arrivedShare

@@ -25,6 +25,9 @@ export function StorePicker({
   const [current, setCurrent] = useState<MyStore | null | undefined>(undefined)
   const [text, setText] = useState(zip ?? '')
   const [found, setFound] = useState<NearbyStore[] | null>(null)
+  // The zip those stores were found by: what choosing one saves, even if the
+  // box has been edited since.
+  const [foundZip, setFoundZip] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -52,6 +55,7 @@ export function StorePicker({
     try {
       const stores = await api.storesNear(z)
       setFound(stores)
+      setFoundZip(z)
       onZip(z)
       if (!stores.length) {
         setMessage(
@@ -70,8 +74,7 @@ export function StorePicker({
     setBusy(true)
     setMessage(null)
     try {
-      const z = text.trim()
-      await api.chooseStore(s.locationId, ZIP.test(z) ? z : null)
+      await api.chooseStore(s.locationId, foundZip)
       setCurrent({ name: s.name, address: s.address })
       setFound(null)
     } catch (err) {

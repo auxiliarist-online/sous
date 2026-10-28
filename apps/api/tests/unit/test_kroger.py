@@ -68,6 +68,9 @@ class TestWords:
             ("1 ea", (1, "each")),
             ("24 bottles/16.9 fl oz", (24 * 16.9, "fl_oz")),
             ("12 cans/12 fl oz", (144, "fl_oz")),
+            # A measured size wins over a pack count, and a fraction isn't a multipack.
+            ("16 oz (2 pk)", (16, "oz")),
+            ("8 oz (1/2 lb)", (8, "oz")),
         ],
     )
     def test_sizes(self, size: str | None, parsed: tuple[float, str] | None) -> None:

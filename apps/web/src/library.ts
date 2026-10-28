@@ -400,6 +400,8 @@ export function filterRecipes(
 /** Whether two links are the same page: ignoring http/https, "www.", a
  *  trailing slash and a #fragment (TYL-118). */
 export function sameLink(a: string, b: string): boolean {
+  // The parts of a link that name the page: host without "www.", path
+  // without trailing slashes, and the query.
   const norm = (u: string) => {
     try {
       const x = new URL(u)

@@ -48,16 +48,31 @@ def main() -> None:
     ).json()
     if not store:
         sys.exit(f"no store with location {args.location}; run match_kroger.py --location first")
-    matches = db.get(
-        "/kroger_product_matches",
-        params={
-            "select": "product_id,ingredient:ingredients(name),stores!inner(chain_slug)",
-            "stores.chain_slug": f"eq.{store[0]['chain_slug']}",
-            "product_id": "not.is.null",
-        },
-    ).json()
+    matches = []
+    page = 1000
+    while True:  # PostgREST returns at most 1000 rows a request
+        rows = db.get(
+            "/kroger_product_matches",
+            params={
+                "select": "ingredient_id,product_id,store_id,"
+                "ingredient:ingredients(name),stores!inner(chain_slug)",
+                "stores.chain_slug": f"eq.{store[0]['chain_slug']}",
+                "product_id": "not.is.null",
+                "order": "ingredient_id,store_id",
+                "limit": str(page),
+                "offset": str(len(matches)),
+            },
+        )
+        rows.raise_for_status()
+        matches += rows.json()
+        if len(rows.json()) < page:
+            break
+    # One match per ingredient, this store's first: the one live pricing uses.
+    chosen: dict[str, dict] = {}
+    for m in sorted(matches, key=lambda m: m["store_id"] != store[0]["id"]):
+        chosen.setdefault(m["ingredient_id"], m)
     by_product: dict[str, set[str]] = {}
-    for m in matches:
+    for m in chosen.values():
         by_product.setdefault(m["product_id"], set()).add(m["ingredient"]["name"])
     ids = list(by_product)
     found = {}

@@ -328,6 +328,27 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
+  it('offers a link shared from another app at /share (TYL-118)', async () => {
+    window.localStorage.removeItem('sous:shared-url')
+    window.history.replaceState(
+      null,
+      '',
+      '/share?url=' + encodeURIComponent('https://example.com/stew'),
+    )
+    const { auth } = fakeAuth(session)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Save the recipe you shared?',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Recipe link')).toHaveValue(
+      'https://example.com/stew',
+    )
+    window.localStorage.removeItem('sous:shared-url')
+    window.history.replaceState(null, '', '/')
+  })
+
   it('has a tab bar for the week, recipes, list and pantry', async () => {
     window.history.replaceState(null, '', '/')
     const { auth } = fakeAuth(session)
