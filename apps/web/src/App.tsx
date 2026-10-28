@@ -194,7 +194,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     onHandIn: (recipeId) => onHandIn(db, recipeId),
     storesNear: (zip) => storesNear(session, zip),
     myStore: () => myStore(session),
-    chooseStore: (locationId) => chooseStore(session, locationId),
+    chooseStore: (locationId, zip) => chooseStore(session, locationId, zip),
     exportMyData: () => exportMyData(db),
     deleteMyAccount: () => deleteMyAccount(db),
     syncList: (week, items) => syncList(db, week, items),
@@ -225,8 +225,16 @@ interface Props {
 function App({ auth = defaultAuth, libraryApi }: Props) {
   const session = useSession(auth)
   const path = usePath()
-  const [shared] = useState(pendingShare)
-  const [sharedPage] = useState(pendingPage)
+  const [arrivedShare] = useState(pendingShare)
+  const [arrivedPage] = useState(pendingPage)
+  // A share is offered once, where it arrived: moving to another page means
+  // it's been dealt with, so "/" goes back to the week (TYL-118). Noted
+  // during render (React's pattern for state from an earlier render).
+  const [sharedAt] = useState(() => window.location.pathname)
+  const [movedOn, setMovedOn] = useState(false)
+  if (!movedOn && path !== sharedAt) setMovedOn(true)
+  const shared = movedOn ? null : arrivedShare
+  const sharedPage = movedOn ? null : arrivedPage
   const [loaded, setPrefs] = useState<Preferences | null>(null)
   // Whose preferences those are: another account signing in mustn't be
   // routed by them, so they count only for the account they were loaded for.

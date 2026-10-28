@@ -78,6 +78,42 @@ def test_chooses_a_store_checked_with_kroger(client: TestClient, supabase: Insta
     }
 
 
+def test_choosing_a_store_keeps_the_zip_it_was_found_by(
+    client: TestClient, supabase: Install
+) -> None:
+    # TYL-145: the zip stayed unsaved unless "Save preferences" was pressed.
+    seen = supabase(lambda r: httpx.Response(200, json=None))
+    resp = client.put("/stores/mine", json={"location_id": "02900540", "zip": "23451"})
+    assert resp.status_code == 200
+    patch = next(r for r in seen if r.url.path.endswith("/profiles"))
+    assert patch.method == "PATCH"
+    assert patch.url.params["user_id"] == "eq.user-1"
+    assert json.loads(patch.content) == {"home_zip": "23451"}
+
+
+def test_without_a_search_zip_the_stores_own_is_kept(client: TestClient, supabase: Install) -> None:
+    seen = supabase(lambda r: httpx.Response(200, json=None))
+    assert client.put("/stores/mine", json={"location_id": "02900540"}).status_code == 200
+    patch = next(r for r in seen if r.url.path.endswith("/profiles"))
+    assert json.loads(patch.content) == {"home_zip": "23452"}
+
+
+def test_the_store_is_kept_even_if_the_zip_cant_be(client: TestClient, supabase: Install) -> None:
+    def handler(r: httpx.Request) -> httpx.Response:
+        return httpx.Response(500 if r.url.path.endswith("/profiles") else 200, json=None)
+
+    supabase(handler)
+    assert (
+        client.put("/stores/mine", json={"location_id": "02900540", "zip": "23451"}).status_code
+        == 200
+    )
+
+
+def test_a_bad_zip_is_refused(client: TestClient) -> None:
+    resp = client.put("/stores/mine", json={"location_id": "02900540", "zip": "2345"})
+    assert resp.status_code == 422
+
+
 def test_an_unknown_or_malformed_store_is_refused(client: TestClient, supabase: Install) -> None:
     seen = supabase(lambda r: httpx.Response(200, json=None))
     assert client.put("/stores/mine", json={"location_id": "12345678"}).status_code == 404

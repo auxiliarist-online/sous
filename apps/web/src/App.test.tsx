@@ -304,6 +304,30 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
+  it('offers a shared link once: after another tab, home is the week again (TYL-118)', async () => {
+    window.localStorage.setItem(
+      'sous:shared-url',
+      JSON.stringify({ url: 'https://example.com/tacos', ingredients: null }),
+    )
+    window.history.replaceState(null, '', '/')
+    const { auth } = fakeAuth(session)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Save the recipe you shared?',
+      }),
+    ).toBeInTheDocument()
+    const tabs = screen.getByRole('navigation', { name: 'Main' })
+    await userEvent.click(within(tabs).getByRole('link', { name: 'List' }))
+    await userEvent.click(within(tabs).getByRole('link', { name: 'Week' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('heading', { name: 'Save the recipe you shared?' }),
+      ).toBeNull(),
+    )
+    window.history.replaceState(null, '', '/')
+  })
+
   it('has a tab bar for the week, recipes, list and pantry', async () => {
     window.history.replaceState(null, '', '/')
     const { auth } = fakeAuth(session)

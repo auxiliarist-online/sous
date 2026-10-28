@@ -7,6 +7,7 @@ import {
   type PantryItem,
 } from './pantry.ts'
 import { StarterKits } from './PantryKits.tsx'
+import { seasonsFrom } from './seasons.ts'
 import { Link } from './router.tsx'
 import { StorePicker, type StoreApi } from './StorePicker.tsx'
 import {
@@ -405,6 +406,9 @@ export function Settings({
         title="Seasons"
         hint="What's in season comes from your state's chart where Sous has one (North Carolina so far), else the USDA's national guide."
       >
+        <p className="small" aria-label="Seasons used">
+          {seasonsFrom(prefs.homeZip)}
+        </p>
         <label className="check">
           <input
             type="checkbox"

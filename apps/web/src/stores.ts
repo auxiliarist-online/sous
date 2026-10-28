@@ -82,12 +82,14 @@ export async function myStore(
 export async function chooseStore(
   session: Session,
   locationId: string,
+  zip: string | null = null,
   send: typeof apiFetch = apiFetch,
 ): Promise<void> {
   await check(
     await send(session, '/stores/mine', {
       method: 'PUT',
-      body: JSON.stringify({ location_id: locationId }),
+      // The zip it was found by is saved as the home zip too (TYL-145).
+      body: JSON.stringify({ location_id: locationId, ...(zip && { zip }) }),
     }),
     "We couldn't save your store. Try again.",
   )

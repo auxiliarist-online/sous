@@ -4,7 +4,8 @@ import type { MyStore, NearbyStore } from './stores.ts'
 export interface StoreApi {
   storesNear(zip: string): Promise<NearbyStore[]>
   myStore(): Promise<MyStore | null>
-  chooseStore(locationId: string): Promise<void>
+  /** Make it the user's store; `zip` (what it was found by) becomes their home zip. */
+  chooseStore(locationId: string, zip?: string | null): Promise<void>
 }
 
 const ZIP = /^\d{5}$/
@@ -69,7 +70,8 @@ export function StorePicker({
     setBusy(true)
     setMessage(null)
     try {
-      await api.chooseStore(s.locationId)
+      const z = text.trim()
+      await api.chooseStore(s.locationId, ZIP.test(z) ? z : null)
       setCurrent({ name: s.name, address: s.address })
       setFound(null)
     } catch (err) {

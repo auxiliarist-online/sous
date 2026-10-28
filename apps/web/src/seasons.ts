@@ -63,3 +63,14 @@ export function inSeasonNow(
     .map(([ingredientId, s]) => ({ ingredientId, name: s.name }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
+
+/** Which seasons chart a zip gets, in words (TYL-145): a missing zip quietly
+ *  meant national seasons. Keep in step with season_region() in
+ *  supabase/migrations/20261022010000_seasons.sql. */
+export function seasonsFrom(zip: string | null): string {
+  if (!zip)
+    return "No home zip yet, so the USDA's national guide. Find your store below to set it."
+  return /^(27|28)\d{3}$/.test(zip)
+    ? `North Carolina's chart, from your zip ${zip}.`
+    : `The USDA's national guide (no state chart for ${zip} yet).`
+}

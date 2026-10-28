@@ -11,6 +11,7 @@ own choice (its name, address and location id), not a copy of Kroger's list.
 """
 
 import asyncio
+import logging
 import re
 from dataclasses import asdict
 from typing import Annotated, Any
@@ -22,6 +23,8 @@ from pydantic import BaseModel, Field
 from app.auth import current_user_id
 from app.config import settings
 from app.pricing.kroger import Kroger, Location
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stores", tags=["stores"])
 
@@ -91,6 +94,8 @@ class Choice(BaseModel):
     """A Kroger location id, from /stores/nearby."""
 
     location_id: str = Field(pattern=r"^[0-9A-Za-z]{1,20}$")
+    # The zip the store was found by: saved as the home zip too (TYL-145).
+    zip: str | None = Field(default=None, pattern=r"^\d{5}$")
 
 
 @router.put("/mine")
@@ -120,7 +125,30 @@ async def choose(body: Choice, user_id: Annotated[str, Depends(current_user_id)]
         )
     if resp.status_code != 200:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "We couldn't save your store.")
+    # The zip it was found by is where the user is (seasons, nearby stores),
+    # and picking a store shouldn't need "Save preferences" to keep it.
+    await _save_home_zip(user_id, body.zip or (loc.zip if ZIP.match(loc.zip) else None))
     return {"store": _out(loc), "default": False}
+
+
+async def _save_home_zip(user_id: str, zip_code: str | None) -> None:
+    """Keep the user's home zip (TYL-145). Only an existing profile is
+    updated: setup creates the profile, and saves the zip, when it finishes.
+    Best effort: the store is already saved."""
+    if not zip_code:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.patch(
+                f"{settings.supabase_url}/rest/v1/profiles",
+                params={"user_id": f"eq.{user_id}"},
+                json={"home_zip": zip_code},
+                headers=_headers(),
+            )
+        if resp.status_code not in (200, 204):
+            log.warning("couldn't save the home zip: %s", resp.status_code)
+    except httpx.HTTPError as exc:
+        log.warning("couldn't save the home zip: %s", exc)
 
 
 @router.delete("/mine", status_code=status.HTTP_204_NO_CONTENT)

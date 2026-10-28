@@ -62,15 +62,22 @@ describe('store calls', () => {
 
   it('chooses a store, and passes on the API’s reason when it can’t', async () => {
     const send = reply(200, { store: {} })
-    await chooseStore({} as Session, '09700181', send)
+    await chooseStore({} as Session, '09700181', null, send)
     expect(send).toHaveBeenCalledWith({}, '/stores/mine', {
       method: 'PUT',
       body: JSON.stringify({ location_id: '09700181' }),
+    })
+    // TYL-145: the zip it was found by goes too, to be the home zip.
+    await chooseStore({} as Session, '09700181', '28801', send)
+    expect(send).toHaveBeenLastCalledWith({}, '/stores/mine', {
+      method: 'PUT',
+      body: JSON.stringify({ location_id: '09700181', zip: '28801' }),
     })
     await expect(
       chooseStore(
         {} as Session,
         '1',
+        null,
         reply(404, { detail: "Kroger doesn't know that store." }),
       ),
     ).rejects.toThrow("Kroger doesn't know that store.")
@@ -121,7 +128,7 @@ describe('StorePicker', () => {
         name: 'Shop at Harris Teeter - Arctic Avenue',
       }),
     )
-    expect(api.chooseStore).toHaveBeenCalledWith('09700181')
+    expect(api.chooseStore).toHaveBeenCalledWith('09700181', '23451')
     expect(
       screen.getByText('Harris Teeter - Arctic Avenue'),
     ).toBeInTheDocument()
@@ -210,7 +217,7 @@ describe('Welcome', () => {
       }),
     )
     expect(api.keepStaples).toHaveBeenCalledWith(['salt', 'fish', 'cumin'])
-    expect(api.chooseStore).toHaveBeenCalledWith('09700181')
+    expect(api.chooseStore).toHaveBeenCalledWith('09700181', '23451')
   })
 
   it('goes back a step, and says when saving fails', async () => {

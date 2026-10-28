@@ -396,3 +396,18 @@ export function filterRecipes(
     return terms.every((t) => haystack.some((w) => w.startsWith(t)))
   })
 }
+
+/** Whether two links are the same page: ignoring http/https, "www.", a
+ *  trailing slash and a #fragment (TYL-118). */
+export function sameLink(a: string, b: string): boolean {
+  const norm = (u: string) => {
+    try {
+      const x = new URL(u)
+      const host = x.hostname.toLowerCase().replace(/^www\./, '')
+      return host + x.pathname.replace(/\/+$/, '') + x.search
+    } catch {
+      return u.trim().toLowerCase()
+    }
+  }
+  return norm(a) === norm(b)
+}
