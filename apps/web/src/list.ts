@@ -250,7 +250,7 @@ function store(): Storage | null {
 }
 
 /** A JSON value kept on the phone, or null. */
-function read<T>(key: string): T | null {
+export function read<T>(key: string): T | null {
   try {
     const raw = store()?.getItem(key)
     return raw ? (JSON.parse(raw) as T) : null
@@ -260,7 +260,7 @@ function read<T>(key: string): T | null {
 }
 
 /** Keep a JSON value on the phone, if storage allows. */
-function write(key: string, value: unknown): void {
+export function write(key: string, value: unknown): void {
   try {
     store()?.setItem(key, JSON.stringify(value))
   } catch {

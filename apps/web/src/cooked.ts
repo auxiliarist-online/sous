@@ -40,6 +40,8 @@ export interface CookedApi {
   cookedEntries(entryIds: string[]): Promise<Record<string, Cooked>>
   /** Record a meal as cooked; a plan entry already cooked returns its record. */
   markCooked(meal: {
+    /** Made on the phone, so a record sent twice is still one (TYL-120). */
+    id?: string
     recipeId: string
     planEntryId?: string | null
     cookedOn: string
@@ -110,6 +112,7 @@ export async function cookedEntries(
 export async function markCooked(
   db: SupabaseClient,
   meal: {
+    id?: string
     recipeId: string
     planEntryId?: string | null
     cookedOn: string
@@ -119,6 +122,7 @@ export async function markCooked(
   const { data, error } = await db
     .from('cooked_meals')
     .insert({
+      ...(meal.id && { id: meal.id }),
       recipe_id: meal.recipeId,
       plan_entry_id: meal.planEntryId ?? null,
       cooked_on: meal.cookedOn,
