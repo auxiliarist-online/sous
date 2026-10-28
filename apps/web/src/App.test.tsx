@@ -328,6 +328,29 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
+  it('goes back to the week when Week is tapped right where a share arrived (TYL-140)', async () => {
+    window.localStorage.setItem(
+      'sous:shared-url',
+      JSON.stringify({ url: 'https://example.com/tacos', ingredients: null }),
+    )
+    window.history.replaceState(null, '', '/')
+    const { auth } = fakeAuth(session)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Save the recipe you shared?',
+      }),
+    ).toBeInTheDocument()
+    const tabs = screen.getByRole('navigation', { name: 'Main' })
+    await userEvent.click(within(tabs).getByRole('link', { name: 'Week' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('heading', { name: 'Save the recipe you shared?' }),
+      ).toBeNull(),
+    )
+    window.history.replaceState(null, '', '/')
+  })
+
   it('offers a link shared from another app at /share (TYL-118)', async () => {
     window.localStorage.removeItem('sous:shared-url')
     window.history.replaceState(

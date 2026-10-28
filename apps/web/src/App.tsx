@@ -18,7 +18,7 @@ import {
   setTags,
   savedRecipes,
 } from './library.ts'
-import { navigate, route, usePath } from './navigation.ts'
+import { navigate, route, useNavigated, usePath } from './navigation.ts'
 import { Browse, type BrowseApi } from './Browse.tsx'
 import { clearBrowseCache } from './browseCache.ts'
 import { clearPage, pendingPage } from './page.ts'
@@ -231,14 +231,10 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
   const path = usePath()
   const [arrivedShare] = useState(pendingShare)
   const [arrivedPage] = useState(pendingPage)
-  // A share is offered once, where it arrived: moving to another page means
-  // it's been dealt with, so "/" goes back to the week (TYL-118). Noted
-  // during render (React's pattern for state from an earlier render). The
-  // arrival is `path` as first captured: pendingShare() has already
-  // rewritten the address bar from /share to /.
-  const [sharedAt] = useState(path)
-  const [movedOn, setMovedOn] = useState(false)
-  if (!movedOn && path !== sharedAt) setMovedOn(true)
+  // A share is offered once, where it arrived: going anywhere in the app,
+  // even tapping Week while on "/", means it's been dealt with, so "/" goes
+  // back to the week (TYL-118, TYL-140).
+  const movedOn = useNavigated()
   const shared = movedOn ? null : arrivedShare
   const sharedPage = movedOn ? null : arrivedPage
   const [loaded, setPrefs] = useState<Preferences | null>(null)

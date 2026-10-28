@@ -25,6 +25,22 @@ export function usePath(): string {
   return path
 }
 
+/** Whether the user has moved since the app opened: any in-app navigation
+ *  (even to the page they're on, like tapping Week while on "/") or Back. */
+export function useNavigated(): boolean {
+  const [moved, setMoved] = useState(false)
+  useEffect(() => {
+    const update = () => setMoved(true)
+    window.addEventListener('popstate', update)
+    window.addEventListener(EVENT, update)
+    return () => {
+      window.removeEventListener('popstate', update)
+      window.removeEventListener(EVENT, update)
+    }
+  }, [])
+  return moved
+}
+
 export type Route =
   | { page: 'home' }
   | { page: 'library' }
