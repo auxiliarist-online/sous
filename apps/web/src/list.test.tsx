@@ -403,6 +403,32 @@ describe('own item prices', () => {
   })
 })
 
+describe('own item prices in batches', () => {
+  it('sends more than 100 items in batches and adds them up', async () => {
+    const send = vi.fn(
+      async (_s: unknown, _path: string, init?: RequestInit) => {
+        const { items } = JSON.parse(String(init?.body)) as {
+          items: { id: string }[]
+        }
+        return new Response(
+          JSON.stringify({
+            total_cents: items.length,
+            items: items.map((i) => ({ id: i.id, cents: 1, estimated: false })),
+          }),
+        )
+      },
+    )
+    const items = Array.from({ length: 150 }, (_, n) => ({
+      id: `i${n}`,
+      name: 'eggs',
+    }))
+    const prices = await ownItemPrices({} as never, WEEK, items, send)
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(prices.totalCents).toBe(150)
+    expect(Object.keys(prices.items)).toHaveLength(150)
+  })
+})
+
 describe('ListPage', () => {
   it('marks what’s in season that week (TYL-70)', async () => {
     const api = listApi({

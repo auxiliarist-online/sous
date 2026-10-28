@@ -459,9 +459,10 @@ export interface OwnPrices {
 export function ownItems(state: ListState): { id: string; name: string }[] {
   return state.items
     .filter((i) => i.isManual && !i.removed && i.name.trim())
-    .slice(0, 100)
     .map((i) => ({ id: i.id, name: i.name.trim().slice(0, 200) }))
 }
+
+const OWN_BATCH = 100
 
 /** Match each of the user's own items to an ingredient and price one of it,
  *  the store's live price first (TYL-146). Names are matched each time, so
@@ -472,23 +473,32 @@ export async function ownItemPrices(
   items: { id: string; name: string }[],
   send: typeof apiFetch = apiFetch,
 ): Promise<OwnPrices> {
-  if (!items.length) return { totalCents: 0, items: {} }
-  const resp = await send(session, `/plans/${weekStart}/own-items`, {
-    method: 'POST',
-    body: JSON.stringify({ items }),
-  })
-  if (!resp.ok) throw new Error(`own item prices: ${resp.status}`)
-  const body = (await resp.json()) as {
-    total_cents: number
-    items: { id: string; cents: number | null; estimated: boolean }[]
-  }
+  // The API takes up to 100 a request.
+  const batches: { id: string; name: string }[][] = []
+  for (let i = 0; i < items.length; i += OWN_BATCH)
+    batches.push(items.slice(i, i + OWN_BATCH))
+  const bodies = await Promise.all(
+    batches.map(async (batch) => {
+      const resp = await send(session, `/plans/${weekStart}/own-items`, {
+        method: 'POST',
+        body: JSON.stringify({ items: batch }),
+      })
+      if (!resp.ok) throw new Error(`own item prices: ${resp.status}`)
+      return (await resp.json()) as {
+        total_cents: number
+        items: { id: string; cents: number | null; estimated: boolean }[]
+      }
+    }),
+  )
   return {
-    totalCents: body.total_cents,
+    totalCents: bodies.reduce((sum, b) => sum + b.total_cents, 0),
     items: Object.fromEntries(
-      body.items.flatMap((i) =>
-        i.cents === null
-          ? []
-          : [[i.id, { cents: i.cents, estimated: i.estimated }]],
+      bodies.flatMap((b) =>
+        b.items.flatMap((i) =>
+          i.cents === null
+            ? []
+            : [[i.id, { cents: i.cents, estimated: i.estimated }]],
+        ),
       ),
     ),
   }

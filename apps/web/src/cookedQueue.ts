@@ -218,7 +218,15 @@ export function offlineCooked(
   return {
     cookedEntries: async (entryIds) => {
       void flushCooked(user, server)
-      const found = await server.cookedEntries(entryIds).catch(() => ({}))
+      // Can't reach the server (offline, or a bad signal): what's on the
+      // phone. A server that answers with an error is passed on, so an empty
+      // list isn't shown as if nothing were cooked.
+      const found = await server
+        .cookedEntries(entryIds)
+        .catch((err: unknown) => {
+          if (!navigator.onLine || err instanceof TypeError) return {}
+          throw err
+        })
       return withPending(user, found, entryIds)
     },
     markCooked: async (meal) => {

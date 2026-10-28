@@ -158,4 +158,13 @@ describe('Cooked it offline (TYL-120)', () => {
     expect(s.undoCooked).toHaveBeenCalledWith('b')
     expect(s.rateCooked).not.toHaveBeenCalled()
   })
+
+  it('passes on a server error instead of showing nothing cooked', async () => {
+    const s = server()
+    s.cookedEntries.mockRejectedValueOnce({ code: 'PGRST301' })
+    const api = offlineCooked('u', s)
+    await expect(api.cookedEntries(['e1'])).rejects.toEqual({
+      code: 'PGRST301',
+    })
+  })
 })
