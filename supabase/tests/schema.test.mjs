@@ -1764,6 +1764,35 @@ describe('meal planner', () => {
     assert.equal(r.entries.filter((e) => !e.candidate).length, 2)
   })
 
+  it('brings ingredients of items added to the list by hand (TYL-146)', async () => {
+    const bread = await ingredient('whole wheat bread')
+    await db.query(
+      `insert into prices (source, ingredient_id, price_cents, quantity, unit)
+       values ('seed', $1, 349, 1, 'each')`,
+      [bread],
+    )
+    const r = await as('service_role', null, async () => {
+      const { rows } = await db.query(
+        'select plan_cost_inputs($1, $2, $3, $4) as r',
+        [DAVE, MONDAY, [], [bread]],
+      )
+      return rows[0].r
+    })
+    assert.equal(r.ingredients[bread].name, 'whole wheat bread')
+    assert.ok(r.prices.some((p) => p.ingredient_id === bread))
+    // Not an entry: the plan's own cost is unchanged.
+    assert.equal(r.entries.length, 2)
+    await assert.rejects(
+      asDave('select plan_cost_inputs($1, $2, $3, $4)', [
+        DAVE,
+        MONDAY,
+        [],
+        [bread],
+      ]),
+      /only callable by the API/,
+    )
+  })
+
   it('keeps one own price per ingredient and store, private to the user (TYL-34)', async () => {
     const tofu = await ingredient('tofu')
     const { rows: stores } = await db.query(

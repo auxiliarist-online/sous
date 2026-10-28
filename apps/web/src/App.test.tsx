@@ -62,6 +62,7 @@ const library = (
   syncList: vi.fn(async () => 'list-1'),
   loadList: vi.fn(async () => null),
   sendListOp: vi.fn(async () => {}),
+  ownItemPrices: vi.fn(async () => ({ totalCents: 0, items: {} })),
   places: vi.fn(async () => []),
   addPlace: vi.fn(async (name: string) => ({ id: 'p', name })),
   sendFeedback: vi.fn(async () => {}),

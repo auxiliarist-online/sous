@@ -7,6 +7,8 @@ POST /plans/{week_start}/added what adding each of some recipes would add to
                                that week's cost (TYL-30).
 POST /plans/{week_start}/draft "Plan my week" (TYL-65): a draft of the open
                                dinners from the user's saved recipes.
+POST /plans/{week_start}/own-items prices for items the user added to the
+                               shopping list themselves (TYL-146).
 
 Adding, editing and copying plans happens in the web app, straight against
 Supabase under row-level security; pricing needs the API's unit conversions.
@@ -25,7 +27,8 @@ from app.auth import current_user_id
 from app.plans.cost import added_costs, plan_cost
 from app.plans.draft import Candidate, Variety, draft_week
 from app.plans.live_prices import add_live_prices, no_store
-from app.plans.store import cost_inputs, draft_pool
+from app.plans.own_items import candidates_for, price_own_items
+from app.plans.store import cost_inputs, draft_pool, match_ingredient
 from app.recipes.store import StoreError
 
 router = APIRouter(prefix="/plans", tags=["plans"])
@@ -79,6 +82,63 @@ async def added(
         "budget_cents": week.budget_cents,
         "total_cents": week.total_cents,
         "recipes": [asdict(a) for a in added_costs(inputs, on=week_start, store_id=store_id)],
+    }
+
+
+class OwnItemName(BaseModel):
+    """A list item the user typed: its id on the list and its name."""
+
+    id: str = Field(max_length=64)
+    name: str = Field(min_length=1, max_length=200)
+
+
+class OwnItems(BaseModel):
+    """The user's own items on the week's list."""
+
+    items: list[OwnItemName] = Field(max_length=100)
+
+
+@router.post("/{week_start}/own-items")
+async def own_items(
+    week_start: date, body: OwnItems, user_id: Annotated[str, Depends(current_user_id)]
+) -> dict[str, Any]:
+    """Each item matched to an ingredient and priced as one package, with
+    their total; an item that doesn't match is left unpriced (TYL-146)."""
+    try:
+        matched = await asyncio.gather(
+            *(match_ingredient(candidates_for(i.name)) for i in body.items)
+        )
+    except StoreError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "We couldn't price your items. Try again."
+        ) from exc
+    extra = sorted({m for m in matched if m})
+    inputs: dict[str, Any] = {}
+    store_id = None
+    if extra:
+        if week_start.isoweekday() != 1:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Weeks start on Monday.")
+        try:
+            inputs = await cost_inputs(user_id, week_start, extra=extra)
+        except StoreError as exc:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, "We couldn't price your items. Try again."
+            ) from exc
+        # Only the items' own ingredients, so live prices look up just those.
+        inputs["entries"] = []
+        inputs["ingredients"] = {
+            k: v for k, v in inputs.get("ingredients", {}).items() if k in extra
+        }
+        store_id = await add_live_prices(user_id, inputs)
+    priced = price_own_items(
+        [(i.id, m) for i, m in zip(body.items, matched, strict=True)],
+        inputs,
+        on=week_start,
+        store_id=store_id,
+    )
+    return {
+        "total_cents": sum(i.cents or 0 for i in priced),
+        "items": [asdict(i) for i in priced],
     }
 
 

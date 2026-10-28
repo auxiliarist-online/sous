@@ -25,9 +25,10 @@ import { recipeInSeason, type Seasons } from './seasons.ts'
 import { Link } from './router.tsx'
 import { ExternalLink } from './ExternalLink.tsx'
 import type { Shared } from './share.ts'
+import { QuickAdd, type QuickAddApi } from './QuickAdd.tsx'
 
 /** What the screen needs from the API and database; tests pass fakes. */
-export interface LibraryApi {
+export interface LibraryApi extends QuickAddApi {
   list(): Promise<SavedRecipe[]>
   save(url: string): Promise<ImportResult>
   savePage(page: PageData): Promise<ImportResult>
@@ -308,6 +309,7 @@ export function Library({
         )}
         {!!recipes?.length && (
           <RecipeList
+            api={api}
             recipes={filterRecipes(recipes, filter, inSeason)}
             onRemove={(r) => void remove(r)}
           />
@@ -667,11 +669,13 @@ function Filters({
 }
 
 /** The filtered recipes, each with its source, time, labels and tags, and a
- *  button to remove it. */
+ *  buttons to plan it this week or remove it. */
 function RecipeList({
+  api,
   recipes,
   onRemove,
 }: {
+  api: QuickAddApi
   recipes: SavedRecipe[]
   onRemove: (r: SavedRecipe) => void
 }) {
@@ -703,6 +707,7 @@ function RecipeList({
               ))}
             </span>
           )}
+          <QuickAdd api={api} recipeId={r.id} title={r.title} />
           <button
             type="button"
             className="remove"

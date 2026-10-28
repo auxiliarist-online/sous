@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Library, type LibraryApi } from './Library.tsx'
 import { ImportError, type ImportResult, type SavedRecipe } from './library.ts'
+import { weekOf } from './plan.ts'
 
 const DAL: SavedRecipe = {
   id: 'r1',
@@ -47,6 +48,8 @@ function fakeApi(recipes: SavedRecipe[] = []): LibraryApi & {
     saveText: vi.fn(async () => SAVED),
     remove: vi.fn(async () => {}),
     seasons: vi.fn(async () => new Map()),
+    addToPlan: vi.fn(async () => {}),
+    recipeFits: vi.fn(async () => ({})),
   }
 }
 
@@ -61,6 +64,18 @@ describe('Library', () => {
     expect(list.getByText('Gluten-free')).toBeInTheDocument()
     expect(list.queryByText('Vegetarian')).toBeNull()
     expect(screen.getByText(/always check the packaging/)).toBeInTheDocument()
+  })
+
+  it('plans a saved recipe this week from the list (TYL-119)', async () => {
+    const api = fakeApi([DAL])
+    render(<Library api={api} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: "Add Red lentil dal to this week's plan",
+      }),
+    )
+    expect(api.addToPlan).toHaveBeenCalledWith(weekOf(), 'r1', 1)
+    expect(await screen.findByText('✓ Planned')).toBeInTheDocument()
   })
 
   it('says how to start when nothing is saved', async () => {

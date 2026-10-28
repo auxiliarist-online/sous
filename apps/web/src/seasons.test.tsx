@@ -143,6 +143,8 @@ describe('the library’s In season filter', () => {
         saveText: vi.fn(),
         remove: vi.fn(),
         seasons: vi.fn(async () => SEASONS),
+        addToPlan: vi.fn(),
+        recipeFits: vi.fn(),
       }
       render(<Library api={api} />)
       await userEvent.click(

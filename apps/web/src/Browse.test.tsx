@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Browse } from './Browse.tsx'
 import { clearBrowseCache } from './browseCache.ts'
 import type { CatalogRecipe } from './sous.ts'
+import { weekOf, type Fit } from './plan.ts'
 
 const FRITTATA: CatalogRecipe = {
   id: 'a',
@@ -27,6 +28,8 @@ function fakeApi(pages: CatalogRecipe[][] = [[FRITTATA, PIE]]) {
     searchCatalog: vi.fn(async (_q: string, offset = 0) =>
       offset === 0 ? pages[0] : (pages[1] ?? []),
     ),
+    addToPlan: vi.fn(async () => {}),
+    recipeFits: vi.fn(async (): Promise<Record<string, Fit>> => ({})),
   }
 }
 
@@ -98,12 +101,59 @@ describe('Browse', () => {
   })
 
   it('explains an empty result', async () => {
-    render(<Browse api={{ searchCatalog: vi.fn(async () => []) }} />)
+    render(
+      <Browse api={{ ...fakeApi(), searchCatalog: vi.fn(async () => []) }} />,
+    )
     await userEvent.type(screen.getByLabelText('Search recipes'), 'chicken')
     expect(
       await screen.findByText(
         /Nothing that fits your preferences matches “chicken”/,
       ),
     ).toBeInTheDocument()
+  })
+
+  it('adds a recipe to this week from the results (TYL-119)', async () => {
+    const api = fakeApi()
+    render(<Browse api={api} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: "Add Frittata to this week's plan",
+      }),
+    )
+    expect(api.addToPlan).toHaveBeenCalledWith(weekOf(), 'a', 1)
+    expect(await screen.findByRole('status')).toHaveTextContent('Planned')
+  })
+
+  it('asks before planning a recipe that breaks your diets', async () => {
+    const api = fakeApi()
+    api.recipeFits.mockResolvedValue({ a: 'excluded' })
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<Browse api={api} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: "Add Frittata to this week's plan",
+      }),
+    )
+    expect(ask).toHaveBeenCalled()
+    expect(api.addToPlan).not.toHaveBeenCalled()
+    ask.mockRestore()
+  })
+
+  it('offers a retry when adding fails', async () => {
+    const api = fakeApi()
+    api.addToPlan.mockRejectedValueOnce(new Error('down'))
+    render(<Browse api={api} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: "Add Frittata to this week's plan",
+      }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: "Couldn't add Frittata. Try again",
+      }),
+    )
+    expect(api.addToPlan).toHaveBeenCalledTimes(2)
+    expect(await screen.findByRole('status')).toHaveTextContent('Planned')
   })
 })

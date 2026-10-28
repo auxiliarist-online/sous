@@ -1,7 +1,8 @@
 // The week's shopping list (TYL-18): filled from the plan, edited freely, and
 // usable offline in the store. Changes apply at once, are kept on the phone,
 // and are sent in order when there's a connection.
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Session, SupabaseClient } from '@supabase/supabase-js'
+import { apiFetch } from './auth.ts'
 import { buyText, type PlanCost } from './plan.ts'
 
 export interface ListItem {
@@ -445,4 +446,50 @@ export function plannedItems(cost: PlanCost): PlannedItem[] {
         ]
       : [],
   )
+}
+
+/** Prices for the items the user added to the list themselves (TYL-146). */
+export interface OwnPrices {
+  totalCents: number
+  /** By list item id; only the items that could be priced. */
+  items: Record<string, { cents: number; estimated: boolean }>
+}
+
+/** The user's own items on the list, as the API prices them. */
+export function ownItems(state: ListState): { id: string; name: string }[] {
+  return state.items
+    .filter((i) => i.isManual && !i.removed && i.name.trim())
+    .slice(0, 100)
+    .map((i) => ({ id: i.id, name: i.name.trim().slice(0, 200) }))
+}
+
+/** Match each of the user's own items to an ingredient and price one of it,
+ *  the store's live price first (TYL-146). Names are matched each time, so
+ *  an edited name is matched again. */
+export async function ownItemPrices(
+  session: Session,
+  weekStart: string,
+  items: { id: string; name: string }[],
+  send: typeof apiFetch = apiFetch,
+): Promise<OwnPrices> {
+  if (!items.length) return { totalCents: 0, items: {} }
+  const resp = await send(session, `/plans/${weekStart}/own-items`, {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  })
+  if (!resp.ok) throw new Error(`own item prices: ${resp.status}`)
+  const body = (await resp.json()) as {
+    total_cents: number
+    items: { id: string; cents: number | null; estimated: boolean }[]
+  }
+  return {
+    totalCents: body.total_cents,
+    items: Object.fromEntries(
+      body.items.flatMap((i) =>
+        i.cents === null
+          ? []
+          : [[i.id, { cents: i.cents, estimated: i.estimated }]],
+      ),
+    ),
+  }
 }
