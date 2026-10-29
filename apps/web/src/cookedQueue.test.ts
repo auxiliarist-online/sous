@@ -173,11 +173,13 @@ describe('Cooked it offline (TYL-120)', () => {
     const api = offlineCooked('u', s, () => 'local-5')
     await api.markCooked(MEAL)
     // supabase-js reports a dropped connection as an error with no code.
-    s.cookedEntries.mockRejectedValueOnce({
-      message: 'TypeError: Failed to fetch',
-      code: '',
-    })
-    expect((await api.cookedEntries(['e1'])).e1.id).toBe('local-5')
+    for (const message of [
+      'TypeError: Failed to fetch',
+      'TypeError: The Internet connection appears to be offline.',
+    ]) {
+      s.cookedEntries.mockRejectedValueOnce({ message, code: '' })
+      expect((await api.cookedEntries(['e1'])).e1.id).toBe('local-5')
+    }
   })
 
   it('shows a queued rating on the record another phone made', async () => {

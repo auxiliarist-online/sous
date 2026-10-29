@@ -112,9 +112,10 @@ function withPending(
 }
 
 // What browsers say when a request never reaches the server: Chrome's
-// "Failed to fetch", Firefox's "NetworkError…", Safari's "Load failed".
+// "Failed to fetch" or "network error", Firefox's "NetworkError…", Safari's
+// "Load failed" (16: "The Internet connection appears to be offline").
 const NETWORK =
-  /failed to fetch|networkerror|load failed|network request failed/i
+  /failed to fetch|network ?error|load failed|network request failed|internet connection appears to be offline/i
 
 /** Whether a failure means the server couldn't be reached: offline, a
  *  network TypeError, or supabase-js wrapping one (no code, and a browser's
