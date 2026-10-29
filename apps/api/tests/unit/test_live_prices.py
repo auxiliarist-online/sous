@@ -201,6 +201,43 @@ def test_a_bunch_sold_as_one_each_is_one_bunch(
     assert (scallions.package_unit, scallions.packages, scallions.cents) == ("bunch", 2, 378)
 
 
+def test_a_pack_of_bunches_is_that_many_bunches(
+    supabase: Install, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A "2 pk" of scallions is two bunches, not two stalks.
+    monkeypatch.setattr(settings, "kroger_client_id", "id")
+
+    def handle(r: httpx.Request) -> httpx.Response:
+        if r.url.path.endswith("/user_stores"):
+            return httpx.Response(200, json=[{"stores": STORE}])
+        return httpx.Response(
+            200, json=[{"ingredient_id": "scallions", "product_id": "4068", "store_id": "store-ht"}]
+        )
+
+    supabase(handle)
+    fetched(monkeypatch, kroger_product("4068", size="2 pk", regular=3.00))
+    plan = {
+        "entries": [entry([line("scallions", 1.5, "cup")])],
+        "ingredients": {
+            "scallions": {
+                "name": "scallions",
+                "aisle": "produce",
+                "grams_per_cup": 100,
+                "grams_per_each": 15,
+                "sold_by": "package",
+                "package_quantity": 1,
+                "package_unit": "bunch",
+                "units": {"bunch": 100},
+            }
+        },
+        "prices": [],
+    }
+    cost = plan_cost(plan, on=MONDAY, store_id=asyncio.run(add_live_prices("user-1", plan)))
+    scallions = cost.items[0]
+    # 150 g fits in one 2-bunch pack at $3.00.
+    assert (scallions.package_unit, scallions.packages, scallions.cents) == ("bunch", 1, 300)
+
+
 def test_a_product_the_store_doesnt_stock_is_left_to_estimates(
     db: list[httpx.Request], monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -19,6 +19,7 @@ import {
   type PageData,
   type RecipeFilter,
   type SavedRecipe,
+  sameLink,
 } from './library.ts'
 import { ingredientsFromText, titleFromUrl } from './paste.ts'
 import { recipeInSeason, type Seasons } from './seasons.ts'
@@ -186,8 +187,20 @@ export function Library({
 
   // A link shared to Sous only fills in the form: saving always takes the
   // user's tap, so another site can't add recipes by linking to /share.
+  // One already saved isn't offered again (TYL-118).
+  const alreadySaved =
+    sharedUrl && recipes
+      ? recipes.find((r) => r.sourceUrl && sameLink(r.sourceUrl, sharedUrl))
+      : undefined
   const confirmingShare =
-    !!sharedUrl && url === sharedUrl && status.state === 'idle'
+    !!sharedUrl && !alreadySaved && url === sharedUrl && status.state === 'idle'
+  // Until the saved recipes load, a shared link can't be told apart from one
+  // already saved; and one already saved isn't saved again. If they can't
+  // load, Save isn't held up (saving a link twice keeps one recipe).
+  const holdShare =
+    !!sharedUrl &&
+    url === sharedUrl &&
+    ((recipes === null && !listError) || !!alreadySaved)
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -215,6 +228,12 @@ export function Library({
         </section>
       )}
 
+      {alreadySaved && url === sharedUrl && (
+        <p className="card" role="status">
+          Already in your recipes:{' '}
+          <Link to={`/recipe/${alreadySaved.id}`}>{alreadySaved.title}</Link>
+        </p>
+      )}
       <form className="card" onSubmit={submit}>
         <h2>
           {confirmingShare ? 'Save the recipe you shared?' : 'Add a recipe'}
@@ -233,7 +252,7 @@ export function Library({
         />
         <button
           type="submit"
-          disabled={status.state === 'saving' || !url.trim()}
+          disabled={status.state === 'saving' || !url.trim() || holdShare}
         >
           {status.state === 'saving' ? 'Saving…' : 'Save recipe'}
         </button>
@@ -288,7 +307,10 @@ export function Library({
         </Link>
         {listError && (
           <p className="error" role="alert">
-            We couldn't load your recipes.
+            We couldn't load your recipes.{' '}
+            <button type="button" className="link" onClick={refresh}>
+              Try again
+            </button>
           </p>
         )}
         {recipes === null && !listError && <p className="muted">Loading…</p>}

@@ -4,7 +4,11 @@ import type { MyStore, NearbyStore } from './stores.ts'
 export interface StoreApi {
   storesNear(zip: string): Promise<NearbyStore[]>
   myStore(): Promise<MyStore | null>
-  chooseStore(locationId: string): Promise<void>
+  /** Make it the user's store; `zip` (what it was found by) becomes their home zip. */
+  chooseStore(
+    locationId: string,
+    zip?: string | null,
+  ): Promise<{ homeZipSaved: boolean } | void>
 }
 
 const ZIP = /^\d{5}$/
@@ -24,6 +28,9 @@ export function StorePicker({
   const [current, setCurrent] = useState<MyStore | null | undefined>(undefined)
   const [text, setText] = useState(zip ?? '')
   const [found, setFound] = useState<NearbyStore[] | null>(null)
+  // The zip those stores were found by: what choosing one saves, even if the
+  // box has been edited since.
+  const [foundZip, setFoundZip] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -51,6 +58,7 @@ export function StorePicker({
     try {
       const stores = await api.storesNear(z)
       setFound(stores)
+      setFoundZip(z)
       onZip(z)
       if (!stores.length) {
         setMessage(
@@ -69,9 +77,13 @@ export function StorePicker({
     setBusy(true)
     setMessage(null)
     try {
-      await api.chooseStore(s.locationId)
+      const saved = await api.chooseStore(s.locationId, foundZip)
       setCurrent({ name: s.name, address: s.address })
       setFound(null)
+      if (saved && !saved.homeZipSaved)
+        setMessage(
+          "Store saved, but we couldn't save your zip code. Save it in Preferences.",
+        )
     } catch (err) {
       setMessage(err instanceof Error ? err.message : String(err))
     } finally {

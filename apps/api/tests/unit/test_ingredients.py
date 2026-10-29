@@ -317,3 +317,24 @@ class TestCandidates:
     )
     def test_singular_and_plural(self, name: str, form: str) -> None:
         assert form in candidates(name)
+
+
+@pytest.mark.parametrize(
+    ("line", "quantity", "unit"),
+    [
+        ("3 generous cups fresh or frozen corn kernels", 3, "cup"),
+        ("1 heaping tablespoon flour", 1, "tbsp"),
+        ("1 heaped tsp cumin", 1, "tsp"),
+        ("1 scant cup sugar", 1, "cup"),
+        ("2 level teaspoons salt", 2, "tsp"),
+        ("1 rounded tbsp cocoa", 1, "tbsp"),
+        ("1 good pinch salt", 1, "pinch"),
+    ],
+)
+def test_words_that_only_qualify_an_amount_leave_the_unit(
+    line: str, quantity: float, unit: str
+) -> None:
+    # TYL-144: "generous cup" isn't a unit, so the amount was unknown.
+    p = parse_line(0, line)[0]
+    assert (p.quantity, p.unit) == (quantity, unit)
+    assert p.raw_text == line

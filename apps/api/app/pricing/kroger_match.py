@@ -32,7 +32,10 @@ from app.pricing.units import UnknownUnitError, convert, normalize_unit
 STORE_BRANDS = ("harris teeter", "kroger", "private selection", "ht traders")
 # Kroger sizes look like "12 ct", "5 lbs", "2.31 oz", "large 18 ct", "64 fl oz".
 SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*(fl\.? ?oz|ct|count|each|[a-z]+)", re.I)
-SIZE_UNITS = {"ct": "each", "count": "each", "fl oz": "fl_oz", "fl. oz": "fl_oz", "floz": "fl_oz"}
+SIZE_UNITS = {
+    "ct": "each", "count": "each", "ea": "each",
+    "fl oz": "fl_oz", "fl. oz": "fl_oz", "floz": "fl_oz",
+}  # fmt: skip
 WORD = re.compile(r"[a-z]+")
 
 # How an ingredient is kept, not what it is.
@@ -117,17 +120,47 @@ def head(description: str) -> set[str]:
     return words(tail[-1]) if tail else set()
 
 
-def parse_size(size: str | None) -> tuple[float, str] | None:
-    if not size:
-        return None
-    m = SIZE.search(size.lower())
-    if not m:
-        return None
-    unit = SIZE_UNITS.get(m.group(2), m.group(2))
+# "24 bottles/16.9 fl oz": a multipack, priced as the whole. A container word
+# is required, so a fraction like "8 oz (1/2 lb)" isn't read as one.
+MULTIPACK = re.compile(
+    r"(\d+)\s*(?:bottles?|cans?|ct|pk|pack|count)\s*/\s*(\d+(?:\.\d+)?)\s*(fl\.? ?oz|[a-z]+)", re.I
+)
+# "2 pk" is two of them; "1 pk" is one package of unknown size (a pack of
+# okra), which can't be priced by the item, so it's left unknown.
+PACK = re.compile(r"(\d+)\s*-?\s*(?:pk|pack)\b", re.I)
+COUNTS = frozenset({"each"})
+
+
+def _unit_of(text: str) -> str | None:
+    """A size word as Sous's unit, or None when it isn't one."""
     try:
-        return float(m.group(1)), normalize_unit(unit)
+        return normalize_unit(SIZE_UNITS.get(text, text))
     except UnknownUnitError:
         return None
+
+
+def parse_size(size: str | None) -> tuple[float, str] | None:
+    """A Kroger size string as (quantity, unit). In order: a multipack ("24
+    bottles/16.9 fl oz" is 405.6 fl oz); a measured size ("16 oz (2 pk)" is
+    16 oz); a pack count ("2 pk" is 2 each); a count ("12 ct"). None when it
+    can't be read, or doesn't say how much is in it ("1 pk")."""
+    if not size:
+        return None
+    text = size.lower()
+    multi = MULTIPACK.search(text)
+    if multi:
+        unit = _unit_of(multi.group(3))
+        return (int(multi.group(1)) * float(multi.group(2)), unit) if unit else None
+    found = [(float(m.group(1)), _unit_of(m.group(2))) for m in SIZE.finditer(text)]
+    measured = [(q, u) for q, u in found if u and u not in COUNTS]
+    if measured:
+        return measured[0]
+    pack = PACK.search(text)
+    if pack:
+        n = int(pack.group(1))
+        return (float(n), "each") if n >= 2 else None
+    counts = [(q, u) for q, u in found if u in COUNTS]
+    return counts[0] if counts else None
 
 
 def is_store_brand(p: Product) -> bool:

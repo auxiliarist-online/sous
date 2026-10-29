@@ -61,6 +61,16 @@ class TestWords:
             ("1 gal", (1, "gallon")),
             ("each", None),
             (None, None),
+            # TYL-143: what Harris Teeter's Asheville store had unreadable.
+            ("2 pk", (2, "each")),
+            ("1 pk", None),  # a pack of okra: how much isn't said
+            ("6-pack", (6, "each")),
+            ("1 ea", (1, "each")),
+            ("24 bottles/16.9 fl oz", (24 * 16.9, "fl_oz")),
+            ("12 cans/12 fl oz", (144, "fl_oz")),
+            # A measured size wins over a pack count, and a fraction isn't a multipack.
+            ("16 oz (2 pk)", (16, "oz")),
+            ("8 oz (1/2 lb)", (8, "oz")),
         ],
     )
     def test_sizes(self, size: str | None, parsed: tuple[float, str] | None) -> None:

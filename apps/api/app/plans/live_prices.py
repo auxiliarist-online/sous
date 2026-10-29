@@ -117,23 +117,26 @@ async def no_store(user_id: str) -> dict[str, Any]:
     return {"store_status": "not_chosen", "home_zip": zip_code}
 
 
-def _size(p: Product, info: dict[str, Any]) -> tuple[float, str, bool] | None:
-    """What one of the product holds, and whether it's our own package.
+def _size(p: Product, info: dict[str, Any]) -> tuple[float, str, float | None] | None:
+    """What one of the product holds, and how many of our own packages that is
+    (None when it isn't counted in them).
 
     Kroger sells a bunch of scallions or cilantro, or a head of garlic, as
-    "1 each". In Sous an "each" of scallion is one stalk, so a product of one
-    "each" for an ingredient bought by its own unit (a bunch, a head) is one of
-    those, priced by its weight: 1 bunch of scallions = 100 g."""
+    "1 each", and two bunches as "2 pk". In Sous an "each" of scallion is one
+    stalk, so a count of the product for an ingredient bought by its own unit
+    (a bunch, a head) is that many of those, priced by their weight: 1 bunch of
+    scallions = 100 g, 2 bunches = 200 g."""
     if p.sold_by == "WEIGHT":
-        return 1.0, "lb", False  # Kroger prices weighed items per pound
+        return 1.0, "lb", None  # Kroger prices weighed items per pound
     size = parse_size(p.size)
     if size is None:
         return None
     own = info.get("units") or {}
     unit = info.get("package_unit")
-    if size == (1.0, "each") and unit in own and info.get("package_quantity"):
-        return float(info["package_quantity"]) * float(own[unit]), "g", True
-    return size[0], size[1], False
+    if size[1] == "each" and unit in own and info.get("package_quantity"):
+        packages = size[0] * float(info["package_quantity"])
+        return packages * float(own[unit]), "g", packages
+    return size[0], size[1], None
 
 
 def _quotes(
@@ -173,8 +176,14 @@ def _package(p: Product, info: dict[str, Any]) -> dict[str, Any]:
     if p.sold_by == "WEIGHT":
         return {"sold_by": "loose", "package_quantity": None, "package_unit": None}
     size = _size(p, info)
-    if size is None or size[2]:
-        return {}  # unknown, or already our own package (a bunch)
+    if size is None:
+        return {}
+    if size[2] is not None:  # counted in our own unit: 2 bunches
+        return {
+            "sold_by": "package",
+            "package_quantity": size[2],
+            "package_unit": info["package_unit"],
+        }
     return {"sold_by": "package", "package_quantity": size[0], "package_unit": size[1]}
 
 

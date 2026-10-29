@@ -142,6 +142,55 @@ describe('Library', () => {
     expect(await screen.findByText('Black bean tacos')).toBeInTheDocument()
   })
 
+  it('says a shared link is already saved instead of offering it again (TYL-118)', async () => {
+    const tacos: SavedRecipe = {
+      id: '11111111-1111-1111-1111-111111111111',
+      title: 'Black bean tacos',
+      sourceUrl: 'https://www.example.com/tacos/',
+      sourceName: null,
+      sourceNote: null,
+      totalMinutes: null,
+      savedAt: '2026-10-20',
+      diets: [],
+      ingredients: [],
+      ingredientIds: [],
+      tags: [],
+      cuisines: [],
+      favorite: null,
+    }
+    const api = fakeApi([tacos])
+    render(
+      <Library
+        api={api}
+        shared={{ url: 'https://example.com/tacos#jump', ingredients: null }}
+      />,
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Already in your recipes: Black bean tacos',
+    )
+    expect(
+      screen.queryByRole('heading', { name: 'Save the recipe you shared?' }),
+    ).toBeNull()
+  })
+
+  it('lets a shared link be saved when the recipes can’t load, and offers a retry', async () => {
+    const api = fakeApi()
+    api.list.mockRejectedValueOnce(new Error('down'))
+    render(
+      <Library
+        api={api}
+        shared={{ url: 'https://example.com/stew', ingredients: null }}
+      />,
+    )
+    expect(
+      await screen.findByText(/We couldn't load your recipes/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save recipe' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText(/We couldn't load your recipes/)).toBeNull()
+  })
+
   it('saves a page from Save to Sous only when the user taps Save', async () => {
     const api = fakeApi()
     const page = {

@@ -157,3 +157,12 @@ describe('the library’s In season filter', () => {
     }
   })
 })
+
+describe('which seasons a zip gets (TYL-145)', () => {
+  it('says so, and says when there is no zip yet', async () => {
+    const { seasonsFrom } = await import('./seasons.ts')
+    expect(seasonsFrom('28801')).toMatch(/North Carolina/)
+    expect(seasonsFrom('43215')).toMatch(/national guide/)
+    expect(seasonsFrom(null)).toMatch(/No home zip yet/)
+  })
+})

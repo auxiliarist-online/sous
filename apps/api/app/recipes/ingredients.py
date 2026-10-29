@@ -222,8 +222,15 @@ def _number(value: Any) -> float | None:
 
 
 def _unit(value: Any) -> str | None:
-    """The parser's unit ("tablespoon", "cloves", "") as our canonical name."""
-    text = re.sub(r"^(?:small|medium|large|big)\s+", "", str(value or "").strip().lower())
+    """The parser's unit ("tablespoon", "cloves", "") as our canonical name.
+    Words that only qualify the amount go: "3 generous cups" is 3 cups,
+    "1 heaping tablespoon" 1 tablespoon (TYL-144). The line's own text keeps them."""
+    text = re.sub(
+        r"^(?:(?:small|medium|large|big|generous|generously|heaping|heaped|scant|level|"
+        r"rounded|good|full|scant)\s+)+",
+        "",
+        str(value or "").strip().lower(),
+    )
     if not text:
         return None
     if text in KNOWN_UNITS:
