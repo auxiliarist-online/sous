@@ -61,16 +61,25 @@ describe('store calls', () => {
   })
 
   it('chooses a store, and passes on the API’s reason when it can’t', async () => {
-    const send = reply(200, { store: {} })
-    await chooseStore({} as Session, '09700181', send)
+    const send = reply(200, { store: {}, home_zip_saved: false })
+    expect(await chooseStore({} as Session, '09700181', null, send)).toEqual({
+      homeZipSaved: false,
+    })
     expect(send).toHaveBeenCalledWith({}, '/stores/mine', {
       method: 'PUT',
       body: JSON.stringify({ location_id: '09700181' }),
+    })
+    // TYL-145: the zip it was found by goes too, to be the home zip.
+    await chooseStore({} as Session, '09700181', '28801', send)
+    expect(send).toHaveBeenLastCalledWith({}, '/stores/mine', {
+      method: 'PUT',
+      body: JSON.stringify({ location_id: '09700181', zip: '28801' }),
     })
     await expect(
       chooseStore(
         {} as Session,
         '1',
+        null,
         reply(404, { detail: "Kroger doesn't know that store." }),
       ),
     ).rejects.toThrow("Kroger doesn't know that store.")
@@ -121,11 +130,30 @@ describe('StorePicker', () => {
         name: 'Shop at Harris Teeter - Arctic Avenue',
       }),
     )
-    expect(api.chooseStore).toHaveBeenCalledWith('09700181')
+    expect(api.chooseStore).toHaveBeenCalledWith('09700181', '23451')
     expect(
       screen.getByText('Harris Teeter - Arctic Avenue'),
     ).toBeInTheDocument()
     expect(screen.queryByText(/No store chosen yet/)).toBeNull()
+  })
+
+  it('says when the store is saved but the zip code isn’t', async () => {
+    const api = storeApi({
+      chooseStore: vi.fn(async () => ({ homeZipSaved: false })),
+    })
+    render(<StorePicker api={api} zip={null} onZip={vi.fn()} />)
+    await userEvent.type(
+      await screen.findByLabelText('Your zip code'),
+      '23451{Enter}',
+    )
+    const list = await screen.findByRole('list', { name: 'Stores near you' })
+    await userEvent.click(within(list).getAllByRole('button')[0])
+    expect(
+      await screen.findByText(/couldn't save your zip code/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Harris Teeter - Arctic Avenue'),
+    ).toBeInTheDocument()
   })
 
   it('checks the zip code, and says when no store is near', async () => {
@@ -210,7 +238,7 @@ describe('Welcome', () => {
       }),
     )
     expect(api.keepStaples).toHaveBeenCalledWith(['salt', 'fish', 'cumin'])
-    expect(api.chooseStore).toHaveBeenCalledWith('09700181')
+    expect(api.chooseStore).toHaveBeenCalledWith('09700181', '23451')
   })
 
   it('goes back a step, and says when saving fails', async () => {

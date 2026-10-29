@@ -304,6 +304,74 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
+  it('offers a shared link once: after another tab, home is the week again (TYL-118)', async () => {
+    window.localStorage.setItem(
+      'sous:shared-url',
+      JSON.stringify({ url: 'https://example.com/tacos', ingredients: null }),
+    )
+    window.history.replaceState(null, '', '/')
+    const { auth } = fakeAuth(session)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Save the recipe you shared?',
+      }),
+    ).toBeInTheDocument()
+    const tabs = screen.getByRole('navigation', { name: 'Main' })
+    await userEvent.click(within(tabs).getByRole('link', { name: 'List' }))
+    await userEvent.click(within(tabs).getByRole('link', { name: 'Week' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('heading', { name: 'Save the recipe you shared?' }),
+      ).toBeNull(),
+    )
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('goes back to the week when Week is tapped right where a share arrived (TYL-140)', async () => {
+    window.localStorage.setItem(
+      'sous:shared-url',
+      JSON.stringify({ url: 'https://example.com/tacos', ingredients: null }),
+    )
+    window.history.replaceState(null, '', '/')
+    const { auth } = fakeAuth(session)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Save the recipe you shared?',
+      }),
+    ).toBeInTheDocument()
+    const tabs = screen.getByRole('navigation', { name: 'Main' })
+    await userEvent.click(within(tabs).getByRole('link', { name: 'Week' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('heading', { name: 'Save the recipe you shared?' }),
+      ).toBeNull(),
+    )
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('offers a link shared from another app at /share (TYL-118)', async () => {
+    window.localStorage.removeItem('sous:shared-url')
+    window.history.replaceState(
+      null,
+      '',
+      '/share?url=' + encodeURIComponent('https://example.com/stew'),
+    )
+    const { auth } = fakeAuth(session)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Save the recipe you shared?',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Recipe link')).toHaveValue(
+      'https://example.com/stew',
+    )
+    window.localStorage.removeItem('sous:shared-url')
+    window.history.replaceState(null, '', '/')
+  })
+
   it('has a tab bar for the week, recipes, list and pantry', async () => {
     window.history.replaceState(null, '', '/')
     const { auth } = fakeAuth(session)
@@ -334,6 +402,27 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Preferences' })).toHaveAttribute(
       'href',
       '/settings',
+    )
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('forgets a share dismissed by moving on before signing in', async () => {
+    window.localStorage.setItem(
+      'sous:shared-url',
+      JSON.stringify({ url: 'https://example.com/tacos', ingredients: null }),
+    )
+    window.history.replaceState(null, '', '/')
+    const { auth } = fakeAuth(null)
+    render(<App auth={auth} libraryApi={() => library()} />)
+    await screen.findByLabelText('Email')
+    // Kept through the sign-in round trip...
+    expect(window.localStorage.getItem('sous:shared-url')).not.toBeNull()
+    // ...but going elsewhere dismisses it.
+    await userEvent.click(
+      screen.getByRole('link', { name: 'What Sous keeps about you' }),
+    )
+    await waitFor(() =>
+      expect(window.localStorage.getItem('sous:shared-url')).toBeNull(),
     )
     window.history.replaceState(null, '', '/')
   })

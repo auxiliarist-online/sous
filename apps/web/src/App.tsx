@@ -18,7 +18,7 @@ import {
   setTags,
   savedRecipes,
 } from './library.ts'
-import { navigate, route, usePath } from './navigation.ts'
+import { navigate, route, useNavigated, usePath } from './navigation.ts'
 import { Browse, type BrowseApi } from './Browse.tsx'
 import { clearBrowseCache } from './browseCache.ts'
 import { clearPage, pendingPage } from './page.ts'
@@ -194,7 +194,13 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     onHandIn: (recipeId) => onHandIn(db, recipeId),
     storesNear: (zip) => storesNear(session, zip),
     myStore: () => myStore(session),
-    chooseStore: (locationId) => chooseStore(session, locationId),
+    // Choose the user's store; the home zip (the seasons' region) may have
+    // changed with it, so the seasons load again.
+    chooseStore: async (locationId, zip) => {
+      const saved = await chooseStore(session, locationId, zip)
+      seasonsLoad = null
+      return saved
+    },
     exportMyData: () => exportMyData(db),
     deleteMyAccount: () => deleteMyAccount(db),
     syncList: (week, items) => syncList(db, week, items),
@@ -225,8 +231,14 @@ interface Props {
 function App({ auth = defaultAuth, libraryApi }: Props) {
   const session = useSession(auth)
   const path = usePath()
-  const [shared] = useState(pendingShare)
-  const [sharedPage] = useState(pendingPage)
+  const [arrivedShare] = useState(pendingShare)
+  const [arrivedPage] = useState(pendingPage)
+  // A share is offered once, where it arrived: going anywhere in the app,
+  // even tapping Week while on "/", means it's been dealt with, so "/" goes
+  // back to the week (TYL-118, TYL-140).
+  const movedOn = useNavigated()
+  const shared = movedOn ? null : arrivedShare
+  const sharedPage = movedOn ? null : arrivedPage
   const [loaded, setPrefs] = useState<Preferences | null>(null)
   // Whose preferences those are: another account signing in mustn't be
   // routed by them, so they count only for the account they were loaded for.
@@ -238,11 +250,13 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
     return defaultClient ? liveApi(defaultClient, session) : null
   }, [session, libraryApi])
 
-  // Once signed in, the Library shows the shared link; don't offer it again later.
+  // Once signed in, the Library shows the shared link; don't offer it again
+  // later. Moving on dismisses it too, signed in or not; until then it's kept
+  // through the sign-in round trip.
   useEffect(() => {
-    if (session && shared) clearShare()
-    if (session && sharedPage) clearPage()
-  }, [session, shared, sharedPage])
+    if ((session || movedOn) && arrivedShare) clearShare()
+    if ((session || movedOn) && arrivedPage) clearPage()
+  }, [session, movedOn, arrivedShare, arrivedPage])
 
   const userId = session?.user.id ?? null
   // Replays and errors are filed under the account's id (never its email).
