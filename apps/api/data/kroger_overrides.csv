@@ -2,13 +2,13 @@ ingredient,product_id,note,chain
 apricots,,matcher picks dried apricots at Kroger,kroger
 beef brisket,,matcher picks corned beef brisket,
 canned lentils,,matcher picks dried red lentils at Kroger,kroger
-canned pineapple,,matcher picks fresh-cut pineapple at Kroger,kroger
+canned pineapple,,"matcher picks fresh pineapple (Kroger, Harris Teeter)",
 canned white beans,,matcher picks white chili beans at Kroger,kroger
 chicken thighs,,matcher picks shawarma-seasoned thighs at Kroger,kroger
 chicken wings,,matcher picks frozen cooked buffalo wings at Kroger,kroger
 chili oil,,matcher picks tuna in olive oil,
 coconut cream,,matcher picks sweetened cream of coconut,
-coconut yogurt,,matcher picks a dairy yogurt at Kroger,kroger
+coconut yogurt,,"matcher picks a dairy yogurt (Kroger, Harris Teeter)",
 cornmeal,,matcher picks precooked arepa flour at Kroger,kroger
 crab meat,,matcher picks imitation crab,
 feta,,matcher picks tzatziki with feta at Kroger,kroger
@@ -35,9 +35,11 @@ pistachios,,matcher picks a nut mix,
 pork,,matcher picks marinated Korean BBQ pork at Kroger,kroger
 potatoes,,matcher picks pre-sliced potatoes at Kroger,kroger
 provolone,,matcher picks a salami and provolone pack at Kroger,kroger
+puff pastry,,matcher picks a gluten-free specialty pastry at Harris Teeter,harris_teeter
 ramen noodles,,matcher picks beef-flavored ramen at Kroger,kroger
 red wine,,matcher picks a $46 cabernet at Kroger,kroger
 rose water,,matcher picks sparkling water,
+rotisserie chicken,,"matcher picks a 7 oz packaged chicken, not a whole bird, at Harris Teeter",harris_teeter
 scallions,0000000004068,Kroger says green onions; sold by the bunch,
 semolina,,matcher picks lasagne made with semolina,
 sourdough bread,,matcher picks a focaccia,
