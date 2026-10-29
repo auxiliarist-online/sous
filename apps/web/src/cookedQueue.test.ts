@@ -200,4 +200,13 @@ describe('Cooked it offline (TYL-120)', () => {
     }).cookedEntries(['e1'])
     expect(shown.e1).toMatchObject({ id: 'other', rating: 'love' })
   })
+
+  it('passes on a server error that has no code', async () => {
+    const s = server()
+    s.cookedEntries.mockRejectedValueOnce({ message: 'Bad Gateway', code: '' })
+    await expect(offlineCooked('u', s).cookedEntries(['e1'])).rejects.toEqual({
+      message: 'Bad Gateway',
+      code: '',
+    })
+  })
 })

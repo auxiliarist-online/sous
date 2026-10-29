@@ -111,12 +111,22 @@ function withPending(
   return byEntry
 }
 
+// What browsers say when a request never reaches the server: Chrome's
+// "Failed to fetch", Firefox's "NetworkError…", Safari's "Load failed".
+const NETWORK =
+  /failed to fetch|networkerror|load failed|network request failed/i
+
 /** Whether a failure means the server couldn't be reached: offline, a
- *  network TypeError, or supabase-js's network error (a message, no code). */
+ *  network TypeError, or supabase-js wrapping one (no code, and a browser's
+ *  network message). A server error without a code is passed on. */
 function unreachable(err: unknown): boolean {
   if (!navigator.onLine || err instanceof TypeError) return true
-  const code = (err as { code?: unknown } | null)?.code
-  return code === '' || code === undefined
+  const e = err as { code?: unknown; message?: unknown } | null
+  return (
+    (e?.code === '' || e?.code === undefined) &&
+    typeof e?.message === 'string' &&
+    NETWORK.test(e.message)
+  )
 }
 
 /** Send one change; for a mark, the id of the record it's saved as. */
@@ -228,6 +238,8 @@ export function offlineCooked(
     })
   }
   return {
+    // The records for these plan entries, with what's queued applied; the
+    // phone's copy alone when the server can't be reached.
     cookedEntries: async (entryIds) => {
       const pending = pendingCooked(user)
       void flushCooked(user, server)
@@ -242,6 +254,7 @@ export function offlineCooked(
         })
       return withPending(user, pending, found, entryIds)
     },
+    // Mark a meal cooked, with its id made here: sent now, or queued.
     markCooked: async (meal) => {
       const cooked: Cooked = {
         id: meal.id ?? newId(),
