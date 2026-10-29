@@ -455,10 +455,15 @@ export interface OwnPrices {
   items: Record<string, { cents: number; estimated: boolean }>
 }
 
-/** The user's own items on the list, as the API prices them. */
-export function ownItems(state: ListState): { id: string; name: string }[] {
+/** The user's own items on the list, as the API prices them: the ones bought
+ *  at the user's store, not ones they'll get at the market or a bakery. */
+export function ownItems(
+  state: ListState,
+  storeId: string | null = null,
+): { id: string; name: string }[] {
   return state.items
     .filter((i) => i.isManual && !i.removed && i.name.trim())
+    .filter((i) => i.storeId === null || i.storeId === storeId)
     .map((i) => ({ id: i.id, name: i.name.trim().slice(0, 200) }))
 }
 

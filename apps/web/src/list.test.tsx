@@ -12,6 +12,7 @@ import {
   isRefused,
   listText,
   ownItemPrices,
+  ownItems,
   pendingOps,
   plannedItems,
   queueOp,
@@ -400,6 +401,20 @@ describe('own item prices', () => {
       method: 'POST',
       body: JSON.stringify({ items }),
     })
+  })
+})
+
+describe('own items', () => {
+  it('leaves out what’s bought at another place', () => {
+    const list = state(
+      item('bread', { isManual: true }),
+      item('honey', { isManual: true, storeId: 'market' }),
+      item('milk', { isManual: true, storeId: 'store-ht' }),
+    )
+    expect(ownItems(list, 'store-ht').map((i) => i.id)).toEqual([
+      'bread',
+      'milk',
+    ])
   })
 })
 

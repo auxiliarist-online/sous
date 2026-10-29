@@ -77,22 +77,26 @@ export function pendingCooked(user: string): CookedOp[] {
 }
 
 /** A plan entry's records with the unsent changes applied, as the user last
- *  saw them. */
+ *  saw them. `pending` is the queue as it was when the records were asked
+ *  for, so a change sent meanwhile still shows. */
 function withPending(
   user: string,
+  pending: CookedOp[],
   found: Record<string, Cooked>,
   entryIds: string[],
 ): Record<string, Cooked> {
   const byEntry = { ...found }
-  for (const op of pendingCooked(user)) {
+  for (const op of pending) {
     if (op.kind === 'mark') {
       const entry = op.cooked.planEntryId
       if (entry && entryIds.includes(entry) && !byEntry[entry])
         byEntry[entry] = op.cooked
       continue
     }
+    // A record this phone made may be saved as another phone's.
+    const id = resolve(user, op.id)
     for (const [entry, c] of Object.entries(byEntry)) {
-      if (c.id !== op.id) continue
+      if (c.id !== op.id && c.id !== id) continue
       if (op.kind === 'undo') delete byEntry[entry]
       else
         byEntry[entry] = {
@@ -105,6 +109,14 @@ function withPending(
     }
   }
   return byEntry
+}
+
+/** Whether a failure means the server couldn't be reached: offline, a
+ *  network TypeError, or supabase-js's network error (a message, no code). */
+function unreachable(err: unknown): boolean {
+  if (!navigator.onLine || err instanceof TypeError) return true
+  const code = (err as { code?: unknown } | null)?.code
+  return code === '' || code === undefined
 }
 
 /** Send one change; for a mark, the id of the record it's saved as. */
@@ -217,6 +229,7 @@ export function offlineCooked(
   }
   return {
     cookedEntries: async (entryIds) => {
+      const pending = pendingCooked(user)
       void flushCooked(user, server)
       // Can't reach the server (offline, or a bad signal): what's on the
       // phone. A server that answers with an error is passed on, so an empty
@@ -224,10 +237,10 @@ export function offlineCooked(
       const found = await server
         .cookedEntries(entryIds)
         .catch((err: unknown) => {
-          if (!navigator.onLine || err instanceof TypeError) return {}
+          if (unreachable(err)) return {}
           throw err
         })
-      return withPending(user, found, entryIds)
+      return withPending(user, pending, found, entryIds)
     },
     markCooked: async (meal) => {
       const cooked: Cooked = {

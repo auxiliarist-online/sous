@@ -150,22 +150,20 @@ def settle(
                     key,
                     Choice(
                         key=key,
-                        options=[
-                            Option(
-                                o,
-                                info[o].get("name") or o,
-                                written=_written(
-                                    next(ln for ln in group if ln.get("ingredient_id") == o),
-                                    info[o].get("name") or o,
-                                ),
-                            )
-                            for o in offered
-                        ],
+                        options=[Option(o, info[o].get("name") or o) for o in offered],
                         chosen=chosen,
                         reason=reason,  # type: ignore[arg-type]
                         fits=fits,
                     ),
                 )
+                # Each recipe's own word for an option, all of them when two
+                # recipes put it differently ("whipped cream / cream").
+                for opt in choice.options:
+                    line = next(ln for ln in group if ln.get("ingredient_id") == opt.ingredient_id)
+                    word = _written(line, opt.name)
+                    words = opt.written.split(" / ") if opt.written else []
+                    if word and word not in words:
+                        opt.written = " / ".join([*words, word])
                 choice.recipes += 1
                 choice.lines.append(group[0].get("raw_text") or "")
         settled.append({**entry, "lines": lines})

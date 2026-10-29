@@ -165,6 +165,17 @@ class TestSettle:
             "milk": None,
         }
 
+    def test_a_shared_choice_keeps_each_recipes_word(self) -> None:
+        first, second = either(), either()
+        first[0]["name"] = "whipped cream"
+        second[0]["name"] = "coconut cream"
+        cost = plan_cost(inputs(entry("a", first), entry("b", second)), on=MONDAY)
+        (choice,) = cost.choices
+        assert choice.recipes == 2
+        assert {o.name: o.written for o in choice.options}["almond milk"] == (
+            "whipped cream / coconut cream"
+        )
+
     def test_an_option_on_hand_is_used(self) -> None:
         week = inputs(entry("a", either()))
         week["ingredients"] = {**INGREDIENTS, MILK: {**INGREDIENTS[MILK], "pantry": "have"}}

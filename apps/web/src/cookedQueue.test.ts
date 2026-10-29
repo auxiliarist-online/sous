@@ -167,4 +167,37 @@ describe('Cooked it offline (TYL-120)', () => {
       code: 'PGRST301',
     })
   })
+
+  it('reads the phone’s copy when supabase can’t reach the server', async () => {
+    const s = server({ value: false })
+    const api = offlineCooked('u', s, () => 'local-5')
+    await api.markCooked(MEAL)
+    // supabase-js reports a dropped connection as an error with no code.
+    s.cookedEntries.mockRejectedValueOnce({
+      message: 'TypeError: Failed to fetch',
+      code: '',
+    })
+    expect((await api.cookedEntries(['e1'])).e1.id).toBe('local-5')
+  })
+
+  it('shows a queued rating on the record another phone made', async () => {
+    const s = server({ value: false })
+    const api = offlineCooked('u', s, () => 'local-6')
+    await api.markCooked(MEAL)
+    s.saved.other = { ...MEAL, id: 'other', scale: 1, rating: null, note: null }
+    s.online.value = true
+    await flushCooked('u', s)
+    // Offline again, a rating for this phone's id is queued...
+    s.online.value = false
+    await api.rateCooked('local-6', { rating: 'love' })
+    // ...and, while it can't be sent yet, shows on the other phone's record.
+    s.online.value = true
+    const shown = await offlineCooked('u', {
+      ...s,
+      rateCooked: vi.fn(async () => {
+        throw OFFLINE
+      }),
+    }).cookedEntries(['e1'])
+    expect(shown.e1).toMatchObject({ id: 'other', rating: 'love' })
+  })
 })

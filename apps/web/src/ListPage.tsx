@@ -81,7 +81,9 @@ export function ListPage({
   const [seasons, setSeasons] = useState<Seasons | null>(null)
   // The user's own items by name: priced again when one is added or renamed,
   // and a price shown only for the names it was worked out for.
-  const ownKey = JSON.stringify(list ? ownItems(list) : [])
+  const ownKey = JSON.stringify(
+    list ? ownItems(list, cost?.storeId ?? null) : [],
+  )
   const [priced, setPriced] = useState<{ key: string; prices: OwnPrices }>()
   // Bumped when the phone is back online, to price them again.
   const [reconnected, setReconnected] = useState(0)
