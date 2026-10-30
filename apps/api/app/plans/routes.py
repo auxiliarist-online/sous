@@ -185,12 +185,17 @@ async def draft(
             tags=list(r.get("tags") or []),
             in_season=list(r.get("in_season") or []),
             out_of_season=int(r.get("out_of_season") or 0),
+            rating=r.get("rating"),
         )
         for r in found.get("candidates") or []
     ]
     locked = [str(r) for r in body.locked]
     pool.sort(key=lambda c: (c.recipe_id not in locked, not c.due, c.weeks_ago is not None))
-    pool = [c for c in pool if c.fit != "excluded"][:DRAFT_POOL]
+    # Left out: ones that break the user's rules, and ones they rated down
+    # after cooking (TYL-16), unless they kept it themselves.
+    pool = [
+        c for c in pool if c.fit != "excluded" and (c.rating != "down" or c.recipe_id in locked)
+    ][:DRAFT_POOL]
     inputs, store_id = await _inputs(user_id, week_start, [c.recipe_id for c in pool])
     # CPU work (scoring many weeks): off the event loop, so other requests
     # aren't held up. draft_week keeps all its state per call.

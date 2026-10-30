@@ -151,6 +151,19 @@ class TestDraft:
         assert picked(d) == ["fav"]
         assert d.picks[0].reason == "A favorite, last had 3 weeks ago"
 
+    def test_favors_what_the_user_loved_last_time(self) -> None:
+        # TYL-16: "loved" outweighs a modest saving; the reason says why.
+        week = inputs(
+            recipe("loved", ("chicken", 1, "each")), recipe("cheap", ("beans", 1, "each"))
+        )
+        loved = Candidate("loved", "Loved", "fits", rating="love")
+        d = draft_week(
+            week, [loved, Candidate("cheap", "Cheap", "fits")], dinners=1, locked=[], exclude=[],
+            on=MONDAY,
+        )  # fmt: skip
+        assert picked(d) == ["loved"]
+        assert d.picks[0].reason == "You loved it last time"
+
     def test_skips_what_was_just_had(self) -> None:
         week = inputs(recipe("again", ("beans", 1, "each")), recipe("new", ("rice", 1, "cup")))
         d = draft_week(
@@ -294,6 +307,7 @@ class TestRoute:
         r1 = "00000000-0000-0000-0000-0000000000a1"
         r2 = "00000000-0000-0000-0000-0000000000a2"
         bad = "00000000-0000-0000-0000-0000000000a3"
+        meh = "00000000-0000-0000-0000-0000000000a4"
         asked: dict[str, Any] = {}
 
         async def fake_pool(user_id: str, week: date) -> dict[str, Any]:
@@ -303,6 +317,8 @@ class TestRoute:
                     {"recipe_id": r1, "title": "Salsa", "fit": "fits", "cuisines": []},
                     {"recipe_id": r2, "title": "Tacos", "fit": "fits", "cuisines": []},
                     {"recipe_id": bad, "title": "Pork", "fit": "excluded", "cuisines": []},
+                    # Rated down after cooking (TYL-16): left out too.
+                    {"recipe_id": meh, "title": "Meh", "fit": "fits", "rating": "down"},
                 ],
             }
 
@@ -323,7 +339,8 @@ class TestRoute:
             app.dependency_overrides.clear()
         assert resp.status_code == 200
         body = resp.json()
-        # The excluded recipe is never priced or picked; the locked one leads.
+        # The excluded and down-rated recipes are never priced or picked; the
+        # locked one leads.
         assert asked["candidates"] == [r2, r1]
         assert [(p["title"], p["locked"]) for p in body["picks"]] == [
             ("Tacos", True),

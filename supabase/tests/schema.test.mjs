@@ -4165,3 +4165,44 @@ describe('cuisines when the source does not say (TYL-56)', () => {
     ])
   })
 })
+
+describe('past choices in recommendations (TYL-16)', () => {
+  const RAE = '00000000-0000-0000-0000-000000001601'
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1)', [RAE])
+  })
+
+  it('ranks what the user loved first and sinks what they rated down', async () => {
+    const loved = await recipe('Quokka fritters, loved (TYL-16)', [])
+    const plain = await recipe('Quokka fritters, plain (TYL-16)', [])
+    const down = await recipe('Quokka fritters, rated down (TYL-16)', [])
+    const rows = await as('authenticated', RAE, async () => {
+      await db.query(
+        `insert into cooked_meals (recipe_id, rating) values ($1, 'love'), ($2, 'down')`,
+        [loved, down],
+      )
+      return (
+        await db.query('select * from search_recipes($1, 50)', ['quokka'])
+      ).rows
+    })
+    const order = rows
+      .map((r) => r.id)
+      .filter((id) => [loved, plain, down].includes(id))
+    assert.deepEqual(order, [loved, plain, down])
+    assert.ok(rows.find((r) => r.id === loved).why.includes('you loved it'))
+    const pool = await as('service_role', null, async () => {
+      await db.query(
+        'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+        [RAE, loved],
+      )
+      return (
+        await db.query("select plan_draft_pool($1, '2026-10-26') as p", [RAE])
+      ).rows[0].p
+    })
+    assert.equal(
+      pool.candidates.find((c) => c.recipe_id === loved).rating,
+      'love',
+    )
+  })
+})
