@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { DietChips } from './Library.tsx'
 import { cleanTag, dietLabels, sourceLabel } from './library.ts'
-import { navigate } from './navigation.ts'
+import { cookPath, navigate } from './navigation.ts'
 import { CookedButton } from './Cooked.tsx'
 import { FavoriteControl } from './Favorite.tsx'
 import type { Frequency } from './variety.ts'
@@ -253,6 +253,10 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
           View full recipe on {sourceLabel(recipe.sourceName, recipe.sourceUrl)}
         </ExternalLink>
       )}
+
+      <Link to={cookPath(recipe.id)} className="button secondary">
+        Cook
+      </Link>
 
       <h3>Ingredients</h3>
       <ul className="ingredients">
