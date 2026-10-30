@@ -109,6 +109,8 @@ describe('step times', () => {
     expect(stepTimes('Roast for 1 hour')[0].seconds).toBe(3600)
     expect(stepTimes('Rest half an hour')[0].seconds).toBe(1800)
     expect(stepTimes('Add 2 cups water')).toEqual([])
+    // "a" inside a word isn't "a minute".
+    expect(stepTimes('Give the pasta an extra minute')).toEqual([])
   })
 
   it('shows a countdown as a clock', () => {

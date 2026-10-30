@@ -4075,6 +4075,16 @@ describe('cuisines when the source does not say (TYL-56)', () => {
     assert.deepEqual(await cuisinesOf(id), [['korean', 'derived']])
   })
 
+  it('derives from the title alone, and again when the title changes', async () => {
+    const id = await recipe('Pad thai for two (TYL-56)', [])
+    assert.deepEqual(await cuisinesOf(id), [['thai', 'derived']])
+    await db.query(
+      "update recipes set title = 'Weeknight jollof rice (TYL-56)' where id = $1",
+      [id],
+    )
+    assert.deepEqual(await cuisinesOf(id), [['west_african', 'derived']])
+  })
+
   it('derives nothing from a weak or tied signal', async () => {
     const id = await recipe('Plain toast (TYL-56)', [])
     assert.deepEqual(await cuisinesOf(id), [])

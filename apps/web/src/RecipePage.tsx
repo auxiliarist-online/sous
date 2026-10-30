@@ -230,12 +230,10 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         recipe={recipe}
         // Load it again: going back shows the recipe's own cuisines.
         onChange={() =>
-          api.recipe(recipe.id).then(
-            (r) => {
-              if (r) setRecipe(r)
-            },
-            () => {},
-          )
+          // A failed reload keeps the picker open with its error.
+          api.recipe(recipe.id).then((r) => {
+            if (r) setRecipe(r)
+          })
         }
       />
       {recipe.saved && (

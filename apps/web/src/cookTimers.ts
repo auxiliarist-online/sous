@@ -31,7 +31,7 @@ const UNITS: [RegExp, number][] = [
 export function stepTimes(step: string): StepTime[] {
   const out: StepTime[] = []
   const re =
-    /(\d+(?:\.\d+)?|an?|one|half an?)(?:\s*(?:-|–|to)\s*(\d+(?:\.\d+)?))?\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b/gi
+    /\b(\d+(?:\.\d+)?|an?|one|half an?)(?:\s*(?:-|–|to)\s*(\d+(?:\.\d+)?))?\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b/gi
   for (const m of step.matchAll(re)) {
     const unit = UNITS.find(([u]) => u.test(m[3]))
     if (!unit) continue
@@ -63,6 +63,7 @@ let timers: Timer[] = []
 const listeners = new Set<() => void>()
 const handles = new Map<string, ReturnType<typeof setTimeout>>()
 
+// Tell every page showing the timers that they changed.
 function emit() {
   for (const l of listeners) l()
 }
@@ -87,6 +88,8 @@ function alert(t: Timer) {
         osc.connect(ctx.destination)
         osc.start(ctx.currentTime + i * 0.5)
         osc.stop(ctx.currentTime + i * 0.5 + 0.3)
+        // Let the sound go once the last beep ends.
+        if (i === 2) osc.onended = () => void ctx.close()
       }
     }
   } catch {
@@ -165,8 +168,14 @@ export function useNow(on: boolean): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!on) return
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
+    const tick = () => setNow(Date.now())
+    // Start from the right time, not when the last timer stopped.
+    const first = setTimeout(tick, 0)
+    const t = setInterval(tick, 1000)
+    return () => {
+      clearTimeout(first)
+      clearInterval(t)
+    }
   }, [on])
   return now
 }
@@ -177,8 +186,10 @@ export function useNow(on: boolean): number {
 export function useWakeLock(): boolean {
   const [held, setHeld] = useState(false)
   useEffect(() => {
-    let lock: WakeLockSentinel | null = null
+    // Every lock acquired, in case requests overlap.
+    const locks = new Set<WakeLockSentinel>()
     let live = true
+    // Ask for a lock while the page is visible.
     const request = async () => {
       try {
         if (
@@ -186,16 +197,20 @@ export function useWakeLock(): boolean {
           document.visibilityState !== 'visible'
         )
           return
-        lock = await navigator.wakeLock.request('screen')
+        const lock = await navigator.wakeLock.request('screen')
         if (!live) {
           void lock.release()
           return
         }
+        locks.add(lock)
         setHeld(true)
-        lock.addEventListener('release', () => live && setHeld(false))
+        lock.addEventListener('release', () => {
+          locks.delete(lock)
+          if (live) setHeld(locks.size > 0)
+        })
       } catch {
         // Refused (battery saver) or not supported: the page still works.
-        if (live) setHeld(false)
+        if (live) setHeld(locks.size > 0)
       }
     }
     const again = () => {
@@ -206,7 +221,8 @@ export function useWakeLock(): boolean {
     return () => {
       live = false
       document.removeEventListener('visibilitychange', again)
-      void lock?.release()
+      for (const lock of locks) void lock.release()
+      locks.clear()
     }
   }, [])
   return held

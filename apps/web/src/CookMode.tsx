@@ -75,6 +75,7 @@ export function CookMode({
 
   const lines = ingredientLines(recipe.ingredients)
   const steps = recipe.instructions ?? []
+  // Check or uncheck one ingredient line.
   const toggle = (n: number) => {
     const next = new Set(checked)
     if (next.has(n)) next.delete(n)

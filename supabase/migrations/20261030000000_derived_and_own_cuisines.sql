@@ -291,6 +291,22 @@ create constraint trigger recipe_ingredients_derive_cuisine
   deferrable initially deferred
   for each row execute function public.recipe_ingredients_derive_cuisine();
 
+-- A new recipe, or a new title, may point to another cuisine too.
+create function public.recipes_derive_cuisine() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from public.recipes where id = new.id) then
+    perform public.refresh_derived_cuisine(new.id);
+  end if;
+  return null;
+end
+$$;
+
+create constraint trigger recipes_derive_cuisine
+  after insert or update of title on public.recipes
+  deferrable initially deferred
+  for each row execute function public.recipes_derive_cuisine();
+
 -- A publisher's cuisine replaces derived ones, whenever it's written.
 create function public.recipe_cuisines_publisher_wins() returns trigger
 language plpgsql security definer set search_path = public as $$
