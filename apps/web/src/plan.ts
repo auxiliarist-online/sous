@@ -105,6 +105,7 @@ interface EntryRow {
         }[]
       | null
     cuisines?: { cuisine: { name: string } | null }[] | null
+    my_cuisines?: { cuisine: { name: string } | null }[] | null
     saved?: { tags: string[] | null }[] | null
   } | null
 }
@@ -118,7 +119,7 @@ export async function loadPlan(
   const { data, error } = await db
     .from('meal_plans')
     .select(
-      'entries:meal_plan_entries(id, scale, planned_for, position, meal, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name)), saved:user_saved_recipes(tags)))',
+      'entries:meal_plan_entries(id, scale, planned_for, position, meal, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name)), my_cuisines:user_recipe_cuisines(cuisine:cuisines(name)), saved:user_saved_recipes(tags)))',
     )
     .eq('week_start', weekStart)
     .maybeSingle()
@@ -141,9 +142,11 @@ export async function loadPlan(
           .filter((l) => l.option_no === 1 && !l.is_optional && l.ingredient)
           .map((l) => l.ingredient!),
       ),
-      cuisines: (e.recipe!.cuisines ?? []).flatMap((c) =>
-        c.cuisine ? [c.cuisine.name] : [],
-      ),
+      // The user's own correction wins (TYL-56).
+      cuisines: (e.recipe!.my_cuisines?.length
+        ? e.recipe!.my_cuisines
+        : (e.recipe!.cuisines ?? [])
+      ).flatMap((c) => (c.cuisine ? [c.cuisine.name] : [])),
       // Only the user's own saved row is readable (row-level security).
       styles: cookingStyles(
         e.recipe!.title,

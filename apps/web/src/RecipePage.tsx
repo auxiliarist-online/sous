@@ -10,7 +10,7 @@ import { shortDate, type CookedApi, type CookedSummary } from './cooked.ts'
 import { isoDate, weekOf, type Fit, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
 import { ExternalLink } from './ExternalLink.tsx'
-import { ingredientLines, type RecipeDetail } from './sous.ts'
+import { ingredientLines, type Option, type RecipeDetail } from './sous.ts'
 
 export interface RecipePageApi extends CookedApi {
   /** How often the user cooked it, when last, and their latest note (TYL-68). */
@@ -31,6 +31,10 @@ export interface RecipePageApi extends CookedApi {
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
   /** Replace the user's tags on a recipe they've saved (TYL-81). */
   setTags(recipeId: string, tags: string[]): Promise<void>
+  /** Every cuisine, to correct a recipe's (TYL-56). */
+  options(): Promise<{ cuisines: Option[] }>
+  /** The user's own cuisines for a recipe; none goes back to the recipe's. */
+  setMyCuisines(recipeId: string, slugs: string[]): Promise<void>
 }
 
 /** "In season: tomatoes, basil" when the recipe's seasonal produce is mostly
@@ -221,6 +225,19 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         />
       </p>
       <DietChips diets={recipe.diets} />
+      <CuisineLine
+        api={api}
+        recipe={recipe}
+        // Load it again: going back shows the recipe's own cuisines.
+        onChange={() =>
+          api.recipe(recipe.id).then(
+            (r) => {
+              if (r) setRecipe(r)
+            },
+            () => {},
+          )
+        }
+      />
       {recipe.saved && (
         <TagEditor
           tags={recipe.tags}
@@ -359,6 +376,134 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         )}
       </div>
     </article>
+  )
+}
+
+/** The recipe's cuisine, and a way to correct it for this user only
+ *  (TYL-56): pick any number, or go back to the recipe's own. */
+function CuisineLine({
+  api,
+  recipe,
+  onChange,
+}: {
+  api: RecipePageApi
+  recipe: RecipeDetail
+  onChange: () => Promise<void> | void
+}) {
+  const [all, setAll] = useState<Option[] | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [picked, setPicked] = useState<string[]>(recipe.cuisines)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    api.options().then(
+      (o) => live && setAll(o.cuisines),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
+
+  const name = (slug: string) => all?.find((c) => c.slug === slug)?.name ?? slug
+
+  // Save the user's own cuisines (none: back to the recipe's).
+  async function save(slugs: string[]) {
+    setBusy(true)
+    setFailed(false)
+    try {
+      await api.setMyCuisines(recipe.id, slugs)
+      await onChange()
+      setEditing(false)
+    } catch {
+      setFailed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!all) return null
+  if (!editing) {
+    return (
+      <p className="small cuisine-line">
+        <span className="muted">Cuisine:</span>{' '}
+        {recipe.cuisines.length
+          ? recipe.cuisines.map(name).join(', ')
+          : 'not known'}
+        {recipe.cuisinesCorrected && (
+          <span className="muted"> (your choice)</span>
+        )}{' '}
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            setPicked(recipe.cuisines)
+            setEditing(true)
+          }}
+        >
+          {recipe.cuisines.length ? 'Change' : 'Set'}
+        </button>
+      </p>
+    )
+  }
+  return (
+    <fieldset className="cuisine-picker">
+      <legend className="small">
+        Cuisine, for you only (it shapes what Sous suggests)
+      </legend>
+      <div className="chips">
+        {all.map((c) => (
+          <button
+            key={c.slug}
+            type="button"
+            className="chip"
+            aria-pressed={picked.includes(c.slug)}
+            onClick={() =>
+              setPicked(
+                picked.includes(c.slug)
+                  ? picked.filter((p) => p !== c.slug)
+                  : [...picked, c.slug],
+              )
+            }
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+      <div className="actions">
+        <button
+          type="button"
+          disabled={busy || !picked.length}
+          onClick={() => void save(picked)}
+        >
+          Save
+        </button>
+        {recipe.cuisinesCorrected && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => void save([])}
+          >
+            Use the recipe's
+          </button>
+        )}
+        <button
+          type="button"
+          className="link"
+          onClick={() => setEditing(false)}
+        >
+          Cancel
+        </button>
+      </div>
+      {failed && (
+        <p className="error" role="alert">
+          We couldn't save that. Try again.
+        </p>
+      )}
+    </fieldset>
   )
 }
 
