@@ -831,6 +831,43 @@ describe('choices (TYL-98)', () => {
     ])
   })
 
+  it('names an option as the recipe does, with what’s bought (TYL-141)', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            budget_cents: null,
+            total_cents: 0,
+            estimated: false,
+            unpriced: 0,
+            items: [],
+            choices: [
+              {
+                key: 'cream,ice',
+                options: [
+                  { ingredient_id: 'ice', name: 'ice cream', cents: 499 },
+                  {
+                    ingredient_id: 'cream',
+                    name: 'heavy cream',
+                    cents: 0,
+                    written: 'whipped cream',
+                  },
+                ],
+                chosen: 'cream',
+                reason: 'needed',
+                recipes: 1,
+              },
+            ],
+          }),
+        ),
+    )
+    const cost = await planCost({} as Session, WEEK, send)
+    expect(cost.choices[0].options.map((o) => o.name)).toEqual([
+      'ice cream',
+      'whipped cream (buy heavy cream)',
+    ])
+  })
+
   it('saves a choice in one merge, in the database', async () => {
     const rpc = vi.fn(async () => ({ data: null, error: null }))
     const db = { rpc } as unknown as SupabaseClient

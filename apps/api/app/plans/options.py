@@ -28,6 +28,17 @@ class Option:
     name: str
     # What buying this option adds to the week, against not buying either.
     cents: int | None = None
+    # The recipe's word for it, when that names something other than what's
+    # bought: "whipped cream", bought as heavy cream (TYL-141).
+    written: str | None = None
+
+
+def _written(line: dict[str, Any], bought: str) -> str | None:
+    """The line's own name for an option, when it isn't just a kind of what's
+    bought ("vanilla ice cream" is ice cream; "whipped cream" isn't heavy
+    cream)."""
+    name = (line.get("name") or "").strip().lower()
+    return name if name and bought.lower() not in name else None
 
 
 @dataclass
@@ -145,6 +156,14 @@ def settle(
                         fits=fits,
                     ),
                 )
+                # Each recipe's own word for an option, all of them when two
+                # recipes put it differently ("whipped cream / cream").
+                for opt in choice.options:
+                    line = next(ln for ln in group if ln.get("ingredient_id") == opt.ingredient_id)
+                    word = _written(line, opt.name)
+                    words = opt.written.split(" / ") if opt.written else []
+                    if word and word not in words:
+                        opt.written = " / ".join([*words, word])
                 choice.recipes += 1
                 choice.lines.append(group[0].get("raw_text") or "")
         settled.append({**entry, "lines": lines})

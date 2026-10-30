@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from './router.tsx'
 import { browseCache as cache, type BrowseResults } from './browseCache.ts'
 import { PAGE_SIZE, type CatalogRecipe } from './sous.ts'
+import { QuickAdd, type QuickAddApi } from './QuickAdd.tsx'
 
-export interface BrowseApi {
+export interface BrowseApi extends QuickAddApi {
   searchCatalog(query: string, offset?: number): Promise<CatalogRecipe[]>
 }
 
@@ -146,6 +147,7 @@ export function Browse({ api }: { api: BrowseApi }) {
                   .filter(Boolean)
                   .join(' · ')}
               </span>
+              <QuickAdd api={api} recipeId={r.id} title={r.title} />
             </li>
           ))}
         </ul>

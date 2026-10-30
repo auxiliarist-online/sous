@@ -1,7 +1,8 @@
 // The week's shopping list (TYL-18): filled from the plan, edited freely, and
 // usable offline in the store. Changes apply at once, are kept on the phone,
 // and are sent in order when there's a connection.
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Session, SupabaseClient } from '@supabase/supabase-js'
+import { apiFetch } from './auth.ts'
 import { buyText, type PlanCost } from './plan.ts'
 
 export interface ListItem {
@@ -249,7 +250,7 @@ function store(): Storage | null {
 }
 
 /** A JSON value kept on the phone, or null. */
-function read<T>(key: string): T | null {
+export function read<T>(key: string): T | null {
   try {
     const raw = store()?.getItem(key)
     return raw ? (JSON.parse(raw) as T) : null
@@ -259,7 +260,7 @@ function read<T>(key: string): T | null {
 }
 
 /** Keep a JSON value on the phone, if storage allows. */
-function write(key: string, value: unknown): void {
+export function write(key: string, value: unknown): void {
   try {
     store()?.setItem(key, JSON.stringify(value))
   } catch {
@@ -445,4 +446,65 @@ export function plannedItems(cost: PlanCost): PlannedItem[] {
         ]
       : [],
   )
+}
+
+/** Prices for the items the user added to the list themselves (TYL-146). */
+export interface OwnPrices {
+  totalCents: number
+  /** By list item id; only the items that could be priced. */
+  items: Record<string, { cents: number; estimated: boolean }>
+}
+
+/** The user's own items on the list, as the API prices them: the ones bought
+ *  at the user's store, not ones they'll get at the market or a bakery. */
+export function ownItems(
+  state: ListState,
+  storeId: string | null = null,
+): { id: string; name: string }[] {
+  return state.items
+    .filter((i) => i.isManual && !i.removed && i.name.trim())
+    .filter((i) => i.storeId === null || i.storeId === storeId)
+    .map((i) => ({ id: i.id, name: i.name.trim().slice(0, 200) }))
+}
+
+const OWN_BATCH = 100
+
+/** Match each of the user's own items to an ingredient and price one of it,
+ *  the store's live price first (TYL-146). Names are matched each time, so
+ *  an edited name is matched again. */
+export async function ownItemPrices(
+  session: Session,
+  weekStart: string,
+  items: { id: string; name: string }[],
+  send: typeof apiFetch = apiFetch,
+): Promise<OwnPrices> {
+  // The API takes up to 100 a request.
+  const batches: { id: string; name: string }[][] = []
+  for (let i = 0; i < items.length; i += OWN_BATCH)
+    batches.push(items.slice(i, i + OWN_BATCH))
+  const bodies = await Promise.all(
+    batches.map(async (batch) => {
+      const resp = await send(session, `/plans/${weekStart}/own-items`, {
+        method: 'POST',
+        body: JSON.stringify({ items: batch }),
+      })
+      if (!resp.ok) throw new Error(`own item prices: ${resp.status}`)
+      return (await resp.json()) as {
+        total_cents: number
+        items: { id: string; cents: number | null; estimated: boolean }[]
+      }
+    }),
+  )
+  return {
+    totalCents: bodies.reduce((sum, b) => sum + b.total_cents, 0),
+    items: Object.fromEntries(
+      bodies.flatMap((b) =>
+        b.items.flatMap((i) =>
+          i.cents === null
+            ? []
+            : [[i.id, { cents: i.cents, estimated: i.estimated }]],
+        ),
+      ),
+    ),
+  }
 }

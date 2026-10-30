@@ -9,6 +9,7 @@ import {
 import { Home, type HomeApi } from './Home.tsx'
 import { Library, type LibraryApi } from './Library.tsx'
 import { ListPage, type ListApi } from './ListPage.tsx'
+import { offlineCooked } from './cookedQueue.ts'
 import { PantryPage, type PantryApi } from './PantryPage.tsx'
 import {
   importPage,
@@ -48,6 +49,7 @@ import {
   places,
   sendOp,
   syncList,
+  ownItemPrices,
 } from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { History, type HistoryApi } from './History.tsx'
@@ -161,10 +163,13 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
       setMyPrice(db, id, store, cents, basis),
     clearMyPrice: (id, store) => clearMyPrice(db, id, store),
     saveChoice: (week, key, id) => saveChoice(db, week, key, id),
-    cookedEntries: (ids) => cookedEntries(db, ids),
-    markCooked: (meal) => markCooked(db, meal),
-    rateCooked: (id, patch) => rateCooked(db, id, patch),
-    undoCooked: (id) => undoCooked(db, id),
+    // Cooked it, ratings and notes work offline (TYL-120).
+    ...offlineCooked(userId, {
+      cookedEntries: (ids) => cookedEntries(db, ids),
+      markCooked: (meal) => markCooked(db, meal),
+      rateCooked: (id, patch) => rateCooked(db, id, patch),
+      undoCooked: (id) => undoCooked(db, id),
+    }),
     cookedSummary: (id) => cookedSummary(db, id),
     cookingHistory: () => cookingHistory(db),
     addFavorite: (id) => addFavorite(db, id),
@@ -206,6 +211,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     syncList: (week, items) => syncList(db, week, items),
     loadList: (week) => loadList(db, week),
     sendListOp: (op) => sendOp(db, op),
+    ownItemPrices: (week, items) => ownItemPrices(session, week, items),
     places: () => places(db, userId),
     addPlace: (name) => addPlace(db, userId, name),
     pantry: () => loadPantry(db),

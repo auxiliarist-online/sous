@@ -6,11 +6,13 @@ import {
   cacheList,
   flushOps,
   listText,
+  ownItems,
   pendingOps,
   queueOp,
   type ListItem,
   type ListOp,
   type ListState,
+  type OwnPrices,
   plannedItems,
   type PlannedItem,
 } from './list.ts'
@@ -39,6 +41,11 @@ export interface ListApi {
   addPlace(name: string): Promise<Place>
   /** What's in season where the user lives, to mark it (TYL-70). */
   seasons(): Promise<Seasons>
+  /** Prices for the items the user added themselves (TYL-146). */
+  ownItemPrices(
+    weekStart: string,
+    items: { id: string; name: string }[],
+  ): Promise<OwnPrices>
 }
 
 /** A list with any changes still waiting to be sent applied, as the user
@@ -72,6 +79,33 @@ export function ListPage({
   const [showRemoved, setShowRemoved] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [seasons, setSeasons] = useState<Seasons | null>(null)
+  // The user's own items by name: priced again when one is added or renamed,
+  // and a price shown only for the names it was worked out for.
+  const ownKey = JSON.stringify(
+    list ? ownItems(list, cost?.storeId ?? null) : [],
+  )
+  const [priced, setPriced] = useState<{ key: string; prices: OwnPrices }>()
+  // Bumped when the phone is back online, to price them again.
+  const [reconnected, setReconnected] = useState(0)
+  useEffect(() => {
+    const back = () => setReconnected((n) => n + 1)
+    window.addEventListener('online', back)
+    return () => window.removeEventListener('online', back)
+  }, [])
+  const own = priced?.key === ownKey ? priced.prices : null
+  useEffect(() => {
+    let live = true
+    const items = JSON.parse(ownKey) as { id: string; name: string }[]
+    // The list works without them: own items just go unpriced.
+    if (items.length)
+      api.ownItemPrices(week, items).then(
+        (prices) => live && setPriced({ key: ownKey, prices }),
+        () => {},
+      )
+    return () => {
+      live = false
+    }
+  }, [api, week, ownKey, reconnected])
   // Marks only; the list works without them.
   useEffect(() => {
     let live = true
@@ -177,6 +211,7 @@ export function ListPage({
     const key = (i.storeId && placeName.get(i.storeId)) || aisleName(i.aisle)
     groups.set(key, [...(groups.get(key) ?? []), i])
   }
+  const ownEstimated = Object.values(own?.items ?? {}).some((p) => p.estimated)
   const title = `Shopping list · week of ${weekLabel(week)}`
   // The month the week mostly falls in, for what's in season (TYL-70).
   const month = Number(addDays(week, 3).slice(5, 7))
@@ -198,7 +233,7 @@ export function ListPage({
 
   // One item: its checkbox, amount, price, and the editor when open.
   const row = (i: ListItem) => {
-    const price = i.ingredientId ? prices.get(i.ingredientId) : undefined
+    const price = i.ingredientId ? prices.get(i.ingredientId) : own?.items[i.id]
     return (
       <li key={i.id} className={i.checked ? 'list-item checked' : 'list-item'}>
         <label className="list-check">
@@ -276,10 +311,12 @@ export function ListPage({
         {cost && (
           <span className="muted">
             {' '}
-            · {cost.estimated ? '~' : ''}
-            {dollars(cost.totalCents)}
+            · {cost.estimated || ownEstimated ? '~' : ''}
+            {dollars(cost.totalCents + (own?.totalCents ?? 0))}
             {cost.budgetCents !== null &&
               ` of your ${dollars(cost.budgetCents)} budget`}
+            {!!own?.totalCents &&
+              `, with ${dollars(own.totalCents)} for items you added`}
           </span>
         )}
       </p>

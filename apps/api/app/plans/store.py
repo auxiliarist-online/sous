@@ -38,13 +38,28 @@ async def draft_pool(user_id: str, week_start: date) -> dict[str, Any]:
 
 
 async def cost_inputs(
-    user_id: str, week_start: date, candidates: list[str] | None = None
+    user_id: str,
+    week_start: date,
+    candidates: list[str] | None = None,
+    extra: list[str] | None = None,
 ) -> dict[str, Any]:
     """The week's plan, ingredients and prices for pricing it. `candidates`
     are recipes the user might add (TYL-30): they come back as entries marked
-    "candidate", at full size."""
+    "candidate", at full size. `extra` are ingredients to bring along with
+    their prices (the user's own list items, TYL-146)."""
     body: dict[str, Any] = {"p_user": user_id, "p_week": week_start.isoformat()}
     if candidates:
         body["p_candidates"] = candidates
+    if extra:
+        body["p_extra"] = extra
     result: dict[str, Any] = await _rpc("plan_cost_inputs", body)
     return result
+
+
+async def match_ingredient(candidates: list[str]) -> str | None:
+    """The first of `candidates` that names an ingredient or an alias, as
+    recipe lines are matched; None when none does."""
+    if not candidates:
+        return None
+    found = await _rpc("match_ingredient", {"p_candidates": candidates})
+    return str(found) if found else None

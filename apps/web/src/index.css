@@ -199,8 +199,30 @@ a.button {
   grid-column: 1;
 }
 
-.recipes .remove {
+/* "+ Plan" on a recipe in a list (TYL-119), before the remove button. */
+.recipes .quick-add {
   grid-column: 2;
+  grid-row: 1 / span 3;
+  min-height: 44px;
+  padding: 0 0.75rem;
+}
+
+.recipes span.quick-add {
+  display: flex;
+  align-items: center;
+  color: var(--color-accent);
+}
+
+.recipes .quick-add.failed {
+  color: #b3261e;
+}
+
+.recipes:has(.remove) li {
+  grid-template-columns: 1fr auto auto;
+}
+
+.recipes .remove {
+  grid-column: 3;
   grid-row: 1 / span 3;
   min-width: 44px;
   min-height: 44px;

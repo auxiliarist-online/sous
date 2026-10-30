@@ -11,6 +11,8 @@ import {
   flushOps,
   isRefused,
   listText,
+  ownItemPrices,
+  ownItems,
   pendingOps,
   plannedItems,
   queueOp,
@@ -18,6 +20,7 @@ import {
   syncList,
   type ListItem,
   type ListState,
+  type OwnPrices,
 } from './list.ts'
 import { ListPage, type ListApi } from './ListPage.tsx'
 import type { BuyItem, PlanCost, PlanEntry } from './plan.ts'
@@ -361,9 +364,85 @@ function listApi(
     places: vi.fn(async () => [{ id: 'market', name: 'River Arts market' }]),
     addPlace: vi.fn(async (name: string) => ({ id: 'new-place', name })),
     seasons: vi.fn(async () => new Map()),
+    ownItemPrices: vi.fn(async () => ({ totalCents: 0, items: {} })),
     ...over,
   } as ListApi & Record<string, ReturnType<typeof vi.fn>>
 }
+
+describe('own item prices', () => {
+  it('asks the API only when there are items, and keeps the priced ones', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            total_cents: 360,
+            items: [
+              { id: 'a', cents: 360, estimated: true },
+              { id: 'b', cents: null, estimated: false },
+            ],
+          }),
+        ),
+    )
+    const session = {} as never
+    expect(await ownItemPrices(session, WEEK, [], send)).toEqual({
+      totalCents: 0,
+      items: {},
+    })
+    expect(send).not.toHaveBeenCalled()
+    const items = [
+      { id: 'a', name: 'eggs' },
+      { id: 'b', name: 'veggie dogs' },
+    ]
+    expect(await ownItemPrices(session, WEEK, items, send)).toEqual({
+      totalCents: 360,
+      items: { a: { cents: 360, estimated: true } },
+    })
+    expect(send).toHaveBeenCalledWith(session, `/plans/${WEEK}/own-items`, {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    })
+  })
+})
+
+describe('own items', () => {
+  it('leaves out what’s bought at another place', () => {
+    const list = state(
+      item('bread', { isManual: true }),
+      item('honey', { isManual: true, storeId: 'market' }),
+      item('milk', { isManual: true, storeId: 'store-ht' }),
+    )
+    expect(ownItems(list, 'store-ht').map((i) => i.id)).toEqual([
+      'bread',
+      'milk',
+    ])
+  })
+})
+
+describe('own item prices in batches', () => {
+  it('sends more than 100 items in batches and adds them up', async () => {
+    const send = vi.fn(
+      async (_s: unknown, _path: string, init?: RequestInit) => {
+        const { items } = JSON.parse(String(init?.body)) as {
+          items: { id: string }[]
+        }
+        return new Response(
+          JSON.stringify({
+            total_cents: items.length,
+            items: items.map((i) => ({ id: i.id, cents: 1, estimated: false })),
+          }),
+        )
+      },
+    )
+    const items = Array.from({ length: 150 }, (_, n) => ({
+      id: `i${n}`,
+      name: 'eggs',
+    }))
+    const prices = await ownItemPrices({} as never, WEEK, items, send)
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(prices.totalCents).toBe(150)
+    expect(Object.keys(prices.items)).toHaveLength(150)
+  })
+})
 
 describe('ListPage', () => {
   it('marks what’s in season that week (TYL-70)', async () => {
@@ -523,6 +602,83 @@ describe('ListPage', () => {
     expect(
       screen.getByRole('list', { name: 'Dairy & eggs' }),
     ).toBeInTheDocument()
+  })
+
+  it('prices the items you add yourself, and again when renamed (TYL-146)', async () => {
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000002',
+    )
+    const id = '00000000-0000-4000-8000-000000000002'
+    const api = listApi({
+      ownItemPrices: vi.fn(
+        async (
+          _week: string,
+          items: { id: string; name: string }[],
+        ): Promise<OwnPrices> =>
+          items[0].name === 'wheat bread'
+            ? {
+                totalCents: 349,
+                items: { [id]: { cents: 349, estimated: false } },
+              }
+            : { totalCents: 0, items: {} },
+      ),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    await screen.findByRole('list', { name: 'Dairy & eggs' })
+    await userEvent.type(screen.getByLabelText('Add an item'), 'wheat bread')
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }))
+    expect(await screen.findByText('$3.49')).toBeInTheDocument()
+    expect(api.ownItemPrices).toHaveBeenCalledWith(WEEK, [
+      { id, name: 'wheat bread' },
+    ])
+    expect(
+      screen.getByText(
+        /~\$51\.49 of your \$60\.00 budget, with \$3\.49 for items you added/,
+      ),
+    ).toBeInTheDocument()
+
+    // Renamed to something Sous doesn't know: matched again, and unpriced.
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Edit wheat bread' }),
+    )
+    const name = screen.getByLabelText('Item')
+    await userEvent.clear(name)
+    await userEvent.type(name, 'veggie dogs')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.ownItemPrices).toHaveBeenLastCalledWith(WEEK, [
+        { id, name: 'veggie dogs' },
+      ]),
+    )
+    await waitFor(() => expect(screen.queryByText('$3.49')).toBeNull())
+    expect(
+      screen.getByText(/~\$48\.00 of your \$60\.00 budget$/),
+    ).toBeInTheDocument()
+  })
+
+  it('prices your own items again when back online', async () => {
+    const api = listApi({
+      loadList: vi.fn(async () =>
+        state(
+          item('bread', {
+            ingredientId: null,
+            isManual: true,
+            position: 10_000,
+          }),
+        ),
+      ),
+      ownItemPrices: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({
+          totalCents: 349,
+          items: { bread: { cents: 349, estimated: false } },
+        }),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    await waitFor(() => expect(api.ownItemPrices).toHaveBeenCalledTimes(1))
+    window.dispatchEvent(new Event('online'))
+    expect(await screen.findByText('$3.49')).toBeInTheDocument()
   })
 
   it('adds a place of the user’s own to buy something at', async () => {
