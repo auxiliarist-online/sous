@@ -14,6 +14,7 @@ import {
   type ManualRecipeInput,
   type Preferences,
   type RecipeDetail,
+  ownCuisines,
 } from './sous.ts'
 import { fakeCookedApi } from './cookedFake.ts'
 import { fakePantryApi } from './pantryFake.ts'
@@ -69,6 +70,7 @@ const BURRITOS: RecipeDetail = {
     },
   ],
   cuisines: ['mexican'],
+  cuisinesCorrected: false,
 }
 
 const SOUP: RecipeDetail = {
@@ -118,7 +120,41 @@ describe('RecipePage', () => {
       Object.fromEntries(ids.map((id) => [id, fit])),
     ),
     setTags: vi.fn(async (_id: string, _tags: string[]) => {}),
+    options: vi.fn(async () => ({
+      cuisines: [
+        { slug: 'indian', name: 'Indian' },
+        { slug: 'thai', name: 'Thai' },
+      ],
+    })),
+    setMyCuisines: vi.fn(async (_id: string, _slugs: string[]) => {}),
     ...fakeCookedApi(),
+  })
+
+  it('corrects the cuisine for the user, and goes back to the recipe’s (TYL-56)', async () => {
+    const a = api({ ...BURRITOS, cuisines: ['thai'] })
+    render(<RecipePage id={BURRITOS.id} api={a} />)
+    expect(await screen.findByText('Thai')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Change' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Thai' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Indian' }))
+    a.recipe.mockResolvedValueOnce({
+      ...BURRITOS,
+      cuisines: ['indian'],
+      cuisinesCorrected: true,
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(a.setMyCuisines).toHaveBeenCalledWith(BURRITOS.id, ['indian'])
+    expect(await screen.findByText('(your choice)')).toBeInTheDocument()
+    expect(screen.getByText('Indian')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Change' }))
+    a.recipe.mockResolvedValueOnce({ ...BURRITOS, cuisines: ['thai'] })
+    await userEvent.click(
+      screen.getByRole('button', { name: "Use the recipe's" }),
+    )
+    expect(a.setMyCuisines).toHaveBeenLastCalledWith(BURRITOS.id, [])
+    expect(await screen.findByText('Thai')).toBeInTheDocument()
+    expect(screen.queryByText('(your choice)')).toBeNull()
   })
 
   it('says what’s in season in the recipe (TYL-70)', async () => {
@@ -760,5 +796,23 @@ describe('helpers', () => {
     expect(filterRecipes(all, { ...NO_FILTER, maxMinutes: 30 })).toEqual([
       tacos,
     ])
+  })
+})
+
+describe('ownCuisines (TYL-56)', () => {
+  it('uses the user’s correction when there is one', () => {
+    const shared = [{ cuisine_slug: 'thai' }]
+    expect(ownCuisines(shared, [{ cuisine_slug: 'indian' }])).toEqual({
+      cuisines: ['indian'],
+      cuisinesCorrected: true,
+    })
+    expect(ownCuisines(shared, [])).toEqual({
+      cuisines: ['thai'],
+      cuisinesCorrected: false,
+    })
+    expect(ownCuisines(null, null)).toEqual({
+      cuisines: [],
+      cuisinesCorrected: false,
+    })
   })
 })

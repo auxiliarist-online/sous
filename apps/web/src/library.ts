@@ -1,6 +1,7 @@
 // Importing recipes and reading the user's library (TYL-35, ADR 0002).
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { apiFetch } from './auth.ts'
+import { ownCuisines } from './sous.ts'
 import type { Frequency } from './variety.ts'
 
 export interface ImportResult {
@@ -136,6 +137,7 @@ interface SavedRow {
         }[]
       | null
     cuisines?: { cuisine_slug: string }[] | null
+    my_cuisines?: { cuisine_slug: string }[] | null
     favorite?: { frequency: Frequency }[] | null
   } | null
 }
@@ -146,7 +148,7 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
   const { data, error } = await db
     .from('user_saved_recipes')
     .select(
-      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name, ingredient_id, option_no), cuisines:recipe_cuisines(cuisine_slug), favorite:user_favorite_recipes(frequency))',
+      'created_at, tags, recipe:recipes(id, title, source_url, source_note, total_minutes, source:recipe_sources(name), diets:recipe_diets(diet_slug, source, checks), ingredients:recipe_ingredients(name, ingredient_id, option_no), cuisines:recipe_cuisines(cuisine_slug), my_cuisines:user_recipe_cuisines(cuisine_slug), favorite:user_favorite_recipes(frequency))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -172,7 +174,9 @@ export async function savedRecipes(db: SupabaseClient): Promise<SavedRecipe[]> {
         i.ingredient_id && (i.option_no ?? 1) === 1 ? [i.ingredient_id] : [],
       ),
       tags: row.tags ?? [],
-      cuisines: (row.recipe!.cuisines ?? []).map((c) => c.cuisine_slug),
+      // The user's own correction wins (TYL-56).
+      cuisines: ownCuisines(row.recipe!.cuisines, row.recipe!.my_cuisines)
+        .cuisines,
       // Row-level security shows only the user's own.
       favorite: row.recipe!.favorite?.[0]?.frequency ?? null,
     }))

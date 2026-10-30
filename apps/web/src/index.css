@@ -939,6 +939,83 @@ button.danger:not(.link) {
   background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
 }
 
+/* Cook mode (TYL-75): big type and big targets, for a phone on the counter. */
+.cook-mode {
+  font-size: 1.25rem;
+}
+
+.cook-mode h2 {
+  font-size: 1.75rem;
+}
+
+.cook-ingredients {
+  list-style: none;
+  padding: 0;
+}
+
+.cook-ingredients label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 56px;
+}
+
+.cook-ingredients input[type='checkbox'] {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+}
+
+.cook-ingredients input:checked + span {
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+.cook-step {
+  font-size: 1.6rem;
+  line-height: 1.45;
+}
+
+.cook-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.cook-nav button,
+.cook-next {
+  min-height: 56px;
+  flex: 1;
+  font-size: 1.15rem;
+}
+
+.cook-timer-start {
+  margin: 0.25rem 0.5rem 0.25rem 0;
+  min-height: 48px;
+}
+
+/* Running timers, above the tab bar on every page. */
+.timer-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  z-index: 11;
+  padding: 0.25rem 1rem;
+  background: var(--color-bg);
+  border-top: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.timer-bar .timer {
+  margin: 0.25rem 0;
+}
+
+.timer-bar .timer.done {
+  color: var(--color-secondary);
+  font-weight: 600;
+}
+
 /* Printing the list: just the items, with boxes to tick. */
 @media print {
   .tab-bar,
