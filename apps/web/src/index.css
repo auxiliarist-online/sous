@@ -939,6 +939,18 @@ button.danger:not(.link) {
   background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
 }
 
+/* Last week's uncooked meals, offered for this week (TYL-147). */
+.carry-over {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.carry-over h3 {
+  margin: 0 0 0.25rem;
+}
+
 /* Printing the list: just the items, with boxes to tick. */
 @media print {
   .tab-bar,

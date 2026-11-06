@@ -23,7 +23,13 @@ import {
   type OwnPrices,
 } from './list.ts'
 import { ListPage, type ListApi } from './ListPage.tsx'
-import type { BuyItem, PlanCost, PlanEntry } from './plan.ts'
+import {
+  addDays,
+  weekOf,
+  type BuyItem,
+  type PlanCost,
+  type PlanEntry,
+} from './plan.ts'
 import { fakeCookedApi } from './cookedFake.ts'
 
 const WEEK = '2026-10-12'
@@ -765,11 +771,65 @@ const entry = (id: string, day: string | null, title: string): PlanEntry => ({
 
 describe('Home', () => {
   const now = new Date('2026-10-14T17:00:00')
-  const homeApi = (entries: PlanEntry[]): HomeApi => ({
-    plan: vi.fn(async () => entries),
+  const homeApi = (
+    entries: PlanEntry[],
+    lastWeek: PlanEntry[] = [],
+  ): HomeApi & { moveEntry: ReturnType<typeof vi.fn> } => ({
+    plan: vi.fn(async (w: string) =>
+      w === weekOf(now)
+        ? entries
+        : w === addDays(weekOf(now), -7)
+          ? lastWeek
+          : [],
+    ),
     planCost: vi.fn(async () => COST),
     list: vi.fn(async () => []),
+    moveEntry: vi.fn(async () => {}),
     ...fakeCookedApi(),
+  })
+
+  it('offers last week’s uncooked meals for this week (TYL-147)', async () => {
+    localStorage.clear()
+    const api = homeApi(
+      [],
+      [entry('a', null, 'Bean soup'), entry('b', null, 'Boxty')],
+    )
+    render(<Home api={api} now={now} />)
+    expect(
+      await screen.findByText(
+        /2 meals from last week weren't cooked: Bean soup, Boxty/,
+      ),
+    ).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Move them to this week' }),
+    )
+    expect(api.moveEntry).toHaveBeenCalledWith('a', weekOf(now))
+    expect(api.moveEntry).toHaveBeenCalledWith('b', weekOf(now))
+    await waitFor(() => expect(screen.queryByText(/from last week/)).toBeNull())
+  })
+
+  it('leaves out what was cooked, and remembers "Not now"', async () => {
+    localStorage.clear()
+    const api = homeApi(
+      [],
+      [entry('a', null, 'Bean soup'), entry('b', null, 'Boxty')],
+    )
+    await api.markCooked({
+      recipeId: 'r',
+      planEntryId: 'a',
+      cookedOn: '2026-10-08',
+    })
+    const { unmount } = render(<Home api={api} now={now} />)
+    expect(
+      await screen.findByText(/1 meal from last week wasn't cooked: Boxty/),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Not now' }))
+    expect(screen.queryByText(/from last week/)).toBeNull()
+    unmount()
+    render(<Home api={api} now={now} />)
+    await screen.findByText(/Nothing planned yet/)
+    expect(screen.queryByText(/from last week/)).toBeNull()
+    localStorage.clear()
   })
 
   it('marks tonight’s meal cooked, dated today (TYL-68)', async () => {
