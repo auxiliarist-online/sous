@@ -3138,6 +3138,17 @@ describe('shopping list (TYL-18)', () => {
        values ($1, 'paper towels', '1 pack', true)`,
       [list],
     )
+    // A size picked for a typed item is a store product id, nothing else
+    // (TYL-142).
+    await asGrace(
+      `update shopping_list_items set product_id = '0007203663218' where name = 'paper towels'`,
+    )
+    await assert.rejects(
+      asGrace(
+        `update shopping_list_items set product_id = '18 ct' where name = 'paper towels'`,
+      ),
+      /product_id/,
+    )
     // The plan now needs 18 eggs and salt, and no rice or milk.
     await sync([
       item(eggs, 'eggs', '18', 'dairy_eggs'),

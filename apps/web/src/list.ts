@@ -13,6 +13,9 @@ export interface ListItem {
   amount: string | null
   aisle: string | null
   storeId: string | null
+  /** The store product picked as its size, for an item the user typed
+   *  (TYL-142); null is Sous's default package. */
+  productId: string | null
   isManual: boolean
   /** Changed by the user, so the plan no longer updates it. */
   edited: boolean
@@ -34,7 +37,12 @@ export type ListOp =
   | {
       kind: 'edit'
       id: string
-      patch: { name?: string; amount?: string | null; storeId?: string | null }
+      patch: {
+        name?: string
+        amount?: string | null
+        storeId?: string | null
+        productId?: string | null
+      }
     }
   | { kind: 'remove'; id: string; manual: boolean }
   | { kind: 'restore'; id: string }
@@ -62,6 +70,7 @@ interface ItemRow {
   amount: string | null
   aisle: string | null
   store_id: string | null
+  product_id?: string | null
   is_manual: boolean
   edited: boolean
   removed: boolean
@@ -78,6 +87,7 @@ function fromRow(r: ItemRow): ListItem {
     amount: r.amount,
     aisle: r.aisle,
     storeId: r.store_id,
+    productId: r.product_id ?? null,
     isManual: r.is_manual,
     edited: r.edited,
     removed: r.removed,
@@ -114,7 +124,7 @@ export async function loadList(
   const { data, error } = await db
     .from('shopping_lists')
     .select(
-      'id, items:shopping_list_items(id, ingredient_id, name, amount, aisle, store_id, is_manual, edited, removed, checked_at, position)',
+      'id, items:shopping_list_items(id, ingredient_id, name, amount, aisle, store_id, product_id, is_manual, edited, removed, checked_at, position)',
     )
     .eq('week_start', week)
     .maybeSingle()
@@ -139,6 +149,9 @@ export async function sendOp(db: SupabaseClient, op: ListOp): Promise<void> {
               ...(op.patch.amount !== undefined && { amount: op.patch.amount }),
               ...(op.patch.storeId !== undefined && {
                 store_id: op.patch.storeId,
+              }),
+              ...(op.patch.productId !== undefined && {
+                product_id: op.patch.productId,
               }),
               edited: true,
             })
@@ -184,6 +197,9 @@ export function applyOp(state: ListState, op: ListOp): ListState {
           ...(op.patch.name !== undefined && { name: op.patch.name }),
           ...(op.patch.amount !== undefined && { amount: op.patch.amount }),
           ...(op.patch.storeId !== undefined && { storeId: op.patch.storeId }),
+          ...(op.patch.productId !== undefined && {
+            productId: op.patch.productId,
+          }),
           edited: true,
         })),
       }
@@ -210,6 +226,7 @@ export function applyOp(state: ListState, op: ListOp): ListState {
             amount: op.amount,
             aisle: null,
             storeId: null,
+            productId: null,
             isManual: true,
             edited: false,
             removed: false,
@@ -455,16 +472,27 @@ export interface OwnPrices {
   items: Record<string, { cents: number; estimated: boolean }>
 }
 
+/** A typed item as the API prices it: its name, and the size picked. */
+export interface OwnItem {
+  id: string
+  name: string
+  product_id?: string
+}
+
 /** The user's own items on the list, as the API prices them: the ones bought
  *  at the user's store, not ones they'll get at the market or a bakery. */
 export function ownItems(
   state: ListState,
   storeId: string | null = null,
-): { id: string; name: string }[] {
+): OwnItem[] {
   return state.items
     .filter((i) => i.isManual && !i.removed && i.name.trim())
     .filter((i) => i.storeId === null || i.storeId === storeId)
-    .map((i) => ({ id: i.id, name: i.name.trim().slice(0, 200) }))
+    .map((i) => ({
+      id: i.id,
+      name: i.name.trim().slice(0, 200),
+      ...(i.productId && { product_id: i.productId }),
+    }))
 }
 
 const OWN_BATCH = 100
@@ -475,11 +503,11 @@ const OWN_BATCH = 100
 export async function ownItemPrices(
   session: Session,
   weekStart: string,
-  items: { id: string; name: string }[],
+  items: OwnItem[],
   send: typeof apiFetch = apiFetch,
 ): Promise<OwnPrices> {
   // The API takes up to 100 a request.
-  const batches: { id: string; name: string }[][] = []
+  const batches: OwnItem[][] = []
   for (let i = 0; i < items.length; i += OWN_BATCH)
     batches.push(items.slice(i, i + OWN_BATCH))
   const bodies = await Promise.all(
@@ -507,4 +535,45 @@ export async function ownItemPrices(
       ),
     ),
   }
+}
+
+/** One size a typed item comes in at the user's store, at today's price. */
+export interface SizeOption {
+  productId: string
+  /** The store's own wording ("12 ct"), shown, never stored. */
+  size: string
+  cents: number
+  onSale: boolean
+  /** What Sous prices it as when no size is picked. */
+  default: boolean
+}
+
+/** The sizes a typed item comes in at the user's store (TYL-142); empty when
+ *  it isn't recognised or there's no store with live prices. */
+export async function itemSizes(
+  session: Session,
+  name: string,
+  send: typeof apiFetch = apiFetch,
+): Promise<SizeOption[]> {
+  const resp = await send(session, '/plans/item-sizes', {
+    method: 'POST',
+    body: JSON.stringify({ name: name.trim().slice(0, 200) }),
+  })
+  if (!resp.ok) throw new Error(`item sizes: ${resp.status}`)
+  const body = (await resp.json()) as {
+    sizes: {
+      product_id: string
+      size: string
+      cents: number
+      on_sale: boolean
+      default: boolean
+    }[]
+  }
+  return body.sizes.map((o) => ({
+    productId: o.product_id,
+    size: o.size,
+    cents: o.cents,
+    onSale: o.on_sale,
+    default: o.default,
+  }))
 }

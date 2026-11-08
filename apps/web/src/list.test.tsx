@@ -10,6 +10,7 @@ import {
   cachedList,
   flushOps,
   isRefused,
+  itemSizes,
   listText,
   ownItemPrices,
   ownItems,
@@ -41,6 +42,7 @@ const item = (id: string, extra: Partial<ListItem> = {}): ListItem => ({
   amount: null,
   aisle: 'pantry',
   storeId: null,
+  productId: null,
   isManual: false,
   edited: false,
   removed: false,
@@ -371,6 +373,7 @@ function listApi(
     addPlace: vi.fn(async (name: string) => ({ id: 'new-place', name })),
     seasons: vi.fn(async () => new Map()),
     ownItemPrices: vi.fn(async () => ({ totalCents: 0, items: {} })),
+    itemSizes: vi.fn(async () => []),
     ...over,
   } as ListApi & Record<string, ReturnType<typeof vi.fn>>
 }
@@ -421,6 +424,41 @@ describe('own items', () => {
       'bread',
       'milk',
     ])
+  })
+})
+
+describe('item sizes', () => {
+  it('reads the store’s sizes for a typed item', async () => {
+    const send = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            ingredient_id: 'eggs',
+            sizes: [
+              {
+                product_id: '18',
+                size: '18 ct',
+                cents: 399,
+                on_sale: true,
+                default: false,
+              },
+            ],
+          }),
+        ),
+    )
+    expect(await itemSizes({} as never, ' eggs ', send)).toEqual([
+      {
+        productId: '18',
+        size: '18 ct',
+        cents: 399,
+        onSale: true,
+        default: false,
+      },
+    ])
+    expect(send).toHaveBeenCalledWith({}, '/plans/item-sizes', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'eggs' }),
+    })
   })
 })
 
@@ -685,6 +723,91 @@ describe('ListPage', () => {
     await waitFor(() => expect(api.ownItemPrices).toHaveBeenCalledTimes(1))
     window.dispatchEvent(new Event('online'))
     expect(await screen.findByText('$3.49')).toBeInTheDocument()
+  })
+
+  it('offers the store’s sizes after adding an item, and keeps the one picked (TYL-142)', async () => {
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000142',
+    )
+    const id = '00000000-0000-4000-8000-000000000142'
+    const api = listApi({
+      itemSizes: vi.fn(async () => [
+        {
+          productId: '6',
+          size: '6 ct',
+          cents: 219,
+          onSale: false,
+          default: false,
+        },
+        {
+          productId: '12',
+          size: '12 ct',
+          cents: 349,
+          onSale: false,
+          default: true,
+        },
+        {
+          productId: '18',
+          size: '18 ct',
+          cents: 399,
+          onSale: true,
+          default: false,
+        },
+      ]),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    await screen.findByRole('list', { name: 'Dairy & eggs' })
+    await userEvent.type(screen.getByLabelText('Add an item'), 'large eggs')
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }))
+    const sizes = await screen.findByRole('group', {
+      name: 'Sizes of large eggs',
+    })
+    expect(api.itemSizes).toHaveBeenCalledWith('large eggs')
+    expect(
+      within(sizes).getByRole('button', { name: '12 ct · $3.49' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(
+      within(sizes).getByRole('button', { name: '18 ct · $3.99 (sale)' }),
+    )
+    expect(api.sendListOp).toHaveBeenCalledWith({
+      kind: 'edit',
+      id,
+      patch: { productId: '18' },
+    })
+    await waitFor(() =>
+      expect(api.ownItemPrices).toHaveBeenLastCalledWith(WEEK, [
+        { id, name: 'large eggs', product_id: '18' },
+      ]),
+    )
+
+    // A new name is another thing: the picked size goes.
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Edit large eggs' }),
+    )
+    const name = screen.getByLabelText('Item')
+    await userEvent.clear(name)
+    await userEvent.type(name, 'duck eggs')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(api.sendListOp).toHaveBeenLastCalledWith({
+      kind: 'edit',
+      id,
+      patch: { name: 'duck eggs', productId: null },
+    })
+  })
+
+  it('says when the store has no sizes for an item', async () => {
+    const api = listApi({
+      loadList: vi.fn(async () =>
+        state(item('candles', { ingredientId: null, isManual: true })),
+      ),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Sizes of candles' }),
+    )
+    expect(
+      await screen.findByText(/doesn't list sizes for this/),
+    ).toBeInTheDocument()
   })
 
   it('adds a place of the user’s own to buy something at', async () => {
