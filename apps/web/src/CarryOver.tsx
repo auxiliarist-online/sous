@@ -10,6 +10,7 @@ export interface CarryOverApi extends Pick<CookedApi, 'cookedEntries'> {
 // Where "Not now" is remembered, per week it was said for.
 const dismissKey = (week: string) => `sous:carry-over-dismissed:${week}`
 
+/** Whether "Not now" was said for this week (false when storage is off). */
 function dismissed(week: string): boolean {
   try {
     return window.localStorage.getItem(dismissKey(week)) !== null
@@ -19,7 +20,7 @@ function dismissed(week: string): boolean {
 }
 
 /** Last week's meals that weren't cooked, offered to move into this week
- *  (TYL-147). Weeks start on Monday, so a plan made over the weekend (or
+ *  (TYL-147). Callers key it by the week, so a new week starts afresh. Weeks start on Monday, so a plan made over the weekend (or
  *  just not cooked yet) used to vanish from "this week" with no way on. */
 export function CarryOver({
   api,

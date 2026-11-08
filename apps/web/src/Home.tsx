@@ -84,6 +84,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
       <section className="card home">
         <h2>This week</h2>
         <CarryOver
+          key={week}
           api={api}
           week={week}
           onMoved={() => setVersion((v) => v + 1)}
@@ -111,6 +112,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
     <section className="card home">
       <h2>This week</h2>
       <CarryOver
+        key={week}
         api={api}
         week={week}
         onMoved={() => setVersion((v) => v + 1)}

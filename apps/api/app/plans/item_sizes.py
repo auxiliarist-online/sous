@@ -165,15 +165,16 @@ async def picked_prices(
     (no store, not carried, Kroger down): the item falls back to the default."""
     if not product_ids or not settings.kroger_client_id:
         return {}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        store = await _store(client, user_id)
-    if store is None:
-        return {}
     try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            store = await _store(client, user_id)
+        if store is None:
+            return {}
         products = await asyncio.to_thread(
             _fetch, sorted(set(product_ids)), store["external_location_id"]
         )
     except (httpx.HTTPError, RuntimeError):
+        # The store or Kroger can't be reached: picked items use the default.
         return {}
     out = {}
     for p in products:

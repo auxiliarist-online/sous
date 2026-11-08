@@ -132,3 +132,21 @@ class TestRoutes:
 
     def test_needs_sign_in(self) -> None:
         assert TestClient(app).post("/plans/item-sizes", json={"name": "x"}).status_code == 401
+
+
+def test_picked_sizes_fall_back_when_the_store_cant_be_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    import httpx2 as httpx
+
+    from app.config import settings
+    from app.plans import item_sizes
+
+    async def down(client: Any, user_id: str) -> None:
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(settings, "kroger_client_id", "id")
+    monkeypatch.setattr(item_sizes, "_store", down)
+    assert asyncio.run(item_sizes.picked_prices("u", ["18"], TODAY)) == {}

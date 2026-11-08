@@ -227,7 +227,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
         </Link>
       )}
       {week === thisWeek && (
-        <CarryOver api={api} week={week} onMoved={reload} />
+        <CarryOver key={week} api={api} week={week} onMoved={reload} />
       )}
 
       {failed && (
