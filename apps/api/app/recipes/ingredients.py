@@ -457,8 +457,11 @@ def parse_line(line_no: int, raw: str, section: str | None = None) -> list[Parse
             name = f"{name}, {comment}"
         # "beans, such as cannellini" -> "cannellini beans"
         example = EXAMPLE.match(comment or "")
-        if example and _plain(name) in GENERIC:
-            kind, generic = _plain(example.group(1)), _plain(name)
+        # Without how it's kept: parser 2.10 reads "cooked beans" as the name,
+        # where 2.8 split "cooked" off as preparation.
+        bare = DESCRIPTOR.sub("", _plain(name)).strip()
+        if example and bare in GENERIC:
+            kind, generic = _plain(example.group(1)), bare
             # "beans, such as cannellini beans" is already whole.
             named = kind.split()[-1] in _forms(generic)
             name = kind if named else f"{kind} {generic}"

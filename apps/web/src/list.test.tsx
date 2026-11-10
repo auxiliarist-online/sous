@@ -911,6 +911,16 @@ describe('Home', () => {
     ...fakeCookedApi(),
   })
 
+  it('offers a retry when the week can’t load', async () => {
+    const api = homeApi([])
+    vi.mocked(api.plan).mockRejectedValueOnce(new Error('down'))
+    render(<Home api={api} now={now} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Try again' }),
+    )
+    expect(await screen.findByText(/Nothing planned yet/)).toBeInTheDocument()
+  })
+
   it('offers last week’s uncooked meals for this week (TYL-147)', async () => {
     localStorage.clear()
     const api = homeApi(

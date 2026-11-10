@@ -51,6 +51,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
     api.plan(week).then(
       (e) => {
         if (!live) return
+        setFailed(false)
         setEntries(e)
         api.cookedEntries(e.map((x) => x.id)).then(
           (c) => live && setCooked(c),
@@ -74,7 +75,14 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   if (failed) {
     return (
       <p className="card error" role="alert">
-        We couldn't load this week.
+        We couldn't load this week.{' '}
+        <button
+          type="button"
+          className="link"
+          onClick={() => setVersion((v) => v + 1)}
+        >
+          Try again
+        </button>
       </p>
     )
   }

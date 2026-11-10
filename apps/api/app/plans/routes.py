@@ -18,7 +18,7 @@ Supabase under row-level security; pricing needs the API's unit conversions.
 
 import asyncio
 from dataclasses import asdict
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -33,6 +33,7 @@ from app.plans.item_sizes import item_sizes, picked_prices
 from app.plans.live_prices import add_live_prices, no_store
 from app.plans.own_items import candidates_for, price_own_items
 from app.plans.store import cost_inputs, draft_pool, match_ingredient
+from app.pricing.kroger import STORE_TZ
 from app.recipes.store import StoreError
 
 router = APIRouter(prefix="/plans", tags=["plans"])
@@ -150,7 +151,7 @@ async def own_items(
     )
     # A size the user picked is priced as that product, live (TYL-142).
     picked = await picked_prices(
-        user_id, [i.product_id for i in body.items if i.product_id], date.today()
+        user_id, [i.product_id for i in body.items if i.product_id], store_today()
     )
     for item, own in zip(body.items, priced, strict=True):
         if item.product_id and item.product_id in picked:
@@ -160,6 +161,12 @@ async def own_items(
         "total_cents": sum(i.cents or 0 for i in priced),
         "items": [asdict(i) for i in priced],
     }
+
+
+def store_today() -> date:
+    """Today where the stores are (Eastern): a sale that ends today still
+    holds after midnight UTC."""
+    return datetime.now(STORE_TZ).date()
 
 
 class ItemName(BaseModel):
@@ -175,7 +182,7 @@ async def sizes(
     """The package sizes a typed item comes in at the user's store, with
     today's prices, to pick from (TYL-142). Looked up live; nothing stored."""
     try:
-        found = await item_sizes(user_id, body.name, date.today())
+        found = await item_sizes(user_id, body.name, store_today())
     except (StoreError, httpx.HTTPError) as exc:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, "We couldn't look up sizes. Try again."
