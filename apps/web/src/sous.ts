@@ -50,7 +50,10 @@ export interface RecipeDetail {
   favorite: Frequency | null
   ingredients: IngredientLine[]
   diets: DietLabel[]
+  /** As the user sees them: their own correction, or the recipe's. */
   cuisines: string[]
+  /** True when the cuisines are the user's own correction (TYL-56). */
+  cuisinesCorrected: boolean
 }
 
 interface RecipeRow {
@@ -89,6 +92,7 @@ interface RecipeRow {
     checks: DietLabel['checks'] | null
   }[]
   cuisines: { cuisine_slug: string }[]
+  my_cuisines?: { cuisine_slug: string }[] | null
   favorite?: { frequency: Frequency }[] | null
 }
 
@@ -112,6 +116,7 @@ export async function recipeDetail(
        instructions, added_by, source:recipe_sources(name, license_name, license_url, attribution),
        ingredients:recipe_ingredients(line_no, option_no, raw_text, section, name, quantity, quantity_max, unit, preparation, is_optional, ingredient_id),
        diets:recipe_diets(diet_slug, source, checks), cuisines:recipe_cuisines(cuisine_slug),
+       my_cuisines:user_recipe_cuisines(cuisine_slug),
        favorite:user_favorite_recipes(frequency)`,
     )
     .eq('id', id)
@@ -162,8 +167,38 @@ export async function recipeDetail(
     diets: r.diets
       .filter((d) => d.source !== 'publisher')
       .map((d) => ({ slug: d.diet_slug, checks: d.checks ?? [] })),
-    cuisines: r.cuisines.map((c) => c.cuisine_slug),
+    // Row-level security shows only the user's own correction (TYL-56).
+    ...ownCuisines(r.cuisines, r.my_cuisines),
   }
+}
+
+/** A recipe's cuisines as the user sees them: their own correction when
+ *  they've made one (TYL-56), else the recipe's. */
+export function ownCuisines(
+  shared: { cuisine_slug: string }[] | null | undefined,
+  mine: { cuisine_slug: string }[] | null | undefined,
+): { cuisines: string[]; cuisinesCorrected: boolean } {
+  const own = (mine ?? []).map((c) => c.cuisine_slug)
+  return own.length
+    ? { cuisines: own, cuisinesCorrected: true }
+    : {
+        cuisines: (shared ?? []).map((c) => c.cuisine_slug),
+        cuisinesCorrected: false,
+      }
+}
+
+/** Set the user's own cuisines for a recipe, for them only; none goes back
+ *  to the recipe's (TYL-56). */
+export async function setMyCuisines(
+  db: SupabaseClient,
+  recipeId: string,
+  slugs: string[],
+): Promise<void> {
+  const { error } = await db.rpc('set_my_recipe_cuisines', {
+    p_recipe: recipeId,
+    p_cuisines: slugs,
+  })
+  if (error) throw error
 }
 
 /** One row per ingredient line: alternatives share a line and its text. */

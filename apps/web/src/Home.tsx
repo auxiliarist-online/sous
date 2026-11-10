@@ -10,6 +10,7 @@ import { plannedItems } from './list.ts'
 import { CookedButton } from './Cooked.tsx'
 import { SeasonCard, type SeasonApi } from './SeasonCard.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
+import { cookPath } from './navigation.ts'
 import { Link } from './router.tsx'
 
 export interface HomeApi extends CookedApi, SeasonApi {
@@ -107,7 +108,14 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
           <ul className="home-meals">
             {tonight.map((e) => (
               <li key={e.id}>
-                <Link to={`/recipe/${e.recipeId}`}>{e.title}</Link>
+                <Link to={`/recipe/${e.recipeId}`}>{e.title}</Link>{' '}
+                <Link
+                  to={cookPath(e.recipeId, e.scale, e.id)}
+                  className="small"
+                  label={`Cook ${e.title}`}
+                >
+                  Cook
+                </Link>
                 {cooked && (
                   <CookedButton
                     api={api}

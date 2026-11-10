@@ -29,6 +29,7 @@ import { CookedButton } from './Cooked.tsx'
 import { DraftWeek, type DraftApi } from './DraftWeek.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
 import type { PantryItem, PantryKind } from './pantry.ts'
+import { cookPath } from './navigation.ts'
 import { Link } from './router.tsx'
 import {
   DEFAULT_VARIETY,
@@ -872,6 +873,13 @@ function Entry({
       <div className="entry-head">
         <Link to={`/recipe/${entry.recipeId}`}>{entry.title}</Link>
         {serves && <span className="muted small">serves {serves}</span>}
+        <Link
+          to={cookPath(entry.recipeId, entry.scale, entry.id)}
+          className="small"
+          label={`Cook ${entry.title}`}
+        >
+          Cook
+        </Link>
         {cost && cost.entryCents[entry.id] !== undefined && (
           <span className="muted small" aria-label="This recipe's share">
             {cost.estimated ? '~' : ''}

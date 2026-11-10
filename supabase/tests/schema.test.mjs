@@ -4053,3 +4053,115 @@ describe('ingredients round 4 (TYL-60)', () => {
     assert.equal(Number(rows[2].grams_per_cup), 260)
   })
 })
+
+describe('cuisines when the source does not say (TYL-56)', () => {
+  const MIA = '00000000-0000-0000-0000-000000005601'
+  const NED = '00000000-0000-0000-0000-000000005602'
+  const cuisinesOf = async (id) =>
+    (
+      await db.query(
+        'select cuisine_slug, source from recipe_cuisines where recipe_id = $1 order by 1',
+        [id],
+      )
+    ).rows.map((r) => [r.cuisine_slug, r.source])
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1), ($2)', [MIA, NED])
+  })
+
+  it('derives a cuisine from the title and ingredients', async () => {
+    const gochujang = await ingredient('gochujang')
+    const id = await recipe('Weeknight bibimbap bowls (TYL-56)', [[gochujang]])
+    assert.deepEqual(await cuisinesOf(id), [['korean', 'derived']])
+  })
+
+  it('derives from the title alone, and again when the title changes', async () => {
+    const id = await recipe('Pad thai for two (TYL-56)', [])
+    assert.deepEqual(await cuisinesOf(id), [['thai', 'derived']])
+    await db.query(
+      "update recipes set title = 'Weeknight jollof rice (TYL-56)' where id = $1",
+      [id],
+    )
+    assert.deepEqual(await cuisinesOf(id), [['west_african', 'derived']])
+  })
+
+  it('derives nothing from a weak or tied signal', async () => {
+    const id = await recipe('Plain toast (TYL-56)', [])
+    assert.deepEqual(await cuisinesOf(id), [])
+  })
+
+  it('lets the publisher win, and derives again when an import rewrites cuisines', async () => {
+    const gochujang = await ingredient('gochujang')
+    const id = await recipe('Spicy bulgogi (TYL-56)', [[gochujang]])
+    await db.query(
+      "insert into recipe_cuisines (recipe_id, cuisine_slug) values ($1, 'american')",
+      [id],
+    )
+    assert.deepEqual(await cuisinesOf(id), [['american', 'publisher']])
+    // An import in one transaction: ingredients set, then cuisines wiped.
+    await db.exec('begin')
+    await db.query(
+      'update recipe_ingredients set raw_text = raw_text where recipe_id = $1',
+      [id],
+    )
+    await db.query('delete from recipe_cuisines where recipe_id = $1', [id])
+    await db.exec('commit')
+    assert.deepEqual(await cuisinesOf(id), [['korean', 'derived']])
+  })
+
+  it('keeps a correction to its user, and shows it in their place', async () => {
+    const chickpeas = await ingredient('chickpeas')
+    const id = await recipe('Chana masala (TYL-56)', [[chickpeas]])
+    await as('authenticated', MIA, () =>
+      db.query("select set_my_recipe_cuisines($1, array['indian', 'nope'])", [
+        id,
+      ]),
+    )
+    const mine = await as('authenticated', MIA, () =>
+      db.query('select cuisine_slug from user_recipe_cuisines'),
+    )
+    assert.deepEqual(
+      mine.rows.map((r) => r.cuisine_slug),
+      ['indian'],
+    )
+    const theirs = await as('authenticated', NED, () =>
+      db.query('select cuisine_slug from user_recipe_cuisines'),
+    )
+    assert.equal(theirs.rows.length, 0)
+    const names = await db.query(
+      'select recipe_cuisine_names($1, $2) as mia, recipe_cuisine_names($1, $3) as ned',
+      [id, MIA, NED],
+    )
+    assert.deepEqual(names.rows[0].mia, ['Indian'])
+    assert.deepEqual(names.rows[0].ned, ['Indian']) // derived from "masala"
+    await assert.rejects(
+      as('authenticated', NED, () =>
+        db.query(
+          "insert into user_recipe_cuisines (user_id, recipe_id, cuisine_slug) values ($1, $2, 'thai')",
+          [MIA, id],
+        ),
+      ),
+    )
+    // None goes back to the shared cuisines.
+    await as('authenticated', MIA, () =>
+      db.query("select set_my_recipe_cuisines($1, '{}')", [id]),
+    )
+    const after = await as('authenticated', MIA, () =>
+      db.query('select count(*)::int as n from user_recipe_cuisines'),
+    )
+    assert.equal(after.rows[0].n, 0)
+  })
+
+  it('exports corrections with the user’s data', async () => {
+    const id = await recipe('Mystery stew (TYL-56)', [])
+    const data = await as('authenticated', MIA, async () => {
+      await db.query("select set_my_recipe_cuisines($1, array['ethiopian'])", [
+        id,
+      ])
+      return (await db.query('select export_my_data() as d')).rows[0].d
+    })
+    assert.deepEqual(data.cuisine_corrections, [
+      { recipe: 'Mystery stew (TYL-56)', cuisine: 'ethiopian' },
+    ])
+  })
+})

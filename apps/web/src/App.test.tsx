@@ -111,6 +111,7 @@ const library = (
   searchCatalog: vi.fn(async () => []),
   saveToLibrary: vi.fn(async () => {}),
   setTags: vi.fn(async () => {}),
+  setMyCuisines: vi.fn(async () => {}),
 })
 
 describe('App', () => {
