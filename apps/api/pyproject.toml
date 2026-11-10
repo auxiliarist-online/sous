@@ -6,7 +6,7 @@ dependencies = [
     "defusedxml>=0.7",
     "fastapi>=0.115",
     "httpx2>=2.13",
-    "ingredient-parser-nlp>=2.8,<3",
+    "ingredient-parser-nlp>=2.10,<3",
     "pydantic-settings>=2.6",
     "recipe-scrapers>=15.12,<16",
     # Error reporting (TYL-74), off unless POSTHOG_KEY is set.
