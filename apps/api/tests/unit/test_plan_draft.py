@@ -151,6 +151,19 @@ class TestDraft:
         assert picked(d) == ["fav"]
         assert d.picks[0].reason == "A favorite, last had 3 weeks ago"
 
+    def test_favors_what_the_user_loved_last_time(self) -> None:
+        # TYL-16: "loved" outweighs a modest saving; the reason says why.
+        week = inputs(
+            recipe("loved", ("chicken", 1, "each")), recipe("cheap", ("beans", 1, "each"))
+        )
+        loved = Candidate("loved", "Loved", "fits", rating="love")
+        d = draft_week(
+            week, [loved, Candidate("cheap", "Cheap", "fits")], dinners=1, locked=[], exclude=[],
+            on=MONDAY,
+        )  # fmt: skip
+        assert picked(d) == ["loved"]
+        assert d.picks[0].reason == "You loved it last time"
+
     def test_skips_what_was_just_had(self) -> None:
         week = inputs(recipe("again", ("beans", 1, "each")), recipe("new", ("rice", 1, "cup")))
         d = draft_week(
@@ -294,6 +307,7 @@ class TestRoute:
         r1 = "00000000-0000-0000-0000-0000000000a1"
         r2 = "00000000-0000-0000-0000-0000000000a2"
         bad = "00000000-0000-0000-0000-0000000000a3"
+        meh = "00000000-0000-0000-0000-0000000000a4"
         asked: dict[str, Any] = {}
 
         async def fake_pool(user_id: str, week: date) -> dict[str, Any]:
@@ -303,6 +317,8 @@ class TestRoute:
                     {"recipe_id": r1, "title": "Salsa", "fit": "fits", "cuisines": []},
                     {"recipe_id": r2, "title": "Tacos", "fit": "fits", "cuisines": []},
                     {"recipe_id": bad, "title": "Pork", "fit": "excluded", "cuisines": []},
+                    # Rated down after cooking (TYL-16): left out too.
+                    {"recipe_id": meh, "title": "Meh", "fit": "fits", "rating": "down"},
                 ],
             }
 
@@ -323,13 +339,74 @@ class TestRoute:
             app.dependency_overrides.clear()
         assert resp.status_code == 200
         body = resp.json()
-        # The excluded recipe is never priced or picked; the locked one leads.
+        # The excluded and down-rated recipes are never priced or picked; the
+        # locked one leads.
         assert asked["candidates"] == [r2, r1]
         assert [(p["title"], p["locked"]) for p in body["picks"]] == [
             ("Tacos", True),
             ("Salsa", False),
         ]
         assert body["total_cents"] == 200
+
+    def test_a_loved_recipe_stays_in_a_full_pool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # TYL-16: more saved recipes than the pool holds; the loved one, saved
+        # first (so last in the order), still makes it in.
+        ids = [f"00000000-0000-0000-0000-{n:012d}" for n in range(routes.DRAFT_POOL + 5)]
+        asked: dict[str, Any] = {}
+
+        async def fake_pool(user_id: str, week: date) -> dict[str, Any]:
+            return {
+                "candidates": [
+                    {"recipe_id": r, "title": r, "fit": "fits", "weeks_ago": 2} for r in ids[:-1]
+                ]
+                + [{"recipe_id": ids[-1], "title": "Loved", "fit": "fits", "rating": "love"}]
+            }
+
+        async def fake_inputs(
+            user_id: str, week: date, candidates: list[str] | None = None
+        ) -> dict[str, Any]:
+            asked["candidates"] = candidates
+            return inputs()
+
+        monkeypatch.setattr(routes, "draft_pool", fake_pool)
+        monkeypatch.setattr(routes, "cost_inputs", fake_inputs)
+        app.dependency_overrides[current_user_id] = lambda: "user-1"
+        try:
+            TestClient(app).post("/plans/2026-10-19/draft", json={"dinners": 1})
+        finally:
+            app.dependency_overrides.clear()
+        assert ids[-1] in asked["candidates"]
+        assert len(asked["candidates"]) == routes.DRAFT_POOL
+
+    def test_swapped_out_recipes_dont_fill_the_pool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A full pool of swapped-out loved recipes still leaves room for a new one.
+        ids = [f"00000000-0000-0000-0000-{n:012d}" for n in range(routes.DRAFT_POOL + 1)]
+        asked: dict[str, Any] = {}
+
+        async def fake_pool(user_id: str, week: date) -> dict[str, Any]:
+            return {
+                "candidates": [
+                    {"recipe_id": r, "title": r, "fit": "fits", "rating": "love"} for r in ids[:-1]
+                ]
+                + [{"recipe_id": ids[-1], "title": "New", "fit": "fits"}]
+            }
+
+        async def fake_inputs(
+            user_id: str, week: date, candidates: list[str] | None = None
+        ) -> dict[str, Any]:
+            asked["candidates"] = candidates
+            return inputs()
+
+        monkeypatch.setattr(routes, "draft_pool", fake_pool)
+        monkeypatch.setattr(routes, "cost_inputs", fake_inputs)
+        app.dependency_overrides[current_user_id] = lambda: "user-1"
+        try:
+            TestClient(app).post(
+                "/plans/2026-10-19/draft", json={"dinners": 1, "exclude": ids[:-1]}
+            )
+        finally:
+            app.dependency_overrides.clear()
+        assert asked["candidates"] == [ids[-1]]
 
     def test_needs_a_monday_and_a_sensible_count(self) -> None:
         app.dependency_overrides[current_user_id] = lambda: "user-1"
