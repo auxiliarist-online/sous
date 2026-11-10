@@ -41,11 +41,38 @@ export function useNavigated(): boolean {
   return moved
 }
 
+/** Cook mode's address for a recipe, at a planned size and entry (TYL-75). */
+export function cookPath(
+  recipeId: string,
+  scale: number = 1,
+  entryId: string | null = null,
+): string {
+  const q = new URLSearchParams()
+  if (scale !== 1) q.set('scale', String(scale))
+  if (entryId) q.set('entry', entryId)
+  const qs = q.toString()
+  return `/cook/${recipeId}${qs ? `?${qs}` : ''}`
+}
+
+/** The size and plan entry from the address: /cook/<id>?scale=2&entry=<id>. */
+export function cookParams(search: string): {
+  scale: 0.5 | 1 | 2
+  entryId: string | null
+} {
+  const q = new URLSearchParams(search)
+  const n = Number(q.get('scale'))
+  return {
+    scale: n === 0.5 || n === 2 ? n : 1,
+    entryId: q.get('entry'),
+  }
+}
+
 export type Route =
   | { page: 'home' }
   | { page: 'library' }
   | { page: 'pantry' }
   | { page: 'recipe'; id: string }
+  | { page: 'cook'; id: string }
   | { page: 'new' }
   | { page: 'edit'; id: string }
   | { page: 'settings' }
@@ -63,6 +90,8 @@ const UUID = '[0-9a-f-]{36}'
 export function route(path: string): Route {
   let m = path.match(new RegExp(`^/recipe/(${UUID})/?$`, 'i'))
   if (m) return { page: 'recipe', id: m[1] }
+  m = path.match(new RegExp(`^/cook/(${UUID})/?$`, 'i'))
+  if (m) return { page: 'cook', id: m[1] }
   m = path.match(new RegExp(`^/edit/(${UUID})/?$`, 'i'))
   if (m) return { page: 'edit', id: m[1] }
   if (path === '/' || path === '') return { page: 'home' }

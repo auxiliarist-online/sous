@@ -9,6 +9,7 @@ import {
 import { Home, type HomeApi } from './Home.tsx'
 import { Library, type LibraryApi } from './Library.tsx'
 import { ListPage, type ListApi } from './ListPage.tsx'
+import { CookMode, TimerBar } from './CookMode.tsx'
 import { offlineCooked } from './cookedQueue.ts'
 import { PantryPage, type PantryApi } from './PantryPage.tsx'
 import {
@@ -19,7 +20,13 @@ import {
   setTags,
   savedRecipes,
 } from './library.ts'
-import { navigate, route, useNavigated, usePath } from './navigation.ts'
+import {
+  cookParams,
+  navigate,
+  route,
+  useNavigated,
+  usePath,
+} from './navigation.ts'
 import { Browse, type BrowseApi } from './Browse.tsx'
 import { clearBrowseCache } from './browseCache.ts'
 import { clearPage, pendingPage } from './page.ts'
@@ -98,6 +105,7 @@ import {
   NO_PREFERENCES,
   recipeDetail,
   referenceOptions,
+  setMyCuisines,
   readPhotos,
   saveManual,
   sourceNotes,
@@ -151,6 +159,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     preferences: () => loadPreferences(db, userId),
     savePreferences: (p) => savePreferences(db, userId, p),
     options: () => referenceOptions(db),
+    setMyCuisines: (recipeId, slugs) => setMyCuisines(db, recipeId, slugs),
     searchIngredients: (q) => searchIngredients(db, q),
     plan: (week) => loadPlan(db, week),
     addToPlan: (week, id, scale, day) => addToPlan(db, week, id, scale, day),
@@ -322,7 +331,9 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         ? 'list'
         : at.page === 'pantry'
           ? 'pantry'
-          : ['library', 'recipe', 'new', 'edit', 'browse'].includes(at.page)
+          : ['library', 'recipe', 'cook', 'new', 'edit', 'browse'].includes(
+                at.page,
+              )
             ? 'recipes'
             : null
 
@@ -392,6 +403,14 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
               onboarded={prefs === null || prefs.saved}
             />
           )}
+          {at.page === 'cook' && (
+            <CookMode
+              key={at.id}
+              api={api}
+              id={at.id}
+              {...cookParams(window.location.search)}
+            />
+          )}
           {at.page === 'recipe' && (
             <RecipePage key={at.id} id={at.id} api={api} />
           )}
@@ -443,6 +462,8 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
               }}
             />
           )}
+          {/* Timers keep running on every page (TYL-75). */}
+          <TimerBar />
           {at.page !== 'welcome' && <Feedback api={api} page={path} />}
         </>
       )}

@@ -386,6 +386,7 @@ const DETAIL: RecipeDetail = {
   ],
   diets: [],
   cuisines: [],
+  cuisinesCorrected: false,
 }
 
 const COST: PlanCost = {
