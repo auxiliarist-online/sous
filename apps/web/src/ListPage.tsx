@@ -12,7 +12,9 @@ import {
   type ListItem,
   type ListOp,
   type ListState,
+  type OwnItem,
   type OwnPrices,
+  type SizeOption,
   plannedItems,
   type PlannedItem,
 } from './list.ts'
@@ -42,10 +44,9 @@ export interface ListApi {
   /** What's in season where the user lives, to mark it (TYL-70). */
   seasons(): Promise<Seasons>
   /** Prices for the items the user added themselves (TYL-146). */
-  ownItemPrices(
-    weekStart: string,
-    items: { id: string; name: string }[],
-  ): Promise<OwnPrices>
+  ownItemPrices(weekStart: string, items: OwnItem[]): Promise<OwnPrices>
+  /** The sizes a typed item comes in at the user's store (TYL-142). */
+  itemSizes(name: string): Promise<SizeOption[]>
 }
 
 /** A list with any changes still waiting to be sent applied, as the user
@@ -76,6 +77,8 @@ export function ListPage({
   const [pending, setPending] = useState(() => pendingOps(user).length)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<string | null>(null)
+  // The typed item whose store sizes are showing (TYL-142).
+  const [sizesFor, setSizesFor] = useState<string | null>(null)
   const [showRemoved, setShowRemoved] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [seasons, setSeasons] = useState<Seasons | null>(null)
@@ -95,7 +98,7 @@ export function ListPage({
   const own = priced?.key === ownKey ? priced.prices : null
   useEffect(() => {
     let live = true
-    const items = JSON.parse(ownKey) as { id: string; name: string }[]
+    const items = JSON.parse(ownKey) as OwnItem[]
     // The list works without them: own items just go unpriced.
     if (items.length)
       api.ownItemPrices(week, items).then(
@@ -266,6 +269,29 @@ export function ListPage({
         >
           Edit
         </button>
+        {i.isManual && !i.checked && (
+          <button
+            type="button"
+            className="link small"
+            aria-label={`Sizes of ${i.name}`}
+            aria-expanded={sizesFor === i.id}
+            onClick={() => setSizesFor(sizesFor === i.id ? null : i.id)}
+          >
+            Size
+          </button>
+        )}
+        {sizesFor === i.id && (
+          <SizePicker
+            api={api}
+            name={i.name}
+            picked={i.productId}
+            onPick={(productId) => {
+              change({ kind: 'edit', id: i.id, patch: { productId } })
+              setSizesFor(null)
+            }}
+            onClose={() => setSizesFor(null)}
+          />
+        )}
         {editing === i.id && (
           <ItemEditor
             item={i}
@@ -276,7 +302,12 @@ export function ListPage({
               return p
             }}
             onSave={(patch) => {
-              change({ kind: 'edit', id: i.id, patch })
+              // A new name is another thing: its picked size no longer holds.
+              const next =
+                patch.name !== undefined && i.productId
+                  ? { ...patch, productId: null }
+                  : patch
+              change({ kind: 'edit', id: i.id, patch: next })
               setEditing(null)
             }}
             onRemove={() => {
@@ -330,15 +361,12 @@ export function ListPage({
       )}
 
       <AddItem
-        onAdd={(name, amount) =>
-          change({
-            kind: 'add',
-            id: crypto.randomUUID(),
-            listId: list.listId,
-            name,
-            amount,
-          })
-        }
+        onAdd={(name, amount) => {
+          const id = crypto.randomUUID()
+          change({ kind: 'add', id, listId: list.listId, name, amount })
+          // Offer the store's sizes straight away (TYL-142).
+          setSizesFor(id)
+        }}
       />
 
       {toBuy.length === 0 && (
@@ -596,5 +624,77 @@ function ItemEditor({
         </button>
       </div>
     </form>
+  )
+}
+
+/** The sizes a typed item comes in at the user's store, with today's
+ *  prices, to tap one (TYL-142). Nothing shows when the store doesn't know
+ *  it; the item is then priced as Sous's default package. */
+function SizePicker({
+  api,
+  name,
+  picked,
+  onPick,
+  onClose,
+}: {
+  api: Pick<ListApi, 'itemSizes'>
+  name: string
+  picked: string | null
+  onPick: (productId: string | null) => void
+  onClose: () => void
+}) {
+  const [sizes, setSizes] = useState<SizeOption[] | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    api.itemSizes(name).then(
+      (s) => live && setSizes(s),
+      () => live && setFailed(true),
+    )
+    return () => {
+      live = false
+    }
+  }, [api, name])
+
+  if (failed)
+    return (
+      <p className="small muted size-picker" role="status">
+        We couldn't look up sizes.{' '}
+        <button type="button" className="link" onClick={onClose}>
+          OK
+        </button>
+      </p>
+    )
+  if (!sizes) return <p className="small muted size-picker">Finding sizes…</p>
+  if (!sizes.length)
+    return (
+      <p className="small muted size-picker" role="status">
+        Your store doesn't list sizes for this.{' '}
+        <button type="button" className="link" onClick={onClose}>
+          OK
+        </button>
+      </p>
+    )
+  const current = picked ?? sizes.find((o) => o.default)?.productId ?? null
+  return (
+    <div
+      className="chips size-picker"
+      role="group"
+      aria-label={`Sizes of ${name}`}
+    >
+      {sizes.map((o) => (
+        <button
+          key={o.productId}
+          type="button"
+          className="chip"
+          aria-pressed={o.productId === current}
+          onClick={() => onPick(o.default && !picked ? null : o.productId)}
+        >
+          {o.size} · {dollars(o.cents)}
+          {o.onSale ? ' (sale)' : ''}
+        </button>
+      ))}
+    </div>
   )
 }

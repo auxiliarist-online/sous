@@ -9,6 +9,8 @@ POST /plans/{week_start}/draft "Plan my week" (TYL-65): a draft of the open
                                dinners from the user's saved recipes.
 POST /plans/{week_start}/own-items prices for items the user added to the
                                shopping list themselves (TYL-146).
+POST /plans/item-sizes         the sizes a typed item comes in at the user's
+                               store, with today's prices (TYL-142).
 
 Adding, editing and copying plans happens in the web app, straight against
 Supabase under row-level security; pricing needs the API's unit conversions.
@@ -20,12 +22,14 @@ from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
 
+import httpx2 as httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.auth import current_user_id
 from app.plans.cost import added_costs, plan_cost
 from app.plans.draft import Candidate, Variety, draft_week
+from app.plans.item_sizes import item_sizes, picked_prices
 from app.plans.live_prices import add_live_prices, no_store
 from app.plans.own_items import candidates_for, price_own_items
 from app.plans.store import cost_inputs, draft_pool, match_ingredient
@@ -90,6 +94,8 @@ class OwnItemName(BaseModel):
 
     id: str = Field(max_length=64)
     name: str = Field(min_length=1, max_length=200)
+    # The store product the user picked a size as (TYL-142), if any.
+    product_id: str | None = Field(default=None, pattern=r"^\d{1,20}$")
 
 
 class OwnItems(BaseModel):
@@ -142,10 +148,39 @@ async def own_items(
         on=week_start,
         store_id=store_id,
     )
+    # A size the user picked is priced as that product, live (TYL-142).
+    picked = await picked_prices(
+        user_id, [i.product_id for i in body.items if i.product_id], date.today()
+    )
+    for item, own in zip(body.items, priced, strict=True):
+        if item.product_id and item.product_id in picked:
+            own.cents, own.on_sale = picked[item.product_id]
+            own.estimated = False
     return {
         "total_cents": sum(i.cents or 0 for i in priced),
         "items": [asdict(i) for i in priced],
     }
+
+
+class ItemName(BaseModel):
+    """An item the user typed on the list."""
+
+    name: str = Field(min_length=1, max_length=200)
+
+
+@router.post("/item-sizes")
+async def sizes(
+    body: ItemName, user_id: Annotated[str, Depends(current_user_id)]
+) -> dict[str, Any]:
+    """The package sizes a typed item comes in at the user's store, with
+    today's prices, to pick from (TYL-142). Looked up live; nothing stored."""
+    try:
+        found = await item_sizes(user_id, body.name, date.today())
+    except (StoreError, httpx.HTTPError) as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "We couldn't look up sizes. Try again."
+        ) from exc
+    return {"ingredient_id": found["ingredient_id"], "sizes": [asdict(o) for o in found["sizes"]]}
 
 
 # The most saved recipes a draft considers: favorites that are due first, then

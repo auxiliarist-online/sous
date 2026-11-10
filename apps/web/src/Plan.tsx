@@ -31,6 +31,7 @@ import type { Cooked, CookedApi } from './cooked.ts'
 import type { PantryItem, PantryKind } from './pantry.ts'
 import { cookPath } from './navigation.ts'
 import { Link } from './router.tsx'
+import { CarryOver } from './CarryOver.tsx'
 import {
   DEFAULT_VARIETY,
   isDue,
@@ -225,6 +226,9 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
         <Link to="/plan" className="small">
           Back to this week
         </Link>
+      )}
+      {week === thisWeek && (
+        <CarryOver key={week} api={api} week={week} onMoved={reload} />
       )}
 
       {failed && (
