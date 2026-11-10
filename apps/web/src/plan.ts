@@ -47,6 +47,12 @@ export function weekLabel(weekStart: string): string {
     : `${month(start)} ${start.getDate()} – ${month(end)} ${end.getDate()}`
 }
 
+/** "Nov 9". */
+export function monthDay(iso: string): string {
+  const d = parseDate(iso)
+  return `${d.toLocaleDateString('en-US', { month: 'short' })} ${d.getDate()}`
+}
+
 export function dayName(iso: string): string {
   return parseDate(iso).toLocaleDateString('en-US', { weekday: 'long' })
 }

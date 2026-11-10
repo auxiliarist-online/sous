@@ -127,6 +127,11 @@ describe('RecipePage', () => {
       ],
     })),
     setMyCuisines: vi.fn(async (_id: string, _slugs: string[]) => {}),
+    addedCosts: vi.fn(async () => ({
+      budgetCents: null,
+      totalCents: 0,
+      recipes: {},
+    })),
     ...fakeCookedApi(),
   })
 

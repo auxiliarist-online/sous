@@ -2,7 +2,8 @@
 
 GET /plans/{week_start}/cost   cost of the user's plan for that week, at today's
                                store prices where there are some (TYL-80), with
-                               each recipe's share (TYL-30).
+                               each recipe's share (TYL-30); ?list=1 for the
+                               reviewed entries only (TYL-150).
 POST /plans/{week_start}/added what adding each of some recipes would add to
                                that week's cost (TYL-30).
 POST /plans/{week_start}/draft "Plan my week" (TYL-65): a draft of the open
@@ -55,10 +56,16 @@ async def _inputs(
 
 @router.get("/{week_start}/cost")
 async def week_cost(
-    week_start: date, user_id: Annotated[str, Depends(current_user_id)]
+    week_start: date,
+    user_id: Annotated[str, Depends(current_user_id)],
+    list: bool = False,  # noqa: A002 - the query parameter's name
 ) -> dict[str, Any]:
-    """The week's buy list and cost, and each planned recipe's share."""
+    """The week's buy list and cost, and each planned recipe's share. With
+    `list`, only the entries reviewed for the list (TYL-150): a new one
+    reaches the shopping list once the user has checked what they have."""
     inputs, store_id = await _inputs(user_id, week_start)
+    if list:
+        inputs["entries"] = [e for e in inputs.get("entries", []) if e.get("reviewed", True)]
     cost = asdict(plan_cost(inputs, on=week_start, store_id=store_id))
     # Priced from a store, or not, and why (for the plan page to say so).
     cost.update(

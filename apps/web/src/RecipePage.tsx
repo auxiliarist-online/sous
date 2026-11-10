@@ -7,8 +7,17 @@ import { FavoriteControl } from './Favorite.tsx'
 import type { Frequency } from './variety.ts'
 import { recipeInSeason, type Seasons } from './seasons.ts'
 import { shortDate, type CookedApi, type CookedSummary } from './cooked.ts'
-import { isoDate, weekOf, type Fit, type Scale } from './plan.ts'
+import {
+  dollars,
+  isoDate,
+  weekOf,
+  type AddedCosts,
+  type Fit,
+  type Scale,
+} from './plan.ts'
 import { Link } from './router.tsx'
+import { ArrowLeft, Leaf } from 'lucide-react'
+import { showToast } from './toast.ts'
 import { ExternalLink } from './ExternalLink.tsx'
 import { ingredientLines, type Option, type RecipeDetail } from './sous.ts'
 
@@ -31,6 +40,8 @@ export interface RecipePageApi extends CookedApi {
   recipeFits(ids: string[]): Promise<Record<string, Fit>>
   /** Replace the user's tags on a recipe they've saved (TYL-81). */
   setTags(recipeId: string, tags: string[]): Promise<void>
+  /** What adding recipes would add to a week's cost (TYL-30). */
+  addedCosts(weekStart: string, recipeIds: string[]): Promise<AddedCosts>
   /** Every cuisine, to correct a recipe's (TYL-56). */
   options(): Promise<{ cuisines: Option[] }>
   /** The user's own cuisines for a recipe; none goes back to the recipe's. */
@@ -58,7 +69,10 @@ function InSeason({
   )
   if (names.length === 0) return null
   return (
-    <p className="small in-season">In season: {names.slice(0, 4).join(', ')}</p>
+    <p className="small in-season">
+      <Leaf size={16} strokeWidth={2.75} aria-hidden="true" />
+      <strong>In season:</strong> {names.slice(0, 4).join(', ')}
+    </p>
   )
 }
 
@@ -87,6 +101,32 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
   // Today, as the page opened: what "Cooked it" dates a meal to.
   const [today] = useState(() => isoDate(new Date()))
   const [version, setVersion] = useState(0)
+  // What's on hand of it (TYL-149: "You have"), and what it would add to
+  // this week's shopping; both optional.
+  const [have, setHave] = useState<Set<string> | null>(null)
+  const [adds, setAdds] = useState<{
+    cents: number
+    estimated: boolean
+  } | null>(null)
+
+  useEffect(() => {
+    let live = true
+    api.onHandIn(id).then(
+      (items) => live && setHave(new Set(items.map((i) => i.ingredientId))),
+      () => live && setHave(new Set()),
+    )
+    api.addedCosts(weekOf(), [id]).then(
+      (a) => {
+        const r = a.recipes[id]
+        if (live && r && !r.unpriced)
+          setAdds({ cents: r.cents, estimated: r.estimated })
+      },
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api, id])
 
   useEffect(() => {
     let live = true
@@ -133,6 +173,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     try {
       await api.addToPlan(weekOf(), id, 1)
       setPlanned('added')
+      showToast('Added to this week.')
     } catch {
       setPlanned('error')
     }
@@ -178,17 +219,64 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     recipe.servings ? `serves ${recipe.servings}` : null,
   ].filter(Boolean)
   const lines = ingredientLines(recipe.ingredients)
-  const headings = lines.map((l, i) =>
-    l.section && l.section !== lines[i - 1]?.section ? l.section : null,
-  )
+
+  // "To buy" and "You have" (TYL-149): a line is had when every option of
+  // it is on hand; lines Sous couldn't match stay to buy.
+  const isHad = (lineNo: number) => {
+    const ids = recipe.ingredients
+      .filter((o) => o.lineNo === lineNo)
+      .map((o) => o.ingredientId)
+    return !!have && ids.length > 0 && ids.every((x) => x && have.has(x))
+  }
+  const toBuy = lines.filter((l) => !isHad(l.lineNo))
+  const had = lines.filter((l) => isHad(l.lineNo))
+  // One line, with its section heading when it starts one.
+  const lineItem = (
+    line: (typeof lines)[number],
+    i: number,
+    list: typeof lines,
+  ) => {
+    const options = recipe.ingredients.filter((o) => o.lineNo === line.lineNo)
+    const star = options.some((o) => o.name && starred.includes(o.name))
+    const heading =
+      line.section && line.section !== list[i - 1]?.section
+        ? line.section
+        : null
+    const haveIt = isHad(line.lineNo)
+    const item = (
+      <li key={line.lineNo} className={haveIt ? 'have' : undefined}>
+        <span className="dot" aria-hidden="true" />
+        <span className="line-text">
+          {line.rawText}
+          {star && (
+            <span className="star" aria-label="check the label">
+              {' '}
+              *
+            </span>
+          )}
+          {line.isOptional && <span className="muted small"> (optional)</span>}
+        </span>
+        {haveIt && <span className="small muted">have it</span>}
+      </li>
+    )
+    return heading ? (
+      <Fragment key={line.lineNo}>
+        <li className="section">{heading}</li>
+        {item}
+      </Fragment>
+    ) : (
+      item
+    )
+  }
+  const source = sourceLabel(recipe.sourceName, recipe.sourceUrl)
 
   return (
-    <article className="card recipe">
-      <Link to="/recipes" className="small">
-        ← Your recipes
-      </Link>
-      <div className="recipe-title">
-        <h2>{recipe.title}</h2>
+    <article className="recipe">
+      <div className="recipe-top">
+        <Link to="/recipes" className="back">
+          <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
+          Your recipes
+        </Link>
         <FavoriteControl
           title={recipe.title}
           favorite={recipe.favorite}
@@ -198,24 +286,64 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
           }}
         />
       </div>
+      <h2 className="recipe-name">{recipe.title}</h2>
+      <p className="muted recipe-facts">{facts.join(' · ')}</p>
       {history?.note && (
-        <p className="small cooked-note-shown">
+        <p className="note-card cooked-note-shown">
           Your note from {shortDate(history.note.on)}: {history.note.text}
         </p>
       )}
-      <p className="muted small">{facts.join(' · ')}</p>
       <InSeason
         seasons={seasons}
         recipe={recipe}
         month={Number(today.slice(5, 7))}
       />
-      <p className="small">
-        {history && history.times > 0 && (
-          <span className="muted">
-            Cooked {history.times === 1 ? 'once' : `${history.times} times`}
-            {history.lastOn && `, last on ${shortDate(history.lastOn)}`}.{' '}
-          </span>
+      {history && history.times > 0 && (
+        <p className="small muted">
+          Cooked {history.times === 1 ? 'once' : `${history.times} times`}
+          {history.lastOn && `, last on ${shortDate(history.lastOn)}`}.
+        </p>
+      )}
+      <div className="recipe-chips">
+        <DietChips diets={recipe.diets} />
+        <CuisineLine
+          api={api}
+          recipe={recipe}
+          // Load it again: going back shows the recipe's own cuisines.
+          onChange={() =>
+            // A failed reload keeps the picker open with its error.
+            api.recipe(recipe.id).then((r) => {
+              if (r) setRecipe(r)
+            })
+          }
+        />
+        {recipe.saved && (
+          <TagEditor
+            tags={recipe.tags}
+            onChange={async (tags) => {
+              await api.setTags(recipe.id, tags)
+              setRecipe({ ...recipe, tags })
+            }}
+          />
         )}
+      </div>
+      {recipe.sourceUrl && !recipe.license && (
+        // The author's page is the main action: their instructions live there (policy).
+        <>
+          <ExternalLink className="button view-full" href={recipe.sourceUrl}>
+            View full recipe on {source}
+          </ExternalLink>
+          <p className="small muted">
+            The steps live on the author's page. Sous keeps the ingredients so
+            it can plan and price them.
+          </p>
+        </>
+      )}
+
+      <div className="recipe-buttons">
+        <Link to={cookPath(recipe.id)} className="button secondary">
+          Cook
+        </Link>
         <CookedButton
           api={api}
           recipeId={recipe.id}
@@ -223,75 +351,38 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
           cookedOn={today}
           onChange={() => setVersion((v) => v + 1)}
         />
-      </p>
-      <DietChips diets={recipe.diets} />
-      <CuisineLine
-        api={api}
-        recipe={recipe}
-        // Load it again: going back shows the recipe's own cuisines.
-        onChange={() =>
-          // A failed reload keeps the picker open with its error.
-          api.recipe(recipe.id).then((r) => {
-            if (r) setRecipe(r)
-          })
-        }
-      />
-      {recipe.saved && (
-        <TagEditor
-          tags={recipe.tags}
-          onChange={async (tags) => {
-            await api.setTags(recipe.id, tags)
-            setRecipe({ ...recipe, tags })
-          }}
-        />
-      )}
-      {recipe.sourceUrl && !recipe.license && (
-        // The author's page is the main action: their instructions live there (policy).
-        <ExternalLink className="button" href={recipe.sourceUrl}>
-          View full recipe on {sourceLabel(recipe.sourceName, recipe.sourceUrl)}
-        </ExternalLink>
-      )}
+        {recipe.handTyped && (
+          <Link to={`/edit/${recipe.id}`} className="button secondary">
+            Edit recipe
+          </Link>
+        )}
+      </div>
 
-      <Link to={cookPath(recipe.id)} className="button secondary">
-        Cook
-      </Link>
-
-      <h3>Ingredients</h3>
-      <ul className="ingredients">
-        {lines.map((line, i) => {
-          const options = recipe.ingredients.filter(
-            (o) => o.lineNo === line.lineNo,
-          )
-          const star = options.some((o) => o.name && starred.includes(o.name))
-          const heading = headings[i]
-          const item = (
-            <li key={line.lineNo}>
-              {line.rawText}
-              {star && (
-                <span className="star" aria-label="check the label">
-                  {' '}
-                  *
-                </span>
-              )}
-              {line.isOptional && (
-                <span className="muted small"> (optional)</span>
-              )}
-            </li>
-          )
-          return heading ? (
-            <Fragment key={line.lineNo}>
-              <li className="section">{heading}</li>
-              {item}
-            </Fragment>
-          ) : (
-            item
-          )
-        })}
+      <h3 className="split-title">
+        {had.length ? `To buy (${toBuy.length})` : 'Ingredients'}
+        {adds && (
+          <span>
+            {' '}
+            · {adds.estimated ? '~' : ''}
+            {dollars(adds.cents)}
+          </span>
+        )}
+      </h3>
+      <ul className="ingredients split">
+        {toBuy.map((l, i) => lineItem(l, i, toBuy))}
       </ul>
+      {had.length > 0 && (
+        <>
+          <h3 className="split-title">You have ({had.length})</h3>
+          <ul className="ingredients split">
+            {had.map((l, i) => lineItem(l, i, had))}
+          </ul>
+        </>
+      )}
 
       {recipe.instructions && recipe.instructions.length > 0 && (
         <>
-          <h3>Steps</h3>
+          <h3 className="split-title">Steps</h3>
           <ol className="steps">
             {recipe.instructions.map((step, i) => (
               <li key={i}>{step}</li>
@@ -321,16 +412,46 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         </p>
       )}
 
-      <div className="actions">
-        {fit === 'excluded' && planned !== 'added' && (
-          <p className="small warning" role="note">
-            This recipe doesn't fit your diets or allergies.
-          </p>
+      {fit === 'excluded' && planned !== 'added' && (
+        <p className="small warning" role="note">
+          This recipe doesn't fit your diets or allergies.
+        </p>
+      )}
+      {planned === 'error' && (
+        <p role="alert" className="error">
+          We couldn't add it to your plan. Try again.
+        </p>
+      )}
+      {saveFailed && (
+        <p role="alert" className="error">
+          We couldn't save it. Try again.
+        </p>
+      )}
+
+      {/* The sticky bar (TYL-149): save, and add to this week. */}
+      <div className="sticky-bar">
+        {recipe.saved ? (
+          <button
+            type="button"
+            className="secondary"
+            aria-label="Remove from my recipes"
+            onClick={() => void remove(recipe)}
+          >
+            Saved
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void save(recipe)}
+          >
+            Save
+          </button>
         )}
         {planned === 'added' ? (
-          <p role="status">
-            Added to this week's plan. <Link to="/plan">See the plan</Link>
-          </p>
+          <Link to="/plan" className="button in-week" label="See the plan">
+            In this week · see the plan
+          </Link>
         ) : (
           <button
             type="button"
@@ -343,38 +464,6 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
                 ? "Add to this week's plan anyway"
                 : "Add to this week's plan"}
           </button>
-        )}
-        {planned === 'error' && (
-          <p role="alert" className="error">
-            We couldn't add it to your plan. Try again.
-          </p>
-        )}
-        {recipe.handTyped && (
-          <Link to={`/edit/${recipe.id}`} className="button secondary">
-            Edit recipe
-          </Link>
-        )}
-        {recipe.saved ? (
-          <button
-            type="button"
-            className="link"
-            onClick={() => void remove(recipe)}
-          >
-            Remove from my recipes
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="link"
-            onClick={() => void save(recipe)}
-          >
-            Save to my recipes
-          </button>
-        )}
-        {saveFailed && (
-          <p role="alert" className="error">
-            We couldn't save it. Try again.
-          </p>
         )}
       </div>
     </article>

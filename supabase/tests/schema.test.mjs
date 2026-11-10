@@ -4176,3 +4176,55 @@ describe('cuisines when the source does not say (TYL-56)', () => {
     ])
   })
 })
+
+describe('reviewing a plan for the list (TYL-150)', () => {
+  const UMA = '00000000-0000-0000-0000-000000015001'
+  const VIC = '00000000-0000-0000-0000-000000015002'
+  const WEEK = '2026-11-09'
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1), ($2)', [UMA, VIC])
+  })
+
+  it('starts a new entry unreviewed, and lets only its owner review it', async () => {
+    const soup = await recipe('Review soup (TYL-150)', [])
+    const entry = await as('authenticated', UMA, async () => {
+      const { rows } = await db.query(
+        'select add_to_meal_plan($1, $2, 1) as id',
+        [WEEK, soup],
+      )
+      return rows[0].id
+    })
+    const reviewed = async () =>
+      (
+        await db.query('select reviewed from meal_plan_entries where id = $1', [
+          entry,
+        ])
+      ).rows[0].reviewed
+    assert.equal(await reviewed(), false)
+    // Someone else can't see it, so can't review it.
+    await as('authenticated', VIC, () =>
+      db.query('update meal_plan_entries set reviewed = true where id = $1', [
+        entry,
+      ]),
+    )
+    assert.equal(await reviewed(), false)
+    await as('authenticated', UMA, () =>
+      db.query('update meal_plan_entries set reviewed = true where id = $1', [
+        entry,
+      ]),
+    )
+    assert.equal(await reviewed(), true)
+    const inputs = await as('service_role', null, async () => {
+      const { rows } = await db.query('select plan_cost_inputs($1, $2) as r', [
+        UMA,
+        WEEK,
+      ])
+      return rows[0].r
+    })
+    assert.deepEqual(
+      inputs.entries.map((e) => e.reviewed),
+      [true],
+    )
+  })
+})

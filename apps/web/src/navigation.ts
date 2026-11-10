@@ -67,6 +67,17 @@ export function cookParams(search: string): {
   }
 }
 
+/** Which drawer a page opens in, over the week (TYL-149): Find opens inside
+ *  Recipes. Pages that aren't drawers are null. */
+export type Drawer = 'recipes' | 'list' | 'pantry'
+
+export function drawerOf(page: string): Drawer | null {
+  if (page === 'library' || page === 'browse') return 'recipes'
+  if (page === 'list') return 'list'
+  if (page === 'pantry') return 'pantry'
+  return null
+}
+
 export type Route =
   | { page: 'home' }
   | { page: 'library' }

@@ -31,6 +31,8 @@ import type { Cooked, CookedApi } from './cooked.ts'
 import type { PantryItem, PantryKind } from './pantry.ts'
 import { cookPath } from './navigation.ts'
 import { Link } from './router.tsx'
+import { ArrowLeft, X } from 'lucide-react'
+import { Sheet } from './Shell.tsx'
 import { CarryOver } from './CarryOver.tsx'
 import {
   DEFAULT_VARIETY,
@@ -207,26 +209,44 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
 
   const thisWeek = weekOf()
   const days = weekDays(week)
+  // Today, for "· tonight" (taken once, like the week).
+  const [todayIso] = useState(() => isoDate(new Date()))
 
   return (
-    <section className="card plan" aria-busy={busy}>
+    <section className="plan" aria-busy={busy}>
+      <Link to="/" className="back">
+        <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
+        This week
+      </Link>
+      <h2 className="screen-title">
+        Your plan <small>{weekLabel(week)}</small>
+      </h2>
       <nav className="week-nav" aria-label="Weeks">
         <Link to={`/plan/${addDays(week, -7)}`} className="small">
           ← Previous
         </Link>
+        {week !== thisWeek && (
+          <Link to="/plan" className="small">
+            Back to this week
+          </Link>
+        )}
         <Link to={`/plan/${addDays(week, 7)}`} className="small">
           Next →
         </Link>
       </nav>
-      <h2>
-        {week === thisWeek ? 'This week' : 'Week of'}{' '}
-        <span className="muted">{weekLabel(week)}</span>
-      </h2>
-      {week !== thisWeek && (
-        <Link to="/plan" className="small">
-          Back to this week
+      <div className="plan-actions">
+        <button
+          type="button"
+          className="plan-my-week"
+          disabled={busy || entries === null || dinners(entries) >= 7}
+          onClick={() => setDrafting(true)}
+        >
+          Plan my week
+        </button>
+        <Link to="/browse" className="button secondary">
+          Add a recipe
         </Link>
-      )}
+      </div>
       {week === thisWeek && (
         <CarryOver key={week} api={api} week={week} onMoved={reload} />
       )}
@@ -313,28 +333,19 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
             />
           )}
 
-          {drafting ? (
-            <DraftWeek
-              api={api}
-              week={week}
-              planned={dinners(entries)}
-              onDone={() => {
-                setDrafting(false)
-                reload()
-              }}
-              onCancel={() => setDrafting(false)}
-            />
-          ) : (
-            dinners(entries) < 7 && (
-              <button
-                type="button"
-                className="secondary plan-my-week"
-                disabled={busy}
-                onClick={() => setDrafting(true)}
-              >
-                Plan my week
-              </button>
-            )
+          {drafting && (
+            <Sheet title="Plan my week" onClose={() => setDrafting(false)}>
+              <DraftWeek
+                api={api}
+                week={week}
+                planned={dinners(entries)}
+                onDone={() => {
+                  setDrafting(false)
+                  reload()
+                }}
+                onCancel={() => setDrafting(false)}
+              />
+            </Sheet>
           )}
 
           <VarietyNotes entries={entries} settings={variety} />
@@ -363,10 +374,22 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
 
           {[...days, null].map((day) => {
             const planned = entries.filter((e) => e.day === day)
-            if (!planned.length) return null
+            if (!planned.length && day === null) return null
+            const heading = day
+              ? `${dayName(day)}${day === todayIso ? ' · tonight' : ''}`
+              : 'Any day this week'
+            if (!planned.length)
+              return (
+                <section key={day} className="plan-day">
+                  <h3 className="kicker">{heading}</h3>
+                  <Link to="/browse" className="plan-open">
+                    Open · add a recipe
+                  </Link>
+                </section>
+              )
             return (
               <section key={day ?? 'any'} className="plan-day">
-                <h3>{day ? dayName(day) : 'Any day this week'}</h3>
+                <h3 className="kicker">{heading}</h3>
                 <ul className="plan-entries">
                   {planned.map((e) => (
                     <Entry
@@ -875,21 +898,47 @@ function Entry({
   return (
     <li className="plan-entry">
       <div className="entry-head">
-        <Link to={`/recipe/${entry.recipeId}`}>{entry.title}</Link>
-        {serves && <span className="muted small">serves {serves}</span>}
-        <Link
-          to={cookPath(entry.recipeId, entry.scale, entry.id)}
-          className="small"
-          label={`Cook ${entry.title}`}
-        >
-          Cook
-        </Link>
-        {cost && cost.entryCents[entry.id] !== undefined && (
-          <span className="muted small" aria-label="This recipe's share">
-            {cost.estimated ? '~' : ''}
-            {dollars(cost.entryCents[entry.id])}
+        <div className="entry-text">
+          <Link to={`/recipe/${entry.recipeId}`} className="entry-title">
+            {entry.title}
+          </Link>
+          <span className="muted small">
+            {serves && `serves ${serves}`}
+            {cost && cost.entryCents[entry.id] !== undefined && (
+              <span aria-label="This recipe's share">
+                {serves && ' · '}
+                {cost.estimated ? '~' : ''}
+                {dollars(cost.entryCents[entry.id])}
+              </span>
+            )}
           </span>
-        )}
+        </div>
+        <label className="visually-hidden" htmlFor={`day-${entry.id}`}>
+          Day for {entry.title}
+        </label>
+        <select
+          id={`day-${entry.id}`}
+          className="move-pill"
+          value={entry.day ?? ''}
+          disabled={busy}
+          onChange={(e) => onChange({ day: e.target.value || null })}
+        >
+          <option value="">Any day</option>
+          {days.map((d) => (
+            <option key={d} value={d}>
+              {dayName(d)}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="icon-button plain"
+          disabled={busy}
+          onClick={onRemove}
+          aria-label={`Remove ${entry.title} from the plan`}
+        >
+          <X size={20} strokeWidth={2.75} aria-hidden="true" />
+        </button>
       </div>
       <div className="entry-controls">
         <div
@@ -910,31 +959,13 @@ function Entry({
             </button>
           ))}
         </div>
-        <label className="visually-hidden" htmlFor={`day-${entry.id}`}>
-          Day for {entry.title}
-        </label>
-        <select
-          id={`day-${entry.id}`}
-          value={entry.day ?? ''}
-          disabled={busy}
-          onChange={(e) => onChange({ day: e.target.value || null })}
+        <Link
+          to={cookPath(entry.recipeId, entry.scale, entry.id)}
+          className="small"
+          label={`Cook ${entry.title}`}
         >
-          <option value="">Any day</option>
-          {days.map((d) => (
-            <option key={d} value={d}>
-              {dayName(d)}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="link"
-          disabled={busy}
-          onClick={onRemove}
-          aria-label={`Remove ${entry.title} from the plan`}
-        >
-          Remove
-        </button>
+          Cook
+        </Link>
       </div>
       {cooked !== undefined && (
         <CookedButton

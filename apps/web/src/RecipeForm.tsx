@@ -32,22 +32,49 @@ function numberOrNull(value: string): number | null {
   return value.trim() && Number.isFinite(n) && n > 0 ? n : null
 }
 
+/** Where a draft came from: photos of a cookbook page, or dictation. */
+export type DraftSource = 'photo' | 'voice'
+
+/** The form's text for a draft read from photos or speech. */
+function fromDraft(d: PhotoDraft, sourceNote = ''): ManualRecipeInput {
+  return {
+    title: d.title,
+    ingredients: d.ingredients.join('\n'),
+    instructions: d.instructions.join('\n'),
+    servings: d.servings,
+    totalMinutes: d.totalMinutes,
+    sourceNote,
+  }
+}
+
 /** Type in a recipe of your own, or edit one. It stays private to you, and
- *  its ingredients are parsed and labelled like any other recipe. */
+ *  its ingredients are parsed and labelled like any other recipe. In the
+ *  Add-a-recipe sheet (TYL-151) it's `embedded`: the sheet has the heading,
+ *  and it may start from a photo or voice `draft`. */
 export function RecipeForm({
   api,
   recipeId,
+  draft,
+  embedded = false,
+  onSaved,
 }: {
   api: RecipeFormApi
   recipeId?: string
+  draft?: { draft: PhotoDraft; from: DraftSource }
+  embedded?: boolean
+  /** Instead of opening the recipe once it's saved. */
+  onSaved?: (id: string) => void
 }) {
   const [input, setInput] = useState<ManualRecipeInput | null>(
-    recipeId ? null : EMPTY,
+    recipeId ? null : draft ? fromDraft(draft.draft) : EMPTY,
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // After reading photos: what to check, and what was left out.
-  const [review, setReview] = useState<PhotoDraft | null>(null)
+  // After reading photos or speech: what to check, and what was left out.
+  const [review, setReview] = useState<PhotoDraft | null>(draft?.draft ?? null)
+  const [reviewFrom, setReviewFrom] = useState<DraftSource>(
+    draft?.from ?? 'photo',
+  )
   // Suggestions, kept with the API they came from: another account's never
   // show, even while its own are loading or if they fail to.
   const [loaded, setLoaded] = useState<{
@@ -99,15 +126,9 @@ export function RecipeForm({
 
   // Fill the form from photos; anything already typed is replaced.
   function fromPhotos(d: PhotoDraft) {
-    setInput({
-      title: d.title,
-      ingredients: d.ingredients.join('\n'),
-      instructions: d.instructions.join('\n'),
-      servings: d.servings,
-      totalMinutes: d.totalMinutes,
-      sourceNote: input?.sourceNote ?? '',
-    })
+    setInput(fromDraft(d, input?.sourceNote ?? ''))
     setReview(d)
+    setReviewFrom('photo')
   }
 
   async function submit(e: FormEvent) {
@@ -117,7 +138,8 @@ export function RecipeForm({
     setError(null)
     try {
       const id = await api.saveManual(input, recipeId)
-      navigate(`/recipe/${id}`, true)
+      if (onSaved) onSaved(id)
+      else navigate(`/recipe/${id}`, true)
     } catch (err) {
       setError((err as Error).message)
       setSaving(false)
@@ -125,19 +147,31 @@ export function RecipeForm({
   }
 
   return (
-    <form className="card recipe-form" onSubmit={submit}>
-      <Link to={recipeId ? `/recipe/${recipeId}` : '/'} className="small">
-        ← {recipeId ? 'Back to the recipe' : 'Your recipes'}
-      </Link>
-      <h2>{recipeId ? 'Edit your recipe' : 'Type in a recipe'}</h2>
-      <p className="muted small">Only you can see recipes you type in.</p>
+    <form
+      className={embedded ? 'recipe-form' : 'card recipe-form'}
+      onSubmit={submit}
+    >
+      {!embedded && (
+        <>
+          <Link
+            to={recipeId ? `/recipe/${recipeId}` : '/recipes'}
+            className="back"
+          >
+            ← {recipeId ? 'Back to the recipe' : 'Your recipes'}
+          </Link>
+          <h2>{recipeId ? 'Edit your recipe' : 'Type in a recipe'}</h2>
+        </>
+      )}
 
-      {!recipeId && <PhotoReader read={api.readPhotos} onRead={fromPhotos} />}
+      {!recipeId && !embedded && (
+        <PhotoReader read={api.readPhotos} onRead={fromPhotos} />
+      )}
       {review && (
         <section className="photo-review" role="status">
           <p className="small">
-            Read from your photos. Check it over before saving, and add the
-            book's name under “Where it's from”.
+            {reviewFrom === 'voice'
+              ? 'Written up from what you said. Check it over before saving.'
+              : "Read from your photos. Check it over before saving, and add the book's name under “Where it's from”."}
           </p>
           {review.unsure.length > 0 && (
             <>
@@ -244,6 +278,7 @@ export function RecipeForm({
       <button type="submit" disabled={saving || !input.title.trim()}>
         {saving ? 'Saving…' : 'Save recipe'}
       </button>
+      <p className="muted small">Only you can see recipes you type in.</p>
       {error && (
         <p role="alert" className="error">
           {error}

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   dayName,
   dollars,
+  weekDays,
+  monthDay,
   weekOf,
   type PlanCost,
   type PlanEntry,
@@ -12,6 +14,7 @@ import { SeasonCard, type SeasonApi } from './SeasonCard.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
 import { cookPath } from './navigation.ts'
 import { Link } from './router.tsx'
+import { SlidersHorizontal } from 'lucide-react'
 import { CarryOver } from './CarryOver.tsx'
 
 export interface HomeApi extends CookedApi, SeasonApi {
@@ -80,38 +83,27 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   }
   if (!entries) return <p className="card muted">Loading…</p>
 
-  if (!entries.length) {
-    return (
-      <section className="card home">
-        <h2>This week</h2>
-        <CarryOver
-          key={week}
-          api={api}
-          week={week}
-          onMoved={() => setVersion((v) => v + 1)}
-        />
-        <p className="muted">Nothing planned yet.</p>
-        <Link to="/plan" className="button">
-          Plan this week
-        </Link>
-        <Link to="/browse" className="small">
-          Find recipes
-        </Link>
-        <SeasonCard api={api} now={opened} />
-      </section>
-    )
-  }
-
   const day = today(opened)
+  const days = weekDays(week)
   const tonight = entries.filter((e) => e.day === day)
-  const ahead = entries.filter((e) => e.day !== null && e.day > day)
   const anyDay = entries.filter((e) => e.day === null)
   // What the list holds from the plan (items Sous couldn't match aren't on it).
   const toBuy = cost ? plannedItems(cost) : []
+  const n = entries.length
 
   return (
-    <section className="card home">
-      <h2>This week</h2>
+    <section className="home" aria-label="This week">
+      <header className="week-head">
+        <span className="wordmark">Sous</span>
+        <span className="small muted">Week of {monthDay(week)}</span>
+        <Link to="/settings" className="icon-button" label="Preferences">
+          <SlidersHorizontal size={20} strokeWidth={2.75} aria-hidden="true" />
+        </Link>
+      </header>
+      <h2 className="ledger-title">
+        This week,{' '}
+        {n === 0 ? 'nothing planned' : `${n} dinner${n === 1 ? '' : 's'}`}.
+      </h2>
       <CarryOver
         key={week}
         api={api}
@@ -119,81 +111,127 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
         onMoved={() => setVersion((v) => v + 1)}
       />
 
-      <section aria-labelledby="tonight">
-        <h3 id="tonight">Tonight</h3>
-        {tonight.length ? (
-          <ul className="home-meals">
-            {tonight.map((e) => (
-              <li key={e.id}>
-                <Link to={`/recipe/${e.recipeId}`}>{e.title}</Link>{' '}
+      {/* The ledger (TYL-149): a row per day, today first in dark green. */}
+      <ol className="ledger" aria-label="Dinners this week">
+        {days.map((d) => {
+          const planned = entries.filter((e) => e.day === d)
+          const isToday = d === day
+          const label = dayName(d).slice(0, 3)
+          if (!planned.length)
+            return (
+              <li
+                key={d}
+                className={isToday ? 'ledger-row today' : 'ledger-row open'}
+              >
+                <span className="ledger-day">{label}</span>
+                <span className="ledger-title-text">Open</span>
                 <Link
-                  to={cookPath(e.recipeId, e.scale, e.id)}
-                  className="small"
-                  label={`Cook ${e.title}`}
+                  to="/browse"
+                  className="ledger-tag"
+                  label={`Add a recipe for ${dayName(d)}`}
                 >
-                  Cook
+                  + Add
                 </Link>
-                {cooked && (
-                  <CookedButton
-                    api={api}
-                    recipeId={e.recipeId}
-                    title={e.title}
-                    planEntryId={e.id}
-                    cookedOn={day}
-                    scale={e.scale}
-                    cooked={cooked[e.id] ?? null}
-                  />
-                )}
               </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted small">
-            Nothing planned for tonight.
-            {anyDay.length > 0 &&
-              ` ${anyDay.length} recipe${anyDay.length === 1 ? ' is' : 's are'} planned for any day.`}
-          </p>
-        )}
-      </section>
+            )
+          return planned.map((e, k) => (
+            <li
+              key={e.id}
+              className={isToday ? 'ledger-row today' : 'ledger-row'}
+            >
+              <span className="ledger-day">{k === 0 ? label : ''}</span>
+              <Link to={`/recipe/${e.recipeId}`} className="ledger-title-text">
+                {e.title}
+              </Link>
+              {isToday && k === 0 && (
+                <span className="ledger-tag">Tonight</span>
+              )}
+            </li>
+          ))
+        })}
+        {anyDay.map((e, k) => (
+          <li key={e.id} className="ledger-row">
+            <span className="ledger-day">{k === 0 ? 'Any' : ''}</span>
+            <Link to={`/recipe/${e.recipeId}`} className="ledger-title-text">
+              {e.title}
+            </Link>
+          </li>
+        ))}
+      </ol>
 
-      {ahead.length > 0 && (
-        <section aria-labelledby="ahead">
-          <h3 id="ahead">Coming up</h3>
-          <ul className="home-meals">
-            {ahead.slice(0, 4).map((e) => (
-              <li key={e.id}>
-                <span className="muted small">{dayName(e.day!)} · </span>
-                <Link to={`/recipe/${e.recipeId}`}>{e.title}</Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {tonight.length > 0 && (
+        <div className="tonight-actions" aria-label="Tonight">
+          {tonight.map((e) => (
+            <p key={e.id} className="small">
+              <span className="muted">{e.title}: </span>
+              <Link
+                to={cookPath(e.recipeId, e.scale, e.id)}
+                label={`Cook ${e.title}`}
+              >
+                Cook
+              </Link>{' '}
+              {cooked && (
+                <CookedButton
+                  api={api}
+                  recipeId={e.recipeId}
+                  title={e.title}
+                  planEntryId={e.id}
+                  cookedOn={day}
+                  scale={e.scale}
+                  cooked={cooked[e.id] ?? null}
+                />
+              )}
+            </p>
+          ))}
+        </div>
       )}
 
-      <Link to="/plan" className="small">
+      <Link to="/plan" className="display-link">
         See and change the plan
       </Link>
 
-      <section aria-labelledby="shopping">
-        <h3 id="shopping">Shopping</h3>
-        {cost ? (
-          <p className="small">
-            {toBuy.length} item{toBuy.length === 1 ? '' : 's'} to buy ·{' '}
-            {cost.estimated ? '~' : ''}
-            {dollars(cost.totalCents)}
-            {cost.budgetCents !== null && ` of ${dollars(cost.budgetCents)}`}
-          </p>
-        ) : (
-          <p className="muted small">
-            {costFailed
-              ? "We couldn't work out the cost just now; the list still works."
-              : 'Working out what to buy…'}
-          </p>
-        )}
-        <Link to="/list" className="button">
-          Open the list
-        </Link>
-      </section>
+      {n > 0 && (
+        <section className="shopping-card" aria-labelledby="shopping">
+          <div className="shopping-head">
+            <h3 id="shopping">Shopping</h3>
+            <span className="small muted">{toBuy.length} to buy</span>
+          </div>
+          {cost ? (
+            <>
+              <p className="shopping-total">
+                <strong>
+                  {cost.estimated ? '~' : ''}
+                  {dollars(cost.totalCents)}
+                </strong>
+                {cost.budgetCents !== null && (
+                  <span className="muted">
+                    {' '}
+                    of your {dollars(cost.budgetCents)} budget
+                  </span>
+                )}
+              </p>
+              {cost.budgetCents ? (
+                <div className="meter" aria-hidden="true">
+                  <span
+                    style={{
+                      width: `${Math.min(100, (cost.totalCents / cost.budgetCents) * 100)}%`,
+                    }}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="muted small">
+              {costFailed
+                ? "We couldn't work out the cost just now; the list still works."
+                : 'Working out what to buy…'}
+            </p>
+          )}
+          <Link to="/list" className="button">
+            Open the list
+          </Link>
+        </section>
+      )}
 
       <SeasonCard api={api} now={opened} />
     </section>
