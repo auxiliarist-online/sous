@@ -4,6 +4,7 @@ import {
   dollars,
   weekDays,
   monthDay,
+  unreviewed,
   weekOf,
   type PlanCost,
   type PlanEntry,
@@ -16,8 +17,9 @@ import { cookPath } from './navigation.ts'
 import { Link } from './router.tsx'
 import { SlidersHorizontal } from 'lucide-react'
 import { CarryOver } from './CarryOver.tsx'
+import { PendingNotice, ReviewSheet, type ReviewApi } from './Review.tsx'
 
-export interface HomeApi extends CookedApi, SeasonApi {
+export interface HomeApi extends CookedApi, SeasonApi, ReviewApi {
   /** The week's planned recipes. */
   plan(weekStart: string): Promise<PlanEntry[]>
   /** The week's buy list and cost against the budget. */
@@ -48,6 +50,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   const [cooked, setCooked] = useState<Record<string, Cooked> | null>(null)
   // Bumped to load the week again (after last week's meals move in).
   const [version, setVersion] = useState(0)
+  const [reviewing, setReviewing] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -109,7 +112,8 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
         </Link>
       </header>
       <h2 className="ledger-title">
-        This week,{' '}
+        This week,
+        <br />
         {n === 0 ? 'nothing planned' : `${n} dinner${n === 1 ? '' : 's'}`}.
       </h2>
       <CarryOver
@@ -235,10 +239,22 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
                 : 'Working out what to buy…'}
             </p>
           )}
+          <PendingNotice
+            entries={unreviewed(entries)}
+            onReview={() => setReviewing(true)}
+          />
           <Link to="/list" className="button">
             Open the list
           </Link>
         </section>
+      )}
+      {reviewing && (
+        <ReviewSheet
+          api={api}
+          week={week}
+          entries={unreviewed(entries)}
+          onClose={() => setReviewing(false)}
+        />
       )}
 
       <SeasonCard api={api} now={opened} />

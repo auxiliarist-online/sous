@@ -18,7 +18,16 @@ import {
   plannedItems,
   type PlannedItem,
 } from './list.ts'
-import { addDays, dollars, weekLabel, weekOf, type PlanCost } from './plan.ts'
+import {
+  addDays,
+  dollars,
+  unreviewed,
+  weekLabel,
+  weekOf,
+  type PlanCost,
+  type PlanEntry,
+} from './plan.ts'
+import { PendingNotice, ReviewSheet, type ReviewApi } from './Review.tsx'
 import { Link } from './router.tsx'
 import { Share2 } from 'lucide-react'
 import { seasonOf, type Seasons } from './seasons.ts'
@@ -29,9 +38,9 @@ export interface Place {
   name: string
 }
 
-export interface ListApi {
-  /** The week's buy list and prices, from the plan. */
-  planCost(weekStart: string): Promise<PlanCost>
+export interface ListApi extends ReviewApi {
+  /** The week's planned meals: any not reviewed yet are offered for review. */
+  plan(weekStart: string): Promise<PlanEntry[]>
   /** Bring the week's list in line with the plan; returns the list's id. */
   syncList(weekStart: string, items: PlannedItem[]): Promise<string>
   /** The week's list as stored, or null when there isn't one yet. */
@@ -83,6 +92,9 @@ export function ListPage({
   const [showRemoved, setShowRemoved] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [seasons, setSeasons] = useState<Seasons | null>(null)
+  // The week's meals not on the list yet (TYL-150), and the review sheet.
+  const [waiting, setWaiting] = useState<PlanEntry[]>([])
+  const [reviewing, setReviewing] = useState(false)
   // The user's own items by name: priced again when one is added or renamed,
   // and a price shown only for the names it was worked out for.
   const ownKey = JSON.stringify(
@@ -131,7 +143,11 @@ export function ListPage({
       flushOps(user, api.sendListOp)
         .then(async (left) => {
           setPending(left)
-          const c = await api.planCost(week).catch(() => null)
+          const c = await api.listCost(week).catch(() => null)
+          api.plan(week).then(
+            (e) => setWaiting(unreviewed(e)),
+            () => {},
+          )
           setCost(c)
           // Only once everything's sent (see above).
           if (c && left === 0) await api.syncList(week, plannedItems(c))
@@ -382,6 +398,19 @@ export function ListPage({
           />
         </div>
       </section>
+      <PendingNotice entries={waiting} onReview={() => setReviewing(true)} />
+      {reviewing && (
+        <ReviewSheet
+          api={api}
+          week={week}
+          entries={waiting}
+          onClose={() => setReviewing(false)}
+          onDone={() => {
+            setReviewing(false)
+            void refresh()
+          }}
+        />
+      )}
       {cost && <WaitingChoices cost={cost} week={week} />}
       {(offline || pending > 0) && (
         <p role="status" className="muted small offline-note">

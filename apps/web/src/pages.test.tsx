@@ -176,7 +176,10 @@ describe('RecipePage', () => {
     )
     render(<RecipePage id={BURRITOS.id} api={a} />)
     expect(
-      await screen.findByText('In season: refried beans'),
+      await screen.findByText(
+        (_, el) =>
+          el?.tagName === 'P' && el.textContent === 'In season: refried beans',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -335,9 +338,7 @@ describe('RecipePage', () => {
   it('saves a recipe from the catalog to the user’s recipes', async () => {
     const fake = api({ ...BURRITOS, saved: false })
     render(<RecipePage id={BURRITOS.id} api={fake} />)
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Save to my recipes' }),
-    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Save' }))
     expect(fake.saveToLibrary).toHaveBeenCalledWith(BURRITOS.id)
     expect(
       await screen.findByRole('button', { name: 'Remove from my recipes' }),

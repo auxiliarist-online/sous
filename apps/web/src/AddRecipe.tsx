@@ -39,6 +39,9 @@ const TITLES: Record<Mode, string> = {
   form: 'Type in a recipe',
 }
 
+// The menu's wording, where it differs from the sheet's title.
+const LABELS: Partial<Record<Mode, string>> = { form: 'Type it in' }
+
 /** Open a saved recipe and say so. */
 function opened(id: string, onClose: () => void) {
   onClose()
@@ -114,7 +117,7 @@ function Menu({ onPick }: { onPick: (m: Mode) => void }) {
       <button type="button" className="add-way" onClick={() => onPick(m)}>
         <span className={brown ? 'add-icon brown' : 'add-icon'}>{icon}</span>
         <span>
-          <span className="add-way-label">{TITLES[m]}</span>
+          <span className="add-way-label">{LABELS[m] ?? TITLES[m]}</span>
           <span className="add-way-sub">{sub}</span>
         </span>
       </button>

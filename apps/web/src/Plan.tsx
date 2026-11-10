@@ -24,6 +24,7 @@ import {
   type PlanCost,
   type PlanEntry,
   type Scale,
+  unreviewed,
 } from './plan.ts'
 import { CookedButton } from './Cooked.tsx'
 import { DraftWeek, type DraftApi } from './DraftWeek.tsx'
@@ -33,6 +34,7 @@ import { cookPath } from './navigation.ts'
 import { Link } from './router.tsx'
 import { ArrowLeft, X } from 'lucide-react'
 import { Sheet } from './Shell.tsx'
+import { PendingNotice, ReviewSheet, type ReviewApi } from './Review.tsx'
 import { CarryOver } from './CarryOver.tsx'
 import {
   DEFAULT_VARIETY,
@@ -44,7 +46,7 @@ import {
 } from './variety.ts'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
 
-export interface PlanApi extends CookedApi, DraftApi {
+export interface PlanApi extends CookedApi, DraftApi, ReviewApi {
   list(): Promise<SavedRecipe[]>
   recipe(id: string): Promise<RecipeDetail | null>
   plan(weekStart: string): Promise<PlanEntry[]>
@@ -211,6 +213,7 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const days = weekDays(week)
   // Today, for "· tonight" (taken once, like the week).
   const [todayIso] = useState(() => isoDate(new Date()))
+  const [reviewing, setReviewing] = useState(false)
 
   return (
     <section className="plan" aria-busy={busy}>
@@ -247,6 +250,19 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
           Add a recipe
         </Link>
       </div>
+      <PendingNotice
+        long
+        entries={unreviewed(entries)}
+        onReview={() => setReviewing(true)}
+      />
+      {reviewing && entries && (
+        <ReviewSheet
+          api={api}
+          week={week}
+          entries={unreviewed(entries)}
+          onClose={() => setReviewing(false)}
+        />
+      )}
       {week === thisWeek && (
         <CarryOver key={week} api={api} week={week} onMoved={reload} />
       )}
@@ -904,6 +920,9 @@ function Entry({
           </Link>
           <span className="muted small">
             {serves && `serves ${serves}`}
+            {entry.reviewed === false && (
+              <span>{serves && ' · '}not on the list yet</span>
+            )}
             {cost && cost.entryCents[entry.id] !== undefined && (
               <span aria-label="This recipe's share">
                 {serves && ' · '}

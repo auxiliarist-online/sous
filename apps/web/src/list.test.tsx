@@ -364,6 +364,12 @@ function listApi(
   )
   return {
     planCost: vi.fn(async () => COST),
+    listCost: vi.fn(async () => COST),
+    plan: vi.fn(async () => []),
+    recipe: vi.fn(async () => null),
+    pantry: vi.fn(async () => []),
+    setPantry: vi.fn(async () => {}),
+    updateEntry: vi.fn(async () => {}),
     syncList: vi.fn(async () => 'list-1'),
     loadList: vi.fn(async () => current),
     sendListOp: vi.fn(async (op) => {
@@ -509,7 +515,9 @@ describe('ListPage', () => {
     expect(api.syncList).toHaveBeenCalledWith(WEEK, plannedItems(COST))
     expect(screen.getByText(/0 of 2 in the cart/)).toBeInTheDocument()
     expect(
-      screen.getByText(/~\$48\.00 of your \$60\.00 budget/),
+      screen.getByText((_, el) =>
+        /^~\$48\.00 of your \$60\.00 budget$/.test(el?.textContent ?? ''),
+      ),
     ).toBeInTheDocument()
 
     await userEvent.click(within(dairy).getByRole('checkbox', { name: /eggs/ }))
@@ -572,7 +580,7 @@ describe('ListPage', () => {
 
   it('says what waits for a choice on the plan (TYL-98)', async () => {
     const api = listApi({
-      planCost: vi.fn(async () => ({
+      listCost: vi.fn(async () => ({
         ...COST,
         choices: [
           {
@@ -676,9 +684,7 @@ describe('ListPage', () => {
       { id, name: 'wheat bread' },
     ])
     expect(
-      screen.getByText(
-        /~\$51\.49 of your \$60\.00 budget, with \$3\.49 for items you added/,
-      ),
+      screen.getByText(/With \$3\.49 for items you added/),
     ).toBeInTheDocument()
 
     // Renamed to something Sous doesn't know: matched again, and unpriced.
@@ -695,9 +701,7 @@ describe('ListPage', () => {
       ]),
     )
     await waitFor(() => expect(screen.queryByText('$3.49')).toBeNull())
-    expect(
-      screen.getByText(/~\$48\.00 of your \$60\.00 budget$/),
-    ).toBeInTheDocument()
+    expect(screen.queryByText(/for items you added/)).toBeNull()
   })
 
   it('prices your own items again when back online', async () => {
@@ -867,7 +871,7 @@ describe('ListPage', () => {
       }),
     })
     render(<ListPage api={stuck} week={WEEK} user="u" />)
-    await waitFor(() => expect(stuck.planCost).toHaveBeenCalled())
+    await waitFor(() => expect(stuck.listCost).toHaveBeenCalled())
     expect(stuck.syncList).not.toHaveBeenCalled()
   })
 
@@ -906,8 +910,12 @@ describe('Home', () => {
           : [],
     ),
     planCost: vi.fn(async () => COST),
+    listCost: vi.fn(async () => COST),
     list: vi.fn(async () => []),
     moveEntry: vi.fn(async () => {}),
+    recipe: vi.fn(async () => null),
+    pantry: vi.fn(async () => []),
+    updateEntry: vi.fn(async () => {}),
     ...fakeCookedApi(),
   })
 
@@ -918,7 +926,7 @@ describe('Home', () => {
     await userEvent.click(
       await screen.findByRole('button', { name: 'Try again' }),
     )
-    expect(await screen.findByText(/Nothing planned yet/)).toBeInTheDocument()
+    expect(await screen.findByText(/nothing planned/)).toBeInTheDocument()
   })
 
   it('offers last week’s uncooked meals for this week (TYL-147)', async () => {
@@ -960,7 +968,7 @@ describe('Home', () => {
     expect(screen.queryByText(/from last week/)).toBeNull()
     unmount()
     render(<Home api={api} now={now} />)
-    await screen.findByText(/Nothing planned yet/)
+    await screen.findByText(/nothing planned/)
     expect(screen.queryByText(/from last week/)).toBeNull()
     localStorage.clear()
   })
@@ -982,24 +990,32 @@ describe('Home', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows tonight, the days ahead, and what’s left to buy', async () => {
+  it('shows the week as a ledger, tonight first, and what’s left to buy (TYL-149)', async () => {
     render(
       <Home
         api={homeApi([
           entry('1', '2026-10-14', 'Red lentil dal'),
           entry('2', '2026-10-16', 'Fish tacos'),
-          entry('3', '2026-10-13', 'Yesterday’s soup'),
+          entry('3', null, 'Any-day soup'),
         ])}
         now={now}
       />,
     )
-    const tonight = await screen.findByRole('link', { name: 'Red lentil dal' })
+    const ledger = await screen.findByRole('list', {
+      name: 'Dinners this week',
+    })
+    const tonight = within(ledger).getByRole('link', { name: 'Red lentil dal' })
     expect(tonight).toHaveAttribute('href', '/recipe/r-1')
-    expect(screen.getByText('Fish tacos')).toBeInTheDocument()
-    expect(screen.queryByText('Yesterday’s soup')).toBeNull()
+    expect(tonight.closest('li')).toHaveTextContent('Tonight')
+    expect(within(ledger).getByText('Fish tacos')).toBeInTheDocument()
+    expect(within(ledger).getByText('Any-day soup')).toBeInTheDocument()
+    // An open day offers to add a recipe.
     expect(
-      await screen.findByText(/2 items to buy · ~\$48\.00 of \$60\.00/),
-    ).toBeInTheDocument()
+      within(ledger).getByRole('link', { name: 'Add a recipe for Monday' }),
+    ).toHaveAttribute('href', '/browse')
+    expect(screen.getByText(/3 dinners/)).toBeInTheDocument()
+    expect(await screen.findByText('2 to buy')).toBeInTheDocument()
+    expect(screen.getByText('~$48.00')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open the list' })).toHaveAttribute(
       'href',
       '/list',
@@ -1017,9 +1033,9 @@ describe('Home', () => {
 
   it('leads to planning when nothing is planned', async () => {
     render(<Home api={homeApi([])} now={now} />)
-    expect(await screen.findByText('Nothing planned yet.')).toBeInTheDocument()
+    expect(await screen.findByText(/nothing planned/)).toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: 'Plan this week' }),
+      screen.getByRole('link', { name: 'See and change the plan' }),
     ).toHaveAttribute('href', '/plan')
   })
 })

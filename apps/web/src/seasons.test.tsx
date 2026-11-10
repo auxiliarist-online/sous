@@ -90,7 +90,7 @@ describe('SeasonCard', () => {
     render(<SeasonCard api={api} now={new Date('2026-06-10T12:00:00')} />)
     const items = await screen.findAllByRole('listitem')
     expect(items.map((li) => li.textContent)).toEqual([
-      'tomatoes · Tomato tart, Panzanella',
+      'tomatoesTomato tart, Panzanella',
       'strawberries',
     ])
     expect(screen.getByRole('link', { name: 'Tomato tart' })).toHaveAttribute(

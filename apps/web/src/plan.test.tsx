@@ -483,6 +483,7 @@ function fakeApi({
     }),
     copyPlan: vi.fn(async (_from: string, _to: string) => copied),
     planCost: vi.fn(async () => cost),
+    listCost: vi.fn(async () => cost),
     recipeFits: vi.fn(async () => fits),
     addedCosts: vi.fn(async (_w: string, _ids: string[]) => added),
     favoriteCuisines: vi.fn(async () => favorites),
@@ -621,7 +622,7 @@ describe('plan my week (TYL-65)', () => {
       await screen.findByRole('button', { name: 'Plan my week' }),
     )
     expect(
-      await screen.findByText('· Uses the rest of the cilantro'),
+      await screen.findByText('Uses the rest of the cilantro'),
     ).toBeInTheDocument()
     expect(api.draftWeek).toHaveBeenCalledWith(WEEK, {
       dinners: 5,
@@ -1004,7 +1005,13 @@ describe('PlanPage', () => {
       .getByRole('heading', { name: 'Any day this week' })
       .closest('section')!
     expect(within(anyDay).getByText('Recipe 2')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Monday' })).toBeNull()
+    // A day with nothing planned is open, with a way to add a recipe.
+    const monday = screen.getByRole('heading', { name: /^Monday/ })
+    expect(
+      within(monday.closest('section')!).getByRole('link', {
+        name: 'Open · add a recipe',
+      }),
+    ).toHaveAttribute('href', '/browse')
     expect(
       await screen.findByText('~$12.00', { selector: 'strong' }),
     ).toBeInTheDocument()

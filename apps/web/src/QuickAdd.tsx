@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { weekOf, type Fit, type Scale } from './plan.ts'
+import { showToast } from './toast.ts'
 
 export interface QuickAddApi {
   addToPlan(
@@ -48,6 +49,7 @@ export function QuickAdd({
       }
       await api.addToPlan(weekOf(), recipeId, 1)
       setState('added')
+      showToast('Added to this week. Review it for the list.')
     } catch {
       setState('error')
     }

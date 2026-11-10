@@ -38,6 +38,20 @@ const session = {
   user: { email: 'cook@example.com' },
 } as Session
 
+const NO_COST = {
+  budgetCents: null,
+  totalCents: 0,
+  estimated: false,
+  unpriced: 0,
+  items: [],
+  storeName: null,
+  storeId: null,
+  storeStatus: 'not_chosen' as const,
+  homeZip: null,
+  entryCents: {},
+  choices: [],
+}
+
 const library = (
   prefs: Preferences = { ...NO_PREFERENCES, saved: true },
 ): SousApi => ({
@@ -73,19 +87,8 @@ const library = (
   removeEntry: vi.fn(async () => {}),
   removeEntries: vi.fn(async () => {}),
   copyPlan: vi.fn(async () => 0),
-  planCost: vi.fn(async () => ({
-    budgetCents: null,
-    totalCents: 0,
-    estimated: false,
-    unpriced: 0,
-    items: [],
-    storeName: null,
-    storeId: null,
-    storeStatus: 'not_chosen' as const,
-    homeZip: null,
-    entryCents: {},
-    choices: [],
-  })),
+  planCost: vi.fn(async () => NO_COST),
+  listCost: vi.fn(async () => NO_COST),
   addedCosts: vi.fn(async () => ({
     budgetCents: null,
     totalCents: 0,
@@ -193,7 +196,7 @@ describe('App', () => {
       type: 'email',
     })
     expect(
-      await screen.findByRole('heading', { name: 'This week' }),
+      await screen.findByRole('heading', { name: /^This week,/ }),
     ).toBeInTheDocument()
   })
 
@@ -250,7 +253,7 @@ describe('App', () => {
       ),
     )
     expect(
-      await screen.findByRole('heading', { name: 'This week' }),
+      await screen.findByRole('heading', { name: /^This week,/ }),
     ).toBeInTheDocument()
     expect(window.location.pathname).toBe('/')
     // A home zip may have been set: seasons are read again (TYL-70).
@@ -275,7 +278,7 @@ describe('App', () => {
     vi.mocked(api.preferences).mockRejectedValue(new Error('down'))
     render(<App auth={auth} libraryApi={() => api} />)
     expect(
-      await screen.findByRole('heading', { name: 'This week' }),
+      await screen.findByRole('heading', { name: /^This week,/ }),
     ).toBeInTheDocument()
     await waitFor(() => expect(api.preferences).toHaveBeenCalled())
     expect(window.location.pathname).toBe('/')
@@ -320,9 +323,10 @@ describe('App', () => {
         name: 'Save the recipe you shared?',
       }),
     ).toBeInTheDocument()
-    const tabs = screen.getByRole('navigation', { name: 'Main' })
-    await userEvent.click(within(tabs).getByRole('link', { name: 'List' }))
-    await userEvent.click(within(tabs).getByRole('link', { name: 'Week' }))
+    const lips = screen.getByRole('navigation', { name: 'Main' })
+    await userEvent.click(within(lips).getByRole('link', { name: 'List' }))
+    // The drawer's "This week" strip goes back to the week.
+    await userEvent.click(screen.getByRole('button', { name: /This week/ }))
     await waitFor(() =>
       expect(
         screen.queryByRole('heading', { name: 'Save the recipe you shared?' }),
@@ -331,7 +335,7 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
-  it('goes back to the week when Week is tapped right where a share arrived (TYL-140)', async () => {
+  it('goes back to the week from right where a share arrived (TYL-140)', async () => {
     window.localStorage.setItem(
       'sous:shared-url',
       JSON.stringify({ url: 'https://example.com/tacos', ingredients: null }),
@@ -344,8 +348,8 @@ describe('App', () => {
         name: 'Save the recipe you shared?',
       }),
     ).toBeInTheDocument()
-    const tabs = screen.getByRole('navigation', { name: 'Main' })
-    await userEvent.click(within(tabs).getByRole('link', { name: 'Week' }))
+    // The share shows as the Recipes drawer: its strip goes to the week.
+    await userEvent.click(screen.getByRole('button', { name: /This week/ }))
     await waitFor(() =>
       expect(
         screen.queryByRole('heading', { name: 'Save the recipe you shared?' }),
@@ -375,37 +379,43 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
-  it('has a tab bar for the week, recipes, list and pantry', async () => {
+  it('pulls up drawers over the week, and the add sheet (TYL-149)', async () => {
     window.history.replaceState(null, '', '/')
     const { auth } = fakeAuth(session)
     render(<App auth={auth} libraryApi={() => library()} />)
-    const tabs = await screen.findByRole('navigation', { name: 'Main' })
+    const lips = await screen.findByRole('navigation', { name: 'Main' })
     expect(
-      within(tabs)
+      within(lips)
         .getAllByRole('link')
         .map((a) => [a.textContent, a.getAttribute('href')]),
     ).toEqual([
-      ['Week', '/'],
       ['Recipes', '/recipes'],
       ['List', '/list'],
       ['Pantry', '/pantry'],
     ])
-    expect(within(tabs).getByRole('link', { name: 'Week' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
-    await userEvent.click(within(tabs).getByRole('link', { name: 'Recipes' }))
+    expect(
+      await screen.findByRole('link', { name: 'Preferences' }),
+    ).toHaveAttribute('href', '/settings')
+    await userEvent.click(within(lips).getByRole('link', { name: 'Recipes' }))
     expect(
       await screen.findByRole('heading', { name: 'Your recipes' }),
     ).toBeInTheDocument()
-    expect(within(tabs).getByRole('link', { name: 'Recipes' })).toHaveAttribute(
+    expect(within(lips).getByRole('link', { name: 'Recipes' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(screen.getByRole('link', { name: 'Preferences' })).toHaveAttribute(
-      'href',
-      '/settings',
-    )
+    // Tapping the open drawer's lip closes it.
+    await userEvent.click(within(lips).getByRole('link', { name: 'Recipes' }))
+    expect(window.location.pathname).toBe('/')
+    expect(
+      await screen.findByRole('heading', { name: /^This week,/ }),
+    ).toBeInTheDocument()
+    // The round button opens Add a recipe.
+    await userEvent.click(screen.getByRole('button', { name: 'Add a recipe' }))
+    const sheet = screen.getByRole('dialog', { name: 'Add a recipe' })
+    expect(
+      within(sheet).getByRole('button', { name: /Paste a link/ }),
+    ).toBeInTheDocument()
     window.history.replaceState(null, '', '/')
   })
 
@@ -447,7 +457,7 @@ describe('App', () => {
     await screen.findByLabelText('Email')
     act(() => emit(session))
     expect(
-      await screen.findByRole('heading', { name: 'This week' }),
+      await screen.findByRole('heading', { name: /^This week,/ }),
     ).toBeInTheDocument()
   })
 })

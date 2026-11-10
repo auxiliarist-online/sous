@@ -90,9 +90,11 @@ h4 {
   margin: 0 auto;
 }
 
-/* Screens come in with a short rise (TYL-148). */
+/* Screens come in with a short rise (TYL-148). Only while it plays: a
+   transform left behind would anchor the sheets inside to the page instead
+   of the screen. */
 .screen {
-  animation: screen-in 0.28s ease both;
+  animation: screen-in 0.28s ease backwards;
 }
 
 @keyframes screen-in {
@@ -534,6 +536,74 @@ button.mic.listening {
   border-radius: 22px;
   background: var(--color-brown-soft);
   color: var(--color-brown-ink);
+}
+
+/* Review (TYL-150): "What do you already have?" rows, Have it / Need it. */
+.review-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 6px 8px 6px 18px;
+  border-radius: 999px;
+  background: var(--color-card);
+}
+
+.review-row.have .review-name,
+.review-row.have > .small {
+  opacity: 0.55;
+}
+
+.review-name {
+  flex: 1;
+  min-width: 0;
+}
+
+button.state {
+  flex: none;
+  min-width: 84px;
+  min-height: 40px;
+  padding: 0 1rem;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+button.state.need {
+  background: var(--color-accent-2);
+  color: var(--color-bg);
+}
+
+button.state.have {
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+.review-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 10px;
+}
+
+.review-total strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.review-confirm {
+  width: 100%;
+  min-height: 54px;
 }
 
 @keyframes sheet-in {
@@ -2102,11 +2172,6 @@ label.button {
   min-width: 0;
 }
 
-.cooked-note-shown {
-  border-left: 3px solid var(--color-secondary);
-  padding-left: 0.5rem;
-}
-
 .history-list {
   list-style: none;
   padding: 0;
@@ -2123,9 +2188,10 @@ label.button {
   gap: 0.375rem;
 }
 
-.favorite .favorite select,
 .favorite select {
   width: auto;
+  min-height: 44px;
+  font-size: 14px;
 }
 
 button.heart[aria-pressed='true'] {

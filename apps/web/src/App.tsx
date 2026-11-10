@@ -174,6 +174,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     removeEntries: (ids) => removeEntries(db, ids),
     copyPlan: (from, to) => copyPlan(db, from, to),
     planCost: (week) => planCost(session, week),
+    listCost: (week) => planCost(session, week, undefined, true),
     addedCosts: (week, ids) => addedCosts(session, week, ids),
     setMyPrice: (id, store, cents, basis) =>
       setMyPrice(db, id, store, cents, basis),

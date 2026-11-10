@@ -173,7 +173,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     try {
       await api.addToPlan(weekOf(), id, 1)
       setPlanned('added')
-      showToast('Added to this week.')
+      showToast('Added to this week. Review it for the list.')
     } catch {
       setPlanned('error')
     }
