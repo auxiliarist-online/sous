@@ -141,6 +141,12 @@ export function Sheet({
 }) {
   const id = useId()
   const panel = useRef<HTMLElement>(null)
+  // The latest onClose, for Escape: the key handler below lives as long as
+  // the sheet, and mustn't call an old one.
+  const close = useRef(onClose)
+  useEffect(() => {
+    close.current = onClose
+  })
 
   // A modal dialog: focus moves into it, Tab stays inside, Escape closes it,
   // and focus goes back to where it was on close.
@@ -150,7 +156,7 @@ export function Sheet({
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        onClose()
+        close.current()
         return
       }
       if (e.key !== 'Tab' || !panel.current) return
@@ -180,8 +186,7 @@ export function Sheet({
       document.removeEventListener('keydown', key)
       before?.focus?.()
     }
-    // Once per opening: a new onClose each render doesn't reset focus.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Once per opening, so a re-render doesn't move focus.
   }, [])
 
   return (

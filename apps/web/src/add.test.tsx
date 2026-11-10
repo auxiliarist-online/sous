@@ -152,6 +152,18 @@ describe('sheets', () => {
   })
 })
 
+describe('a sheet on Escape', () => {
+  it('uses the latest onClose', async () => {
+    const first = vi.fn()
+    const latest = vi.fn()
+    const { rerender } = render(<AddRecipeSheet api={api()} onClose={first} />)
+    rerender(<AddRecipeSheet api={api()} onClose={latest} />)
+    await userEvent.keyboard('{Escape}')
+    expect(latest).toHaveBeenCalled()
+    expect(first).not.toHaveBeenCalled()
+  })
+})
+
 describe('draftFromSpeech', () => {
   it('splits the title, ingredients and steps at the words people say', () => {
     expect(
