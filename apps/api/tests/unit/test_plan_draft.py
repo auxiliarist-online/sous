@@ -378,6 +378,36 @@ class TestRoute:
         assert ids[-1] in asked["candidates"]
         assert len(asked["candidates"]) == routes.DRAFT_POOL
 
+    def test_swapped_out_recipes_dont_fill_the_pool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A full pool of swapped-out loved recipes still leaves room for a new one.
+        ids = [f"00000000-0000-0000-0000-{n:012d}" for n in range(routes.DRAFT_POOL + 1)]
+        asked: dict[str, Any] = {}
+
+        async def fake_pool(user_id: str, week: date) -> dict[str, Any]:
+            return {
+                "candidates": [
+                    {"recipe_id": r, "title": r, "fit": "fits", "rating": "love"} for r in ids[:-1]
+                ]
+                + [{"recipe_id": ids[-1], "title": "New", "fit": "fits"}]
+            }
+
+        async def fake_inputs(
+            user_id: str, week: date, candidates: list[str] | None = None
+        ) -> dict[str, Any]:
+            asked["candidates"] = candidates
+            return inputs()
+
+        monkeypatch.setattr(routes, "draft_pool", fake_pool)
+        monkeypatch.setattr(routes, "cost_inputs", fake_inputs)
+        app.dependency_overrides[current_user_id] = lambda: "user-1"
+        try:
+            TestClient(app).post(
+                "/plans/2026-10-19/draft", json={"dinners": 1, "exclude": ids[:-1]}
+            )
+        finally:
+            app.dependency_overrides.clear()
+        assert asked["candidates"] == [ids[-1]]
+
     def test_needs_a_monday_and_a_sensible_count(self) -> None:
         app.dependency_overrides[current_user_id] = lambda: "user-1"
         try:

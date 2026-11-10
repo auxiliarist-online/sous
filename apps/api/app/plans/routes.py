@@ -245,10 +245,16 @@ async def draft(
             c.weeks_ago is not None,
         )
     )
-    # Left out: ones that break the user's rules, and ones they rated down
-    # after cooking (TYL-16), unless they kept it themselves.
+    # Left out before the cap: ones that break the user's rules, ones they
+    # swapped out, and ones they rated down after cooking (TYL-16), unless
+    # they kept it themselves.
+    swapped = {str(r) for r in body.exclude}
     pool = [
-        c for c in pool if c.fit != "excluded" and (c.rating != "down" or c.recipe_id in locked)
+        c
+        for c in pool
+        if c.fit != "excluded"
+        and c.recipe_id not in swapped
+        and (c.rating != "down" or c.recipe_id in locked)
     ][:DRAFT_POOL]
     inputs, store_id = await _inputs(user_id, week_start, [c.recipe_id for c in pool])
     # CPU work (scoring many weeks): off the event loop, so other requests
