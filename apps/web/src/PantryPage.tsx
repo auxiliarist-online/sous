@@ -173,17 +173,17 @@ export function PantryPage({
   })
 
   return (
-    <section className="card pantry">
-      <h2>Pantry</h2>
+    <section className="pantry">
+      <h2 className="screen-title">Pantry</h2>
       {saveFailed && (
         <p role="alert" className="error small">
           That didn't save. Try again.
         </p>
       )}
       <p className="muted small">
-        Staples are what you always keep: they're left off your list until you
-        mark one out. Anything else a recipe needs gets bought, unless you have
-        some right now.
+        What you keep at home. Sous ticks these as “have it” when you review a
+        plan for the list: staples until you mark one out, and anything else you
+        have right now.
       </p>
       {suggestions.length > 0 && (
         <ul className="pantry-suggestions" aria-label="Suggestions">

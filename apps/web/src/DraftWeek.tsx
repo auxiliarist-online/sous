@@ -106,8 +106,7 @@ export function DraftWeek({
 
   const busy = state === 'loading' || state === 'adding'
   return (
-    <section className="card draft" aria-labelledby="draft-title">
-      <h3 id="draft-title">Plan my week</h3>
+    <section className="draft" aria-label="Your drafted week">
       <label htmlFor="draft-dinners">Dinners this week</label>
       <select
         id="draft-dinners"
@@ -159,9 +158,9 @@ export function DraftWeek({
             <ul className="draft-picks">
               {draft.picks.map((p) => (
                 <li key={p.recipeId}>
-                  <span>
+                  <span className="draft-pick">
                     <strong>{p.title}</strong>
-                    <span className="small muted"> · {p.reason}</span>
+                    <span className="small muted">{p.reason}</span>
                   </span>
                   <span className="chips">
                     <button

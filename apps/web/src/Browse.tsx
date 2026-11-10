@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from './router.tsx'
+import { ArrowLeft, Search } from 'lucide-react'
 import { browseCache as cache, type BrowseResults } from './browseCache.ts'
 import { PAGE_SIZE, type CatalogRecipe } from './sous.ts'
 import { QuickAdd, type QuickAddApi } from './QuickAdd.tsx'
@@ -10,11 +11,28 @@ export interface BrowseApi extends QuickAddApi {
 
 type Results = BrowseResults
 
+// The quick filters: words the search already understands. ("In season"
+// isn't one yet, so it isn't offered here.)
+const SHORTCUTS: [string, string][] = [
+  ['Under 30 min', 'under 30'],
+  ['Vegetarian', 'vegetarian'],
+  ['Soup', 'soup'],
+  ['Dessert', 'dessert'],
+]
+
 // Where the user had scrolled to in a list, for Back from a recipe.
 const SCROLL_KEY = 'sous:browse-scroll'
 
 function queryFromAddress(): string {
   return new URLSearchParams(window.location.search).get('q') ?? ''
+}
+
+/** The shortcut chips picked, from the address (f=vegetarian&f=soup). */
+function shortcutsFromAddress(): string[] {
+  const known = new Set(SHORTCUTS.map(([, words]) => words))
+  return new URLSearchParams(window.location.search)
+    .getAll('f')
+    .filter((w) => known.has(w))
 }
 
 function savedScroll(query: string): number | null {
@@ -45,21 +63,32 @@ function saveScroll(query: string) {
  *  results for them; recipes that break their rules never show. */
 export function Browse({ api }: { api: BrowseApi }) {
   const [query, setQuery] = useState(queryFromAddress)
+  // Shortcut chips (TYL-149): words added to the search, which reads them.
+  const [picked, setPicked] = useState<string[]>(shortcutsFromAddress)
   // Results live in the cache; this only makes the page re-render.
   const [, setVersion] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const [failed, setFailed] = useState(false)
   const restored = useRef(false)
-  const key = query.trim()
+  // The search: what was typed, plus the picked shortcuts it doesn't say.
+  const typed = query.trim()
+  const key = [typed, ...picked.filter((w) => !typed.toLowerCase().includes(w))]
+    .filter(Boolean)
+    .join(' ')
   const results: Results | null = cache.get(key) ?? null
 
-  // Keep the search in the address, so Back and reload return to it.
+  // Keep the search in the address, so Back and reload return to it: what
+  // was typed and the chips picked, apart.
   useEffect(() => {
-    const url = key ? `/browse?q=${encodeURIComponent(key)}` : '/browse'
+    const params = new URLSearchParams()
+    if (typed) params.set('q', typed)
+    for (const w of picked) params.append('f', w)
+    const qs = params.toString()
+    const url = qs ? `/browse?${qs}` : '/browse'
     if (url !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, '', url)
     }
-  }, [key])
+  }, [typed, picked])
 
   useEffect(() => {
     if (cache.has(key)) return
@@ -108,8 +137,12 @@ export function Browse({ api }: { api: BrowseApi }) {
   }
 
   return (
-    <section className="card">
-      <h2>Find recipes</h2>
+    <section className="find">
+      <Link to="/recipes" className="back">
+        <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
+        Back
+      </Link>
+      <h2 className="screen-title">Find recipes</h2>
       <p className="muted small">
         Search by ingredient, dish, cuisine or time: “eggs”, “quick vegetarian
         dinner”, “thai soup”, “dessert”. Recipes that don't fit your diets or
@@ -118,13 +151,42 @@ export function Browse({ api }: { api: BrowseApi }) {
       <label htmlFor="catalog-search" className="visually-hidden">
         Search recipes
       </label>
-      <input
-        id="catalog-search"
-        type="search"
-        placeholder="What do you feel like?"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="search-field">
+        <Search size={20} strokeWidth={2.75} aria-hidden="true" />
+        <input
+          id="catalog-search"
+          type="search"
+          placeholder="What do you feel like?"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      <div className="chips" role="group" aria-label="Quick filters">
+        {SHORTCUTS.map(([label, words]) => (
+          <button
+            key={words}
+            type="button"
+            className="chip"
+            aria-pressed={picked.includes(words)}
+            onClick={() =>
+              setPicked((p) =>
+                p.includes(words)
+                  ? p.filter((w) => w !== words)
+                  : [...p, words],
+              )
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {results && results.items.length > 0 && (
+        <p className="small muted">
+          {results.items.length}
+          {results.more ? '+' : ''} recipe
+          {results.items.length === 1 ? '' : 's'} that fit your preferences
+        </p>
+      )}
       {failed && (
         <p className="error" role="alert">
           We couldn't search recipes right now.
@@ -134,19 +196,25 @@ export function Browse({ api }: { api: BrowseApi }) {
       {results && results.items.length > 0 && (
         <ul className="recipes found" aria-label="Recipes found">
           {results.items.map((r) => (
-            <li key={r.id}>
-              <Link to={`/recipe/${r.id}`} onNavigate={() => saveScroll(key)}>
-                {r.title}
-              </Link>
-              <span className="small muted">
-                {[
-                  r.sourceName,
-                  r.totalMinutes ? `${r.totalMinutes} min` : null,
-                  ...r.why,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
+            <li key={r.id} className="recipe-card">
+              <div className="recipe-card-text">
+                <Link
+                  to={`/recipe/${r.id}`}
+                  className="recipe-card-title"
+                  onNavigate={() => saveScroll(key)}
+                >
+                  {r.title}
+                </Link>
+                <span className="small muted">
+                  {[
+                    r.sourceName,
+                    r.totalMinutes ? `${r.totalMinutes} min` : null,
+                    ...r.why,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </div>
               <QuickAdd api={api} recipeId={r.id} title={r.title} />
             </li>
           ))}

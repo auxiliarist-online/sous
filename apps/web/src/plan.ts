@@ -47,6 +47,12 @@ export function weekLabel(weekStart: string): string {
     : `${month(start)} ${start.getDate()} – ${month(end)} ${end.getDate()}`
 }
 
+/** "Nov 9". */
+export function monthDay(iso: string): string {
+  const d = parseDate(iso)
+  return `${d.toLocaleDateString('en-US', { month: 'short' })} ${d.getDate()}`
+}
+
 export function dayName(iso: string): string {
   return parseDate(iso).toLocaleDateString('en-US', { weekday: 'long' })
 }
@@ -57,6 +63,11 @@ export function weekDays(weekStart: string): string[] {
 }
 
 // ---------- plans ----------
+
+/** The plan entries not on the list yet (TYL-150). */
+export function unreviewed(entries: PlanEntry[] | null): PlanEntry[] {
+  return (entries ?? []).filter((e) => e.reviewed === false)
+}
 
 /** Recipes are planned at half, full or double size. */
 export type Scale = 0.5 | 1 | 2
@@ -85,6 +96,9 @@ export interface PlanEntry {
   cuisines: string[]
   /** Its cooking styles ("soup"), from its title and the user's tags. */
   styles: string[]
+  /** Checked against what the user has, so its ingredients are on the list
+   *  (TYL-150). Missing in older test data: counted as reviewed. */
+  reviewed?: boolean
 }
 
 interface EntryRow {
@@ -93,6 +107,7 @@ interface EntryRow {
   planned_for: string | null
   position: number
   meal?: string | null
+  reviewed?: boolean
   recipe: {
     id: string
     title: string
@@ -119,7 +134,7 @@ export async function loadPlan(
   const { data, error } = await db
     .from('meal_plans')
     .select(
-      'entries:meal_plan_entries(id, scale, planned_for, position, meal, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name)), my_cuisines:user_recipe_cuisines(cuisine:cuisines(name)), saved:user_saved_recipes(tags)))',
+      'entries:meal_plan_entries(id, scale, planned_for, position, meal, reviewed, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name)), my_cuisines:user_recipe_cuisines(cuisine:cuisines(name)), saved:user_saved_recipes(tags)))',
     )
     .eq('week_start', weekStart)
     .maybeSingle()
@@ -137,6 +152,7 @@ export async function loadPlan(
       day: e.planned_for,
       position: e.position,
       meal: e.meal ?? null,
+      reviewed: e.reviewed ?? true,
       proteins: mainProteins(
         (e.recipe!.lines ?? [])
           .filter((l) => l.option_no === 1 && !l.is_optional && l.ingredient)
@@ -189,11 +205,12 @@ export async function addToPlan(
 export async function updateEntry(
   db: SupabaseClient,
   id: string,
-  patch: { scale?: Scale; day?: string | null },
+  patch: { scale?: Scale; day?: string | null; reviewed?: boolean },
 ): Promise<void> {
   const row: Record<string, unknown> = {}
   if (patch.scale !== undefined) row.scale = patch.scale
   if (patch.day !== undefined) row.planned_for = patch.day
+  if (patch.reviewed !== undefined) row.reviewed = patch.reviewed
   const { error } = await db.from('meal_plan_entries').update(row).eq('id', id)
   if (error) throw error
 }
@@ -360,8 +377,13 @@ export async function planCost(
   session: Session,
   weekStart: string,
   send: typeof apiFetch = apiFetch,
+  /** Only the entries reviewed for the shopping list (TYL-150). */
+  listOnly = false,
 ): Promise<PlanCost> {
-  const resp = await send(session, `/plans/${weekStart}/cost`)
+  const resp = await send(
+    session,
+    `/plans/${weekStart}/cost${listOnly ? '?list=1' : ''}`,
+  )
   if (!resp.ok) throw new Error(`plan cost: ${resp.status}`)
   const body = (await resp.json()) as {
     budget_cents: number | null

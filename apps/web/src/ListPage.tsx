@@ -18,8 +18,18 @@ import {
   plannedItems,
   type PlannedItem,
 } from './list.ts'
-import { addDays, dollars, weekLabel, weekOf, type PlanCost } from './plan.ts'
+import {
+  addDays,
+  dollars,
+  unreviewed,
+  weekLabel,
+  weekOf,
+  type PlanCost,
+  type PlanEntry,
+} from './plan.ts'
+import { PendingNotice, ReviewSheet, type ReviewApi } from './Review.tsx'
 import { Link } from './router.tsx'
+import { Share2 } from 'lucide-react'
 import { seasonOf, type Seasons } from './seasons.ts'
 
 /** A place an item can be bought: the user's store, or one they added. */
@@ -28,9 +38,9 @@ export interface Place {
   name: string
 }
 
-export interface ListApi {
-  /** The week's buy list and prices, from the plan. */
-  planCost(weekStart: string): Promise<PlanCost>
+export interface ListApi extends ReviewApi {
+  /** The week's planned meals: any not reviewed yet are offered for review. */
+  plan(weekStart: string): Promise<PlanEntry[]>
   /** Bring the week's list in line with the plan; returns the list's id. */
   syncList(weekStart: string, items: PlannedItem[]): Promise<string>
   /** The week's list as stored, or null when there isn't one yet. */
@@ -82,6 +92,9 @@ export function ListPage({
   const [showRemoved, setShowRemoved] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [seasons, setSeasons] = useState<Seasons | null>(null)
+  // The week's meals not on the list yet (TYL-150), and the review sheet.
+  const [waiting, setWaiting] = useState<PlanEntry[]>([])
+  const [reviewing, setReviewing] = useState(false)
   // The user's own items by name: priced again when one is added or renamed,
   // and a price shown only for the names it was worked out for.
   const ownKey = JSON.stringify(
@@ -130,7 +143,11 @@ export function ListPage({
       flushOps(user, api.sendListOp)
         .then(async (left) => {
           setPending(left)
-          const c = await api.planCost(week).catch(() => null)
+          const c = await api.listCost(week).catch(() => null)
+          api.plan(week).then(
+            (e) => setWaiting(unreviewed(e)),
+            () => {},
+          )
           setCost(c)
           // Only once everything's sent (see above).
           if (c && left === 0) await api.syncList(week, plannedItems(c))
@@ -322,7 +339,23 @@ export function ListPage({
   }
 
   return (
-    <section className="card shopping-list">
+    <section className="shopping-list">
+      <header className="screen-head">
+        <h2 className="screen-title list-title">
+          Shopping list
+          <small>
+            {week === weekOf() ? 'this week' : `week of ${weekLabel(week)}`}
+          </small>
+        </h2>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Share list"
+          onClick={() => void share()}
+        >
+          <Share2 size={20} strokeWidth={2.75} aria-hidden="true" />
+        </button>
+      </header>
       <nav className="week-nav" aria-label="Weeks">
         <Link to={`/list/${addDays(week, -7)}`} className="small">
           ← Previous
@@ -331,26 +364,53 @@ export function ListPage({
           Next →
         </Link>
       </nav>
-      <h2>
-        Shopping list{' '}
-        <span className="muted">
-          {week === weekOf() ? 'this week' : `week of ${weekLabel(week)}`}
-        </span>
-      </h2>
-      <p className="small">
-        {inCart.length} of {shown.length} in the cart
-        {cost && (
-          <span className="muted">
-            {' '}
-            · {cost.estimated || ownEstimated ? '~' : ''}
-            {dollars(cost.totalCents + (own?.totalCents ?? 0))}
-            {cost.budgetCents !== null &&
-              ` of your ${dollars(cost.budgetCents)} budget`}
-            {!!own?.totalCents &&
-              `, with ${dollars(own.totalCents)} for items you added`}
+      {/* The summary (TYL-149): the total, and how much is in the cart. */}
+      <section className="list-summary" aria-label="Summary">
+        <p className="list-summary-row">
+          {cost && (
+            <span>
+              <strong>
+                {cost.estimated || ownEstimated ? '~' : ''}
+                {dollars(cost.totalCents + (own?.totalCents ?? 0))}
+              </strong>
+              {cost.budgetCents !== null && (
+                <span className="small">
+                  {' '}
+                  of your {dollars(cost.budgetCents)} budget
+                </span>
+              )}
+            </span>
+          )}
+          <span className="small">
+            {inCart.length} of {shown.length} in the cart
           </span>
+        </p>
+        {!!own?.totalCents && (
+          <p className="small">
+            With {dollars(own.totalCents)} for items you added
+          </p>
         )}
-      </p>
+        <div className="meter" aria-hidden="true">
+          <span
+            style={{
+              width: `${shown.length ? (inCart.length / shown.length) * 100 : 0}%`,
+            }}
+          />
+        </div>
+      </section>
+      <PendingNotice entries={waiting} onReview={() => setReviewing(true)} />
+      {reviewing && (
+        <ReviewSheet
+          api={api}
+          week={week}
+          entries={waiting}
+          onClose={() => setReviewing(false)}
+          onDone={() => {
+            setReviewing(false)
+            void refresh()
+          }}
+        />
+      )}
       {cost && <WaitingChoices cost={cost} week={week} />}
       {(offline || pending > 0) && (
         <p role="status" className="muted small offline-note">
@@ -376,14 +436,14 @@ export function ListPage({
       )}
       {[...groups].map(([aisle, items]) => (
         <section key={aisle} className="list-aisle">
-          <h3>{aisle}</h3>
+          <h3 className="kicker">{aisle}</h3>
           <ul aria-label={aisle}>{items.map(row)}</ul>
         </section>
       ))}
 
       {inCart.length > 0 && (
         <section className="list-aisle">
-          <h3>In the cart ({inCart.length})</h3>
+          <h3 className="kicker">In the cart ({inCart.length})</h3>
           <ul aria-label="In the cart">{inCart.map(row)}</ul>
         </section>
       )}
@@ -414,13 +474,6 @@ export function ListPage({
       )}
 
       <div className="list-actions">
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void share()}
-        >
-          Share list
-        </button>
         <button
           type="button"
           className="secondary"

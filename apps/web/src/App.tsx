@@ -1,5 +1,5 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   auth as defaultAuth,
   client as defaultClient,
@@ -22,6 +22,7 @@ import {
 } from './library.ts'
 import {
   cookParams,
+  drawerOf,
   navigate,
   route,
   useNavigated,
@@ -58,6 +59,7 @@ import {
   syncList,
   itemSizes,
   ownItemPrices,
+  cachedList,
 } from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { History, type HistoryApi } from './History.tsx'
@@ -89,6 +91,10 @@ import { InstallOffer } from './InstallOffer.tsx'
 import { identify, replayUrl } from './telemetry.ts'
 import { Privacy } from './Privacy.tsx'
 import { Link } from './router.tsx'
+import { DrawerPanel, Lips, Toaster } from './Shell.tsx'
+import { AddRecipeSheet } from './AddRecipe.tsx'
+import { openAddSheet, useAddSheetRequests } from './addSheet.ts'
+import { ArrowLeft } from 'lucide-react'
 import { Settings } from './Settings.tsx'
 import { clearShare, pendingShare } from './share.ts'
 import { SignIn } from './SignIn.tsx'
@@ -168,6 +174,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     removeEntries: (ids) => removeEntries(db, ids),
     copyPlan: (from, to) => copyPlan(db, from, to),
     planCost: (week) => planCost(session, week),
+    listCost: (week) => planCost(session, week, undefined, true),
     addedCosts: (week, ids) => addedCosts(session, week, ids),
     setMyPrice: (id, store, cents, basis) =>
       setMyPrice(db, id, store, cents, basis),
@@ -256,6 +263,9 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
   const movedOn = useNavigated()
   const shared = movedOn ? null : arrivedShare
   const sharedPage = movedOn ? null : arrivedPage
+  // The Add-a-recipe sheet (TYL-151), from the round add button.
+  const [adding, setAdding] = useState(false)
+  useAddSheetRequests(useCallback(() => setAdding(true), []))
   const [loaded, setPrefs] = useState<Preferences | null>(null)
   // Whose preferences those are: another account signing in mustn't be
   // routed by them, so they count only for the account they were loaded for.
@@ -322,56 +332,111 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         ? at.week
         : weekOf(new Date(`${at.week}T12:00`))
       : weekOf()
-  // Which tab is current (TYL-72): Find and recipe pages sit under Recipes,
-  // the plan under Week.
-  const tab =
-    at.page === 'home' || at.page === 'plan'
-      ? 'week'
-      : at.page === 'list'
-        ? 'list'
-        : at.page === 'pantry'
-          ? 'pantry'
-          : ['library', 'recipe', 'cook', 'new', 'edit', 'browse'].includes(
-                at.page,
-              )
-            ? 'recipes'
-            : null
+  // Drawers over the week (TYL-149): which one this page opens in, and
+  // where the lips show (not on full screens like a recipe or settings).
+  // A share arriving at "/" shows Recipes there: as its drawer, so the strip
+  // goes back to the week (TYL-140).
+  const drawer =
+    at.page === 'home' && (shared || sharedPage) ? 'recipes' : drawerOf(at.page)
+  const showLips =
+    signedIn && (drawer !== null || at.page === 'home' || at.page === 'plan')
+  // Left to buy on this week's list, from the phone's copy (no request).
+  const cached = session ? cachedList(session.user.id, weekOf()) : null
+  const toBuy = cached
+    ? cached.items.filter((i) => !i.removed && !i.checked).length
+    : null
+
+  const pages = signedIn && api && auth && session && (
+    <>
+      {at.page === 'home' && !shared && !sharedPage && <Home api={api} />}
+      {(at.page === 'library' ||
+        (at.page === 'home' && (shared || sharedPage))) && (
+        <Library
+          api={api}
+          shared={shared}
+          sharedPage={sharedPage}
+          myDiets={prefs?.diets ?? []}
+          onboarded={prefs === null || prefs.saved}
+        />
+      )}
+      {at.page === 'cook' && (
+        <CookMode
+          key={at.id}
+          api={api}
+          id={at.id}
+          {...cookParams(window.location.search)}
+        />
+      )}
+      {at.page === 'recipe' && <RecipePage key={at.id} id={at.id} api={api} />}
+      {at.page === 'new' && <RecipeForm api={api} />}
+      {at.page === 'edit' && (
+        <RecipeForm key={at.id} api={api} recipeId={at.id} />
+      )}
+      {at.page === 'browse' && <Browse api={api} />}
+      {at.page === 'plan' && <PlanPage key={week} api={api} week={week} />}
+      {at.page === 'list' && (
+        <ListPage key={week} api={api} week={week} user={session.user.id} />
+      )}
+      {at.page === 'pantry' && (
+        <PantryPage api={api} prefs={prefs ?? undefined} />
+      )}
+      {at.page === 'history' && <History api={api} />}
+      {at.page === 'settings' && (
+        <>
+          <Link to="/" className="back">
+            <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
+            This week
+          </Link>
+          <Settings
+            api={api}
+            email={session.user.email}
+            onSaved={(p) => {
+              clearBrowseCache() // Find's ranking depends on preferences
+              api.resetSeasons() // the home zip decides the region's seasons
+              setPrefs(p)
+            }}
+            onSignOut={() => {
+              clearListData() // someone else may sign in on this phone
+              void auth.signOut()
+            }}
+            onDeleted={() => {
+              clearListData()
+              void auth.signOut()
+              navigate('/', true)
+            }}
+          />
+        </>
+      )}
+      {at.page === 'welcome' && !prefs && (
+        <p className="card muted">Loading…</p>
+      )}
+      {at.page === 'welcome' && prefs && (
+        <Welcome
+          api={api}
+          initial={prefs}
+          onDone={(p) => {
+            clearBrowseCache()
+            api.resetSeasons() // the home zip decides the region's seasons
+            setPrefs(p)
+            navigate('/', true)
+          }}
+        />
+      )}
+    </>
+  )
 
   return (
-    <main className="app" aria-busy={session === undefined}>
-      <header className="app-header">
-        <h1>
-          <Link to="/">Sous</Link>
-        </h1>
-        <p>Plan the week. Shop the deals.</p>
-        {signedIn && (
-          <Link
-            to="/settings"
-            className="profile-link"
-            current={at.page === 'settings'}
-            label="Preferences"
-          >
-            <span aria-hidden="true">☰</span>
-          </Link>
-        )}
-      </header>
-      {signedIn && at.page !== 'welcome' && (
-        <nav className="tab-bar" aria-label="Main">
-          <Link to="/" current={tab === 'week'}>
-            Week
-          </Link>
-          <Link to="/recipes" current={tab === 'recipes'}>
-            Recipes
-          </Link>
-          <Link to="/list" current={tab === 'list'}>
-            List
-          </Link>
-          <Link to="/pantry" current={tab === 'pantry'}>
-            Pantry
-          </Link>
-        </nav>
+    <main
+      className={drawer && signedIn ? 'app in-drawer' : 'app'}
+      aria-busy={session === undefined}
+    >
+      {!signedIn && (
+        <header className="app-header">
+          <h1>Sous</h1>
+          <p>Plan the week. Shop the deals.</p>
+        </header>
       )}
-
+      <Toaster />
       {at.page !== 'welcome' && at.page !== 'privacy' && (
         <InstallOffer signedIn={signedIn} />
       )}
@@ -390,82 +455,25 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
           <SignIn auth={auth} />
         </>
       )}
-      {signedIn && api && auth && session && (
+      {drawer && signedIn ? (
+        <DrawerPanel>{pages}</DrawerPanel>
+      ) : (
+        signedIn && (
+          <div className="screen" key={at.page}>
+            {pages}
+          </div>
+        )
+      )}
+      {signedIn && api && (
         <>
-          {at.page === 'home' && !shared && !sharedPage && <Home api={api} />}
-          {(at.page === 'library' ||
-            (at.page === 'home' && (shared || sharedPage))) && (
-            <Library
-              api={api}
-              shared={shared}
-              sharedPage={sharedPage}
-              myDiets={prefs?.diets ?? []}
-              onboarded={prefs === null || prefs.saved}
-            />
-          )}
-          {at.page === 'cook' && (
-            <CookMode
-              key={at.id}
-              api={api}
-              id={at.id}
-              {...cookParams(window.location.search)}
-            />
-          )}
-          {at.page === 'recipe' && (
-            <RecipePage key={at.id} id={at.id} api={api} />
-          )}
-          {at.page === 'new' && <RecipeForm api={api} />}
-          {at.page === 'edit' && (
-            <RecipeForm key={at.id} api={api} recipeId={at.id} />
-          )}
-          {at.page === 'browse' && <Browse api={api} />}
-          {at.page === 'plan' && <PlanPage key={week} api={api} week={week} />}
-          {at.page === 'list' && (
-            <ListPage key={week} api={api} week={week} user={session.user.id} />
-          )}
-          {at.page === 'pantry' && (
-            <PantryPage api={api} prefs={prefs ?? undefined} />
-          )}
-          {at.page === 'history' && <History api={api} />}
-          {at.page === 'settings' && (
-            <Settings
-              api={api}
-              email={session.user.email}
-              onSaved={(p) => {
-                clearBrowseCache() // Find's ranking depends on preferences
-                api.resetSeasons() // the home zip decides the region's seasons
-                setPrefs(p)
-              }}
-              onSignOut={() => {
-                clearListData() // someone else may sign in on this phone
-                void auth.signOut()
-              }}
-              onDeleted={() => {
-                clearListData()
-                void auth.signOut()
-                navigate('/', true)
-              }}
-            />
-          )}
-          {at.page === 'welcome' && !prefs && (
-            <p className="card muted">Loading…</p>
-          )}
-          {at.page === 'welcome' && prefs && (
-            <Welcome
-              api={api}
-              initial={prefs}
-              onDone={(p) => {
-                clearBrowseCache()
-                api.resetSeasons() // the home zip decides the region's seasons
-                setPrefs(p)
-                navigate('/', true)
-              }}
-            />
-          )}
           {/* Timers keep running on every page (TYL-75). */}
           <TimerBar />
           {at.page !== 'welcome' && <Feedback api={api} page={path} />}
         </>
+      )}
+      {showLips && <Lips open={drawer} toBuy={toBuy} onAdd={openAddSheet} />}
+      {adding && api && (
+        <AddRecipeSheet api={api} onClose={() => setAdding(false)} />
       )}
     </main>
   )

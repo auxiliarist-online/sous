@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/organic-cd438e4f-43e6-4caf-9b86-4f91cb352af8/styles.css">
+<style>
+[data-sous]{--color-bg:#f5ead8;--color-surface:#ebddc5;--card:#fbf3e4;--color-text:#1f1c19;--muted:#66574a;--color-accent:#14402e;--accent-ink:#f5ead8;--accent-soft:#d3e1cf;--color-accent-2:#7a4a2b;--brown-soft:#ead0b3;--brown-ink:#5a3119;--divider:rgba(31,28,25,.15);--hero:#123524;--hero-ink:#f3e8d2;--hero-muted:#b4d3c0;--hero-blob:#6b3f26;--scrim:rgba(12,34,24,.5)}
+[data-sous][data-theme="dark"]{--color-bg:#0d1a14;--color-surface:#16281f;--card:#1b3126;--color-text:#f1e6d0;--muted:#b9ab94;--color-accent:#8fcdb0;--accent-ink:#0c2218;--accent-soft:#214132;--color-accent-2:#d9a87a;--brown-soft:#3b2a1d;--brown-ink:#ecc9a4;--divider:rgba(241,230,208,.16);--hero:#1c4a36;--hero-ink:#f3e8d2;--hero-muted:#b4d3c0;--hero-blob:#7a4a2b;--scrim:rgba(0,0,0,.6)}
+[data-sous] a{color:var(--color-accent)}[data-sous] a:hover{color:var(--color-accent-2)}
+[data-sous] input,[data-sous] textarea{font-family:var(--font-body)}
+[data-sous] input::placeholder,[data-sous] textarea::placeholder{color:var(--muted);opacity:.8}
+[data-sous] ::-webkit-scrollbar{display:none}
+@keyframes sousIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes sousUp{from{transform:translateY(100%)}to{transform:none}}
+@keyframes sousFade{from{opacity:0}to{opacity:1}}
+@keyframes sousPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+</style>
+</helmet>
+<div data-sous data-theme="{{ theme }}" style="width:412px;font-family:var(--font-body);color:var(--color-text);font-size:15px;line-height:1.45">
+<x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ isDark }}" bg="var(--color-bg)" hint-size="412px,892px">
+<div style="position:relative;height:812px;overflow:hidden;background:var(--color-bg)">
+
+<sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+  <button onClick="{{ goWeek }}" style="position:absolute;top:0;left:0;right:0;height:84px;border:none;background:var(--hero);color:var(--hero-ink);display:flex;align-items:flex-start;gap:8px;padding:14px 22px;font-family:var(--font-heading);font-size:16px;cursor:pointer;text-align:left">This week<span style="font-family:var(--font-body);font-size:13px;color:var(--hero-muted);margin-left:auto">tap to close</span></button>
+</sc-if>
+
+<div ref="{{ scrollRef }}" style="position:absolute;left:0;right:0;bottom:0;top:{{ scrollTop }};border-radius:{{ scrollRadius }};background:var(--color-bg);overflow-y:auto;padding:8px 20px 132px">
+
+<!-- WEEK -->
+<sc-if value="{{ isWeek }}" hint-placeholder-val="{{ true }}">
+<div data-screen-label="Week" style="animation:sousIn .28s ease both;display:flex;flex-direction:column;gap:22px">
+  <div style="display:flex;align-items:center;gap:12px;padding-top:6px">
+    <div style="font-family:var(--font-heading);font-size:30px;color:var(--color-accent);line-height:1">Sous</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:6px">Week of Nov 9</div>
+    <button onClick="{{ openPantryOrPrefs }}" aria-label="Preferences" style="margin-left:auto;width:44px;height:44px;border-radius:999px;border:none;background:var(--color-surface);color:var(--color-text);display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:20px;height:20px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/sliders-horizontal.svg) center/contain no-repeat"></span></button>
+  </div>
+
+  <sc-if value="{{ homeTonight }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;flex-direction:column;gap:22px">
+    <div style="position:relative;overflow:hidden;border-radius:34px;background:var(--hero);color:var(--hero-ink);padding:24px 24px 22px">
+      <div style="position:absolute;right:-56px;top:-56px;width:170px;height:170px;border-radius:50%;background:var(--hero-blob);opacity:.55"></div>
+      <div style="position:relative;display:flex;flex-direction:column;gap:14px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--hero-muted)">Tonight · Monday</div>
+        <sc-for list="{{ tonight }}" as="m" hint-placeholder-count="1">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <button onClick="{{ m.open }}" style="border:none;background:none;padding:0;text-align:left;color:inherit;cursor:pointer;font-family:var(--font-heading);font-size:29px;line-height:1.1;text-wrap:balance">{{ m.title }}</button>
+            <div style="font-size:14px;color:var(--hero-muted)">{{ m.facts }}</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button onClick="{{ cook }}" style="min-height:48px;padding:0 26px;border:none;border-radius:999px;background:var(--hero-ink);color:#123524;font-family:var(--font-heading);font-size:15px;cursor:pointer">Cook</button>
+              <button onClick="{{ m.cooked }}" style="min-height:48px;padding:0 20px;border:1.5px solid var(--hero-muted);border-radius:999px;background:transparent;color:var(--hero-ink);font-family:var(--font-heading);font-size:15px;cursor:pointer">{{ m.cookedLabel }}</button>
+            </div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ noTonight }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:14px;align-items:flex-start">
+            <div style="font-family:var(--font-heading);font-size:24px;line-height:1.15">Nothing planned for tonight.</div>
+            <button onClick="{{ goFind }}" style="min-height:48px;padding:0 22px;border:none;border-radius:999px;background:var(--hero-ink);color:#123524;font-family:var(--font-heading);font-size:15px;cursor:pointer">Find recipes</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="font-family:var(--font-heading);font-size:20px">Coming up</div>
+      <sc-for list="{{ ahead }}" as="a" hint-placeholder-count="3">
+        <button onClick="{{ a.open }}" style="display:flex;align-items:center;gap:14px;min-height:52px;padding:6px 0;border:none;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit">
+          <span style="width:46px;flex:none;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--color-accent-2)">{{ a.day }}</span>
+          <span style="flex:1;font-weight:600">{{ a.title }}</span>
+          <span style="width:18px;height:18px;flex:none;color:var(--muted);background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/chevron-right.svg) center/contain no-repeat"></span>
+        </button>
+      </sc-for>
+      <button onClick="{{ goPlan }}" style="align-self:flex-start;min-height:44px;border:none;background:none;padding:0;color:var(--color-accent);font-family:var(--font-heading);font-size:15px;cursor:pointer;text-decoration:underline;text-underline-offset:4px">See and change the plan</button>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ homeStrip }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">
+      <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+        <button onClick="{{ d.pick }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0 8px;min-height:74px;border:none;border-radius:999px;background:{{ d.pillBg }};color:{{ d.pillFg }};cursor:pointer;font:inherit">
+          <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase">{{ d.short }}</span>
+          <span style="font-family:var(--font-heading);font-size:19px;line-height:1">{{ d.date }}</span>
+          <span style="width:6px;height:6px;border-radius:50%;background:{{ d.dot }}"></span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="border-radius:34px;background:var(--card);padding:22px;display:flex;flex-direction:column;gap:14px;box-shadow:0 3px 10px rgba(46,43,37,.1)">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-2)">{{ selDayLabel }}</div>
+      <sc-for list="{{ selMeals }}" as="m" hint-placeholder-count="1">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onClick="{{ m.open }}" style="border:none;background:none;padding:0;text-align:left;color:var(--color-text);cursor:pointer;font-family:var(--font-heading);font-size:25px;line-height:1.12;text-wrap:balance">{{ m.title }}</button>
+          <div style="font-size:14px;color:var(--muted)">{{ m.facts }}</div>
+          <div style="display:flex;gap:10px">
+            <button onClick="{{ cook }}" style="min-height:46px;padding:0 24px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:15px;cursor:pointer">Cook</button>
+            <button onClick="{{ m.move }}" style="min-height:46px;padding:0 18px;border:1.5px solid var(--divider);border-radius:999px;background:transparent;color:var(--color-text);font-family:var(--font-heading);font-size:15px;cursor:pointer">Move a day</button>
+          </div>
+        </div>
+      </sc-for>
+      <sc-if value="{{ selEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+          <div style="font-family:var(--font-heading);font-size:22px;line-height:1.15">An open night.</div>
+          <button onClick="{{ goFind }}" style="min-height:46px;padding:0 22px;border:1.5px dashed var(--color-accent);border-radius:999px;background:transparent;color:var(--color-accent);font-family:var(--font-heading);font-size:15px;cursor:pointer">+ Add a recipe</button>
+        </div>
+      </sc-if>
+    </div>
+    <sc-if value="{{ hasAnyDay }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-2)">Any day this week</div>
+        <sc-for list="{{ anyDay }}" as="m" hint-placeholder-count="1">
+          <button onClick="{{ m.open }}" style="display:flex;align-items:center;min-height:48px;border:none;background:none;padding:0;color:inherit;text-align:left;cursor:pointer;font:inherit;font-weight:600">{{ m.title }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
+    <button onClick="{{ goPlan }}" style="align-self:flex-start;min-height:44px;border:none;background:none;padding:0;color:var(--color-accent);font-family:var(--font-heading);font-size:15px;cursor:pointer;text-decoration:underline;text-underline-offset:4px">See and change the plan</button>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ homeLedger }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="font-family:var(--font-heading);font-size:38px;line-height:1.02;text-wrap:balance">This week, {{ plannedCount }} dinners.</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+        <button onClick="{{ d.act }}" style="display:flex;align-items:center;gap:16px;min-height:62px;padding:8px 18px;border:none;border-radius:26px;background:{{ d.rowBg }};color:{{ d.rowFg }};text-align:left;cursor:pointer;font:inherit">
+          <span style="width:54px;flex:none;font-family:var(--font-heading);font-size:22px;line-height:1">{{ d.short }}</span>
+          <span style="flex:1;font-weight:600;line-height:1.25;opacity:{{ d.titleOp }}">{{ d.firstTitle }}</span>
+          <span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.8">{{ d.tag }}</span>
+        </button>
+      </sc-for>
+    </div>
+    <button onClick="{{ goPlan }}" style="align-self:flex-start;min-height:44px;border:none;background:none;padding:0;color:var(--color-accent);font-family:var(--font-heading);font-size:15px;cursor:pointer;text-decoration:underline;text-underline-offset:4px">See and change the plan</button>
+  </div>
+  </sc-if>
+
+  <div style="border-radius:34px;background:var(--color-surface);padding:22px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <div style="font-family:var(--font-heading);font-size:20px">Shopping</div>
+      <div style="margin-left:auto;font-size:13px;color:var(--muted)">{{ toBuyCount }} to buy</div>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--font-heading);font-size:34px;line-height:1;color:var(--color-accent)">{{ totalLabel }}</span><span style="font-size:14px;color:var(--muted)">of your {{ budgetLabel }} budget</span></div>
+    <div style="height:10px;border-radius:999px;background:var(--color-bg);overflow:hidden"><div style="height:100%;width:{{ budgetPct }};border-radius:999px;background:var(--color-accent);transition:width .4s ease"></div></div>
+    <sc-if value="{{ hasPending }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ openReview }}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 16px;border:none;border-radius:22px;background:var(--brown-soft);color:var(--brown-ink);text-align:left;cursor:pointer;font:inherit;font-size:13px;line-height:1.35"><span style="flex:1"><strong>Not on the list yet:</strong> {{ pendingTitles }}. Check what you already have.</span><span style="font-family:var(--font-heading);font-size:14px;white-space:nowrap">Review</span></button>
+    </sc-if>
+    <button onClick="{{ goList }}" style="min-height:48px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:15px;cursor:pointer">Open the list</button>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="width:18px;height:18px;color:var(--color-accent);background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/leaf.svg) center/contain no-repeat"></span><div style="font-family:var(--font-heading);font-size:20px">In season now</div></div>
+    <div style="display:flex;flex-direction:column">
+      <sc-for list="{{ season }}" as="sn" hint-placeholder-count="4">
+        <button onClick="{{ sn.open }}" style="display:flex;align-items:baseline;gap:10px;min-height:44px;padding:4px 0;border:none;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit"><span style="width:76px;flex:none;font-weight:700">{{ sn.name }}</span><span style="flex:1;font-size:14px;color:var(--muted)">{{ sn.recipe }}</span></button>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- PLAN -->
+<sc-if value="{{ isPlan }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Plan" style="animation:sousIn .28s ease both;display:flex;flex-direction:column;gap:18px">
+  <button onClick="{{ back }}" style="align-self:flex-start;display:flex;align-items:center;gap:6px;min-height:44px;border:none;background:none;padding:0;color:var(--muted);cursor:pointer;font:inherit;font-size:14px"><span style="width:18px;height:18px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/arrow-left.svg) center/contain no-repeat"></span>This week</button>
+  <div style="font-family:var(--font-heading);font-size:32px;line-height:1.05">Your plan <span style="color:var(--muted);font-size:18px">Nov 9 – 15</span></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button onClick="{{ openDraft }}" style="min-height:48px;padding:0 22px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:15px;cursor:pointer">Plan my week</button>
+    <button onClick="{{ goFind }}" style="min-height:48px;padding:0 20px;border:1.5px solid var(--divider);border-radius:999px;background:transparent;color:var(--color-text);font-family:var(--font-heading);font-size:15px;cursor:pointer">Add a recipe</button>
+  </div>
+  <sc-if value="{{ hasPending }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ openReview }}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:12px 18px;border:none;border-radius:24px;background:var(--brown-soft);color:var(--brown-ink);text-align:left;cursor:pointer;font:inherit;font-size:14px;line-height:1.35"><span style="flex:1"><strong>{{ pendingCount }} not on the list yet.</strong> Check what you already have before they're added.</span><span style="font-family:var(--font-heading);white-space:nowrap">Review</span></button>
+  </sc-if>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ planDays }}" as="d" hint-placeholder-count="5">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-2)">{{ d.heading }}</div>
+        <sc-for list="{{ d.meals }}" as="m" hint-placeholder-count="1">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 10px 12px 18px;border-radius:24px;background:var(--card)">
+            <button onClick="{{ m.open }}" style="flex:1;min-height:44px;border:none;background:none;padding:0;text-align:left;color:var(--color-text);cursor:pointer;font:inherit"><span style="display:block;font-weight:700;line-height:1.25">{{ m.title }}</span><span style="display:block;font-size:13px;color:var(--muted)">{{ m.sub }}</span></button>
+            <button onClick="{{ m.move }}" style="min-height:44px;padding:0 14px;border:none;border-radius:999px;background:var(--color-surface);color:var(--color-text);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Move</button>
+            <button onClick="{{ m.remove }}" aria-label="Remove" style="width:44px;height:44px;border:none;border-radius:999px;background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:18px;height:18px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/x.svg) center/contain no-repeat"></span></button>
+          </div>
+        </sc-for>
+        <sc-if value="{{ d.empty }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ goFind }}" style="min-height:48px;border:1.5px dashed var(--divider);border-radius:24px;background:none;color:var(--muted);font:inherit;font-size:14px;cursor:pointer;text-align:left;padding:0 18px">Open · add a recipe</button>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<!-- RECIPES -->
+<sc-if value="{{ isRecipes }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Recipes" style="animation:sousIn .28s ease both;display:flex;flex-direction:column;gap:16px;padding-top:10px">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="flex:1;font-family:var(--font-heading);font-size:32px;line-height:1.05">Your recipes</div>
+    <button onClick="{{ openAdd }}" style="min-height:44px;padding:0 18px;border:none;border-radius:999px;background:var(--color-accent-2);color:var(--color-bg);font-family:var(--font-heading);font-size:14px;cursor:pointer">+ Add</button>
+  </div>
+  <button onClick="{{ goFind }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 18px;border:none;border-radius:999px;background:var(--color-surface);color:var(--muted);font:inherit;cursor:pointer;text-align:left"><span style="width:18px;height:18px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/search.svg) center/contain no-repeat"></span>Find new recipes: “quick vegetarian dinner”</button>
+  <div style="display:flex;gap:8px;overflow-x:auto;margin:0 -20px;padding:0 20px">
+    <sc-for list="{{ libTags }}" as="c" hint-placeholder-count="4">
+      <button onClick="{{ c.pick }}" style="flex:none;min-height:44px;padding:0 16px;border:none;border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">{{ c.label }}</button>
+    </sc-for>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <sc-for list="{{ library }}" as="r" hint-placeholder-count="5">
+      <div style="display:flex;align-items:center;gap:10px;padding:16px 12px 16px 20px;border-radius:28px;background:var(--card)">
+        <button onClick="{{ r.open }}" style="flex:1;min-height:44px;border:none;background:none;padding:0;text-align:left;color:var(--color-text);cursor:pointer;font:inherit"><span style="display:block;font-family:var(--font-heading);font-size:18px;line-height:1.2;text-wrap:pretty">{{ r.title }}</span><span style="display:block;margin-top:4px;font-size:13px;color:var(--muted)">{{ r.meta }}</span></button>
+        <button onClick="{{ r.quick }}" style="flex:none;min-height:44px;padding:0 14px;border:1.5px solid {{ r.qBorder }};border-radius:999px;background:{{ r.qBg }};color:{{ r.qFg }};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">{{ r.qLabel }}</button>
+      </div>
+    </sc-for>
+    <sc-if value="{{ libraryEmpty }}" hint-placeholder-val="{{ false }}"><div style="color:var(--muted);padding:12px 4px">No recipes with that tag yet.</div></sc-if>
+  </div>
+</div>
+</sc-if>
+
+<!-- FIND -->
+<sc-if value="{{ isFind }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Find" style="animation:sousIn .28s ease both;display:flex;flex-direction:column;gap:14px">
+  <button onClick="{{ back }}" style="align-self:flex-start;display:flex;align-items:center;gap:6px;min-height:44px;border:none;background:none;padding:0;color:var(--muted);cursor:pointer;font:inherit;font-size:14px"><span style="width:18px;height:18px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/arrow-left.svg) center/contain no-repeat"></span>Back</button>
+  <div style="font-family:var(--font-heading);font-size:32px;line-height:1.05">Find recipes</div>
+  <div style="font-size:13px;color:var(--muted);text-wrap:pretty">Search by ingredient, dish, cuisine or time. Recipes that don't fit your diets or allergies are left out.</div>
+  <div style="display:flex;align-items:center;gap:10px;min-height:54px;padding:0 18px;border-radius:999px;background:var(--card);border:1.5px solid var(--divider)"><span style="width:18px;height:18px;flex:none;color:var(--muted);background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/search.svg) center/contain no-repeat"></span><input type="search" value="{{ query }}" onChange="{{ onQuery }}" placeholder="What do you feel like?" style="flex:1;min-width:0;height:50px;border:none;outline:none;background:transparent;color:var(--color-text);font-size:16px"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <sc-for list="{{ filters }}" as="c" hint-placeholder-count="5">
+      <button onClick="{{ c.pick }}" style="min-height:44px;padding:0 16px;border:none;border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">{{ c.label }}</button>
+    </sc-for>
+  </div>
+  <div style="font-size:13px;color:var(--muted)">{{ foundLabel }}</div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <sc-for list="{{ found }}" as="r" hint-placeholder-count="5">
+      <div style="display:flex;align-items:center;gap:10px;padding:16px 12px 16px 20px;border-radius:28px;background:var(--card)">
+        <button onClick="{{ r.open }}" style="flex:1;min-height:44px;border:none;background:none;padding:0;text-align:left;color:var(--color-text);cursor:pointer;font:inherit"><span style="display:block;font-family:var(--font-heading);font-size:18px;line-height:1.2;text-wrap:pretty">{{ r.title }}</span><span style="display:block;margin-top:4px;font-size:13px;color:var(--muted)">{{ r.meta }}</span></button>
+        <button onClick="{{ r.quick }}" style="flex:none;min-height:44px;padding:0 14px;border:1.5px solid {{ r.qBorder }};border-radius:999px;background:{{ r.qBg }};color:{{ r.qFg }};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">{{ r.qLabel }}</button>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<!-- RECIPE -->
+<sc-if value="{{ isRecipe }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Recipe" style="animation:sousIn .28s ease both;display:flex;flex-direction:column;gap:16px">
+  <sc-if value="{{ detailHero }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;overflow:hidden;margin:-8px -20px 0;padding:10px 22px 30px;background:var(--hero);color:var(--hero-ink);border-radius:0 0 40px 40px">
+      <div style="position:absolute;right:-70px;bottom:-90px;width:210px;height:210px;border-radius:50%;background:var(--hero-blob);opacity:.5"></div>
+      <div style="position:relative;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center">
+          <button onClick="{{ back }}" aria-label="Back" style="width:44px;height:44px;margin-left:-10px;border:none;background:none;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:22px;height:22px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/arrow-left.svg) center/contain no-repeat"></span></button>
+          <button onClick="{{ toggleFav }}" aria-label="Favorite" style="margin-left:auto;width:44px;height:44px;border:none;border-radius:999px;background:{{ favBgHero }};color:{{ favFgHero }};display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:20px;height:20px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/heart.svg) center/contain no-repeat"></span></button>
+        </div>
+        <div style="font-family:var(--font-heading);font-size:32px;line-height:1.06;text-wrap:balance">{{ rec.title }}</div>
+        <div style="font-size:14px;color:var(--hero-muted)">{{ rec.facts }}</div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ detailPlain }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center">
+        <button onClick="{{ back }}" style="display:flex;align-items:center;gap:6px;min-height:44px;border:none;background:none;padding:0;color:var(--muted);cursor:pointer;font:inherit;font-size:14px"><span style="width:18px;height:18px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/arrow-left.svg) center/contain no-repeat"></span>Your recipes</button>
+        <button onClick="{{ toggleFav }}" aria-label="Favorite" style="margin-left:auto;width:44px;height:44px;border:none;border-radius:999px;background:{{ favBg }};color:{{ favFg }};display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:20px;height:20px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/heart.svg) center/contain no-repeat"></span></button>
+      </div>
+      <div style="font-family:var(--font-heading);font-size:34px;line-height:1.05;text-wrap:balance">{{ rec.title }}</div>
+      <div style="font-size:14px;color:var(--muted)">{{ rec.facts }}</div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ rec.hasNote }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 18px;border-radius:22px;background:var(--brown-soft);color:var(--brown-ink);font-size:14px">{{ rec.note }}</div></sc-if>
+  <div style="display:flex;flex-direction:column;gap:6px;font-size:14px">
+    <sc-if value="{{ rec.hasSeason }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;color:var(--color-accent);font-weight:700"><span style="width:16px;height:16px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/leaf.svg) center/contain no-repeat"></span>In season: {{ rec.season }}</div></sc-if>
+    <div style="color:var(--muted)">{{ rec.cooked }}</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <sc-for list="{{ rec.chips }}" as="c" hint-placeholder-count="3"><span style="display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font-size:12px;font-weight:700">{{ c.label }}</span></sc-for>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <sc-if value="{{ rec.linkOnly }}" hint-placeholder-val="{{ false }}"><button onClick="{{ viewSource }}" style="flex:1 1 100%;min-height:50px;padding:0 20px;border:none;border-radius:999px;background:var(--color-accent-2);color:var(--color-bg);font-family:var(--font-heading);font-size:15px;cursor:pointer">View full recipe on {{ rec.source }}</button></sc-if>
+    <button onClick="{{ cook }}" style="flex:1;min-height:48px;padding:0 20px;border:1.5px solid var(--divider);border-radius:999px;background:transparent;color:var(--color-text);font-family:var(--font-heading);font-size:15px;cursor:pointer">Cook</button>
+    <button onClick="{{ markCooked }}" style="flex:1;min-height:48px;padding:0 20px;border:1.5px solid var(--divider);border-radius:999px;background:transparent;color:var(--color-text);font-family:var(--font-heading);font-size:15px;cursor:pointer">{{ rec.cookedBtn }}</button>
+  </div>
+
+  <sc-if value="{{ detailTabs }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;padding:4px;border-radius:999px;background:var(--color-surface)">
+      <button onClick="{{ tabIng }}" style="flex:1;min-height:44px;border:none;border-radius:999px;background:{{ tabIngBg }};color:{{ tabIngFg }};font-family:var(--font-heading);font-size:15px;cursor:pointer">Ingredients</button>
+      <button onClick="{{ tabSteps }}" style="flex:1;min-height:44px;border:none;border-radius:999px;background:{{ tabStepsBg }};color:{{ tabStepsFg }};font-family:var(--font-heading);font-size:15px;cursor:pointer">Steps</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showIng }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ rec.groups }}" as="g" hint-placeholder-count="1">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="font-family:var(--font-heading);font-size:22px;margin-bottom:4px">{{ g.heading }}</div>
+          <sc-for list="{{ g.lines }}" as="l" hint-placeholder-count="6">
+            <div style="display:flex;align-items:baseline;gap:10px;min-height:42px;padding:9px 0;border-bottom:1px solid var(--divider)"><span style="width:8px;height:8px;flex:none;border-radius:50%;background:{{ l.dot }};transform:translateY(-1px)"></span><span style="flex:1"><strong>{{ l.amt }}</strong> {{ l.name }}</span><span style="font-size:13px;color:var(--muted)">{{ l.price }}</span></div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showSteps }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-family:var(--font-heading);font-size:22px">Steps</div>
+      <sc-for list="{{ rec.steps }}" as="st" hint-placeholder-count="4">
+        <div style="display:flex;gap:14px;align-items:flex-start"><span style="flex:none;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--color-text);display:flex;align-items:center;justify-content:center;font-family:var(--font-heading);font-size:15px">{{ st.n }}</span><span style="flex:1;padding-top:5px;text-wrap:pretty">{{ st.t }}</span></div>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ showLinkNote }}" hint-placeholder-val="{{ false }}"><div style="padding:18px;border-radius:24px;background:var(--color-surface);font-size:14px;color:var(--muted)">The steps live on the author's page. Sous keeps the ingredients so it can plan and price them.</div></sc-if>
+  <sc-if value="{{ rec.hasLicense }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:var(--muted);text-wrap:pretty">From the {{ rec.source }}, under {{ rec.license }}. Sous reformatted the ingredients and steps; this version is shared under the same license.</div></sc-if>
+</div>
+</sc-if>
+
+<!-- LIST -->
+<sc-if value="{{ isList }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="List" style="animation:sousIn .28s ease both;display:flex;flex-direction:column;gap:16px;padding-top:10px">
+  <div style="display:flex;align-items:flex-end;gap:10px">
+    <div style="flex:1;font-family:var(--font-heading);font-size:32px;line-height:1.05">Shopping list <span style="display:block;font-size:16px;color:var(--muted)">this week</span></div>
+    <button onClick="{{ shareList }}" aria-label="Share list" style="width:44px;height:44px;border:none;border-radius:999px;background:var(--color-surface);color:var(--color-text);display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:20px;height:20px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/share-2.svg) center/contain no-repeat"></span></button>
+  </div>
+  <div style="border-radius:28px;background:var(--hero);color:var(--hero-ink);padding:18px 20px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--font-heading);font-size:28px;line-height:1">{{ totalLabel }}</span><span style="font-size:13px;color:var(--hero-muted)">of your {{ budgetLabel }} budget</span><span style="margin-left:auto;font-size:13px;color:var(--hero-muted)">{{ cartLabel }}</span></div>
+    <div style="height:8px;border-radius:999px;background:rgba(243,232,210,.2);overflow:hidden"><div style="height:100%;width:{{ cartPct }};border-radius:999px;background:var(--hero-ink);transition:width .35s ease"></div></div>
+  </div>
+  <sc-if value="{{ hasPending }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ openReview }}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:12px 18px;border:none;border-radius:24px;background:var(--brown-soft);color:var(--brown-ink);text-align:left;cursor:pointer;font:inherit;font-size:14px;line-height:1.35"><span style="flex:1"><strong>Not on the list yet:</strong> {{ pendingTitles }}.</span><span style="font-family:var(--font-heading);white-space:nowrap">Review</span></button>
+  </sc-if>
+  <div style="display:flex;align-items:center;gap:8px;min-height:54px;padding:0 6px 0 18px;border-radius:999px;background:var(--card);border:1.5px solid var(--divider)"><input value="{{ newItem }}" onChange="{{ onNewItem }}" onKeyDown="{{ onNewItemKey }}" placeholder="Add an item, like paper towels" style="flex:1;min-width:0;height:50px;border:none;outline:none;background:transparent;color:var(--color-text);font-size:16px"><button onClick="{{ addItem }}" style="min-height:42px;padding:0 18px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:14px;cursor:pointer;opacity:{{ addItemOp }}">Add</button></div>
+  <sc-if value="{{ allInCart }}" hint-placeholder-val="{{ false }}"><div style="font-family:var(--font-heading);font-size:20px;color:var(--color-accent);padding:8px 0">Everything's in the cart.</div></sc-if>
+  <sc-for list="{{ aisles }}" as="a" hint-placeholder-count="3">
+    <div style="display:flex;flex-direction:column">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-2);margin-bottom:2px">{{ a.aisle }}</div>
+      <sc-for list="{{ a.items }}" as="i" hint-placeholder-count="3">
+        <button onClick="{{ i.toggle }}" style="display:flex;align-items:center;gap:14px;min-height:52px;padding:6px 0;border:none;border-bottom:1px solid var(--divider);background:none;color:inherit;text-align:left;cursor:pointer;font:inherit"><span style="width:26px;height:26px;flex:none;border-radius:50%;border:2px solid var(--color-accent)"></span><span style="flex:1"><strong>{{ i.name }}</strong><span style="color:var(--muted);font-size:13px">{{ i.amt }}</span></span><span style="font-size:13px;color:var(--muted)">{{ i.price }}</span></button>
+      </sc-for>
+    </div>
+  </sc-for>
+  <sc-if value="{{ hasCart }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:2px">In the cart ({{ cartCount }})</div>
+      <sc-for list="{{ inCart }}" as="i" hint-placeholder-count="1">
+        <button onClick="{{ i.toggle }}" style="display:flex;align-items:center;gap:14px;min-height:48px;padding:6px 0;border:none;background:none;color:var(--muted);text-align:left;cursor:pointer;font:inherit"><span style="width:26px;height:26px;flex:none;border-radius:50%;background:var(--color-accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center"><span style="width:15px;height:15px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/check.svg) center/contain no-repeat"></span></span><span style="flex:1;text-decoration:line-through">{{ i.name }}</span></button>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<!-- PANTRY -->
+<sc-if value="{{ isPantry }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Pantry" style="animation:sousIn .28s ease both;display:flex;flex-direction:column;gap:18px;padding-top:10px">
+  <div style="font-family:var(--font-heading);font-size:32px;line-height:1.05">Pantry</div>
+  <div style="font-size:14px;color:var(--muted);text-wrap:pretty">What you keep at home. Sous ticks these as “have it” when you review a plan for the list.</div>
+  <sc-for list="{{ pantryGroups }}" as="g" hint-placeholder-count="2">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-family:var(--font-heading);font-size:20px">{{ g.heading }}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <sc-for list="{{ g.items }}" as="c" hint-placeholder-count="6"><button onClick="{{ c.pick }}" style="min-height:44px;padding:0 16px;border:none;border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">{{ c.label }}</button></sc-for>
+      </div>
+    </div>
+  </sc-for>
+</div>
+</sc-if>
+</div>
+
+<!-- Recipe CTA -->
+<sc-if value="{{ isRecipe }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 20px 14px;background:var(--color-bg);box-shadow:0 -14px 18px var(--color-bg);display:flex;gap:10px">
+    <button onClick="{{ rec.saveToggle }}" style="min-height:52px;padding:0 18px;border:1.5px solid var(--divider);border-radius:999px;background:transparent;color:var(--color-text);font-family:var(--font-heading);font-size:14px;cursor:pointer">{{ rec.saveLabel }}</button>
+    <button onClick="{{ rec.plan }}" style="flex:1;min-height:52px;padding:0 16px;border:none;border-radius:999px;background:{{ rec.planBg }};color:{{ rec.planFg }};font-family:var(--font-heading);font-size:15px;cursor:pointer">{{ rec.planLabel }}</button>
+  </div>
+</sc-if>
+
+<!-- NAV: tabs -->
+<sc-if value="{{ navTabs }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:8px 10px 10px;background:var(--color-surface)">
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+      <button onClick="{{ t.go }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;min-height:56px;border:none;background:none;color:{{ t.fg }};cursor:pointer;font:inherit;font-size:12px;font-weight:700"><span style="display:flex;align-items:center;justify-content:center;width:60px;height:30px;border-radius:999px;background:{{ t.pill }};color:{{ t.iconFg }}"><span style="width:20px;height:20px;background:currentColor;mask:url({{ t.icon }}) center/contain no-repeat"></span></span>{{ t.label }}</button>
+    </sc-for>
+  </div>
+</sc-if>
+
+<!-- NAV: floating pill -->
+<sc-if value="{{ navPill }}" hint-placeholder-val="{{ true }}">
+  <div style="position:absolute;left:18px;right:18px;bottom:14px;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:999px;background:var(--hero);box-shadow:0 12px 32px rgba(12,34,24,.35)">
+    <sc-for list="{{ tabsL }}" as="t" hint-placeholder-count="2">
+      <button onClick="{{ t.go }}" aria-label="{{ t.label }}" style="display:flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;border:none;border-radius:999px;background:{{ t.hPill }};color:{{ t.hFg }};cursor:pointer;font-family:var(--font-heading);font-size:14px"><span style="width:20px;height:20px;background:currentColor;mask:url({{ t.icon }}) center/contain no-repeat"></span>{{ t.activeLabel }}</button>
+    </sc-for>
+    <button onClick="{{ openAdd }}" aria-label="Add a recipe" style="width:58px;height:58px;margin:-18px 0;border:5px solid var(--color-bg);border-radius:50%;background:var(--color-accent-2);color:var(--color-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;box-sizing:content-box"><span style="width:26px;height:26px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/plus.svg) center/contain no-repeat"></span></button>
+    <sc-for list="{{ tabsR }}" as="t" hint-placeholder-count="2">
+      <button onClick="{{ t.go }}" aria-label="{{ t.label }}" style="display:flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;border:none;border-radius:999px;background:{{ t.hPill }};color:{{ t.hFg }};cursor:pointer;font-family:var(--font-heading);font-size:14px"><span style="width:20px;height:20px;background:currentColor;mask:url({{ t.icon }}) center/contain no-repeat"></span>{{ t.activeLabel }}</button>
+    </sc-for>
+  </div>
+</sc-if>
+
+<!-- NAV: drawers -->
+<sc-if value="{{ navDrawers }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;gap:6px;padding:28px 12px 0;background:linear-gradient(transparent,var(--color-bg) 55%)">
+    <sc-for list="{{ lips }}" as="t" hint-placeholder-count="3">
+      <button onClick="{{ t.go }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:{{ t.lipH }};padding-top:8px;border:none;border-radius:22px 22px 0 0;background:{{ t.lipBg }};color:{{ t.lipFg }};cursor:pointer;font-family:var(--font-heading);font-size:14px;transition:height .2s ease;box-shadow:0 -4px 14px rgba(12,34,24,.14)"><span style="width:30px;height:4px;border-radius:2px;background:currentColor;opacity:.45"></span>{{ t.lipLabel }}</button>
+    </sc-for>
+    <button onClick="{{ openAdd }}" aria-label="Add a recipe" style="flex:none;width:56px;height:56px;margin-bottom:10px;border:none;border-radius:50%;background:var(--color-accent-2);color:var(--color-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 16px rgba(12,34,24,.3)"><span style="width:26px;height:26px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/plus.svg) center/contain no-repeat"></span></button>
+  </div>
+</sc-if>
+
+<!-- SHEET: add -->
+<sc-if value="{{ sheetAdd }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;background:var(--scrim);animation:sousFade .2s ease both">
+  <button onClick="{{ closeSheet }}" aria-label="Close" style="flex:1;border:none;background:none;cursor:pointer"></button>
+  <div data-screen-label="Add recipe" style="max-height:92%;overflow-y:auto;border-radius:36px 36px 0 0;background:var(--color-bg);padding:12px 22px 26px;display:flex;flex-direction:column;gap:16px;animation:sousUp .3s cubic-bezier(.2,.8,.2,1) both">
+    <div style="align-self:center;width:44px;height:5px;border-radius:3px;background:var(--divider)"></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <sc-if value="{{ addHasMode }}" hint-placeholder-val="{{ false }}"><button onClick="{{ addHome }}" aria-label="Back" style="width:44px;height:44px;margin-left:-12px;border:none;background:none;color:var(--color-text);display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:20px;height:20px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/arrow-left.svg) center/contain no-repeat"></span></button></sc-if>
+      <div style="font-family:var(--font-heading);font-size:26px;line-height:1.1">{{ addTitle }}</div>
+    </div>
+
+    <sc-if value="{{ addMenu }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ addOptions }}" as="o" hint-placeholder-count="5">
+          <button onClick="{{ o.go }}" style="display:flex;align-items:center;gap:16px;min-height:68px;padding:10px 18px;border:none;border-radius:28px;background:var(--card);color:var(--color-text);text-align:left;cursor:pointer;font:inherit"><span style="flex:none;width:46px;height:46px;border-radius:50%;background:{{ o.bg }};color:{{ o.fg }};display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;background:currentColor;mask:url({{ o.icon }}) center/contain no-repeat"></span></span><span style="flex:1"><span style="display:block;font-family:var(--font-heading);font-size:17px">{{ o.label }}</span><span style="display:block;font-size:13px;color:var(--muted)">{{ o.sub }}</span></span></button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ addLink }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <input value="{{ url }}" onChange="{{ onUrl }}" placeholder="https://…" inputMode="url" style="min-height:54px;padding:0 20px;border-radius:999px;border:1.5px solid var(--divider);background:var(--card);color:var(--color-text);font-size:16px;outline:none">
+        <sc-if value="{{ hasAddError }}" hint-placeholder-val="{{ false }}"><div role="alert" style="font-size:14px;color:var(--color-accent-2);font-weight:700">{{ addError }}</div></sc-if>
+        <button onClick="{{ saveLink }}" style="min-height:52px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:16px;cursor:pointer">{{ saveLinkLabel }}</button>
+        <div style="font-size:13px;color:var(--muted);text-wrap:pretty">Sous keeps the ingredients and links back to the author's page for the steps.</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ addShare }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="padding:18px 20px;border-radius:28px;background:var(--card);display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-2)">Shared from your browser</span><span style="font-family:var(--font-heading);font-size:20px;line-height:1.2">Save the recipe from weeknightplate.example?</span><span style="font-size:13px;color:var(--muted)">Soft eggs on garlicky kale toast · 15 min</span></div>
+        <button onClick="{{ saveShare }}" style="min-height:52px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:16px;cursor:pointer">Save to my recipes</button>
+        <div style="font-size:13px;color:var(--muted);text-wrap:pretty">On any recipe page, tap Share and choose Sous. It lands here.</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ addPhoto }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="height:190px;border-radius:28px;background:repeating-linear-gradient(135deg,var(--color-surface) 0 12px,var(--card) 12px 24px);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)">photo of a cookbook page</div>
+        <button onClick="{{ readPhoto }}" style="min-height:52px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:16px;cursor:pointer">{{ readPhotoLabel }}</button>
+        <div style="font-size:13px;color:var(--muted)">Up to 4 pages. Only you can see recipes read from photos.</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ addVoice }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center">
+        <button onClick="{{ toggleVoice }}" aria-label="Dictate" style="width:104px;height:104px;border:none;border-radius:50%;background:{{ micBg }};color:var(--color-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;animation:{{ micAnim }}"><span style="width:40px;height:40px;background:currentColor;mask:url(https://unpkg.com/lucide-static@latest/icons/mic.svg) center/contain no-repeat"></span></button>
+        <div style="font-family:var(--font-heading);font-size:18px">{{ voiceHint }}</div>
+        <div style="align-self:stretch;min-height:96px;padding:16px 18px;border-radius:24px;background:var(--card);text-align:left;font-size:15px;color:var(--color-text);text-wrap:pretty">{{ transcript }}</div>
+        <sc-if value="{{ voiceDone }}" hint-placeholder-val="{{ false }}"><button onClick="{{ useVoice }}" style="align-self:stretch;min-height:52px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:16px;cursor:pointer">Turn this into a recipe</button></sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ addForm }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{ hasFormNote }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 18px;border-radius:22px;background:var(--brown-soft);color:var(--brown-ink);font-size:14px;text-wrap:pretty">{{ formNote }}</div></sc-if>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700">Title<input value="{{ form.title }}" onChange="{{ onTitle }}" style="min-height:52px;padding:0 18px;border-radius:999px;border:1.5px solid {{ titleBorder }};background:var(--card);color:var(--color-text);font-size:16px;outline:none"></label>
+        <sc-if value="{{ hasAddError }}" hint-placeholder-val="{{ false }}"><div role="alert" style="font-size:14px;color:var(--color-accent-2);font-weight:700">{{ addError }}</div></sc-if>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700">Ingredients<span style="font-weight:400;color:var(--muted)">One per line, like “2 cups rice”.</span><textarea value="{{ form.ing }}" onChange="{{ onIng }}" rows="5" style="padding:14px 18px;border-radius:24px;border:1.5px solid var(--divider);background:var(--card);color:var(--color-text);font-size:16px;line-height:1.5;outline:none;resize:none"></textarea></label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700">Steps<span style="font-weight:400;color:var(--muted)">One step per line.</span><textarea value="{{ form.steps }}" onChange="{{ onSteps }}" rows="4" style="padding:14px 18px;border-radius:24px;border:1.5px solid var(--divider);background:var(--card);color:var(--color-text);font-size:16px;line-height:1.5;outline:none;resize:none"></textarea></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700">Serves<input value="{{ form.serves }}" onChange="{{ onServes }}" inputMode="numeric" style="min-height:52px;padding:0 18px;border-radius:999px;border:1.5px solid var(--divider);background:var(--card);color:var(--color-text);font-size:16px;outline:none;min-width:0"></label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700">Total time (min)<input value="{{ form.min }}" onChange="{{ onMin }}" inputMode="numeric" style="min-height:52px;padding:0 18px;border-radius:999px;border:1.5px solid var(--divider);background:var(--card);color:var(--color-text);font-size:16px;outline:none;min-width:0"></label>
+        </div>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700">Where it's from (optional)<input value="{{ form.source }}" onChange="{{ onSource }}" placeholder="Grandma, or a cookbook and page" style="min-height:52px;padding:0 18px;border-radius:999px;border:1.5px solid var(--divider);background:var(--card);color:var(--color-text);font-size:16px;outline:none"></label>
+        <button onClick="{{ saveForm }}" style="min-height:52px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:16px;cursor:pointer">Save recipe</button>
+        <div style="font-size:13px;color:var(--muted)">Only you can see recipes you type in.</div>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</sc-if>
+
+<!-- SHEET: review -->
+<sc-if value="{{ sheetReview }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;background:var(--scrim);animation:sousFade .2s ease both">
+  <button onClick="{{ closeSheet }}" aria-label="Close" style="flex:1;min-height:40px;border:none;background:none;cursor:pointer"></button>
+  <div data-screen-label="Review for list" style="max-height:90%;display:flex;flex-direction:column;border-radius:36px 36px 0 0;background:var(--color-bg);animation:sousUp .3s cubic-bezier(.2,.8,.2,1) both">
+    <div style="padding:12px 22px 8px;display:flex;flex-direction:column;gap:10px">
+      <div style="align-self:center;width:44px;height:5px;border-radius:3px;background:var(--divider)"></div>
+      <div style="font-family:var(--font-heading);font-size:26px;line-height:1.1">What do you already have?</div>
+      <div style="font-size:14px;color:var(--muted);text-wrap:pretty">Pantry items are ticked for you. Tap anything to change it; only what you need goes on the list.</div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:6px 22px 12px;display:flex;flex-direction:column;gap:16px">
+      <sc-for list="{{ reviewGroups }}" as="g" hint-placeholder-count="1">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-2)">{{ g.title }}</div>
+          <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="5">
+            <button onClick="{{ r.toggle }}" style="display:flex;align-items:center;gap:12px;min-height:54px;padding:6px 8px 6px 18px;border:none;border-radius:999px;background:var(--card);color:var(--color-text);text-align:left;cursor:pointer;font:inherit"><span style="flex:1;opacity:{{ r.op }}"><strong>{{ r.name }}</strong><span style="font-size:13px;color:var(--muted)"> · {{ r.amt }}</span></span><span style="font-size:13px;color:var(--muted)">{{ r.price }}</span><span style="min-width:84px;min-height:40px;display:flex;align-items:center;justify-content:center;border-radius:999px;background:{{ r.bg }};color:{{ r.fg }};font-size:13px;font-weight:700">{{ r.label }}</span></button>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <div style="padding:12px 22px 20px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--divider)">
+      <div style="display:flex;align-items:baseline;font-size:14px;color:var(--muted)"><span>List after this</span><span style="margin-left:auto;font-family:var(--font-heading);font-size:18px;color:var(--color-text)">{{ reviewTotal }}</span><span style="margin-left:6px">of {{ budgetLabel }}</span></div>
+      <button onClick="{{ confirmReview }}" style="min-height:54px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:16px;cursor:pointer">{{ reviewCta }}</button>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- SHEET: draft -->
+<sc-if value="{{ sheetDraft }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;background:var(--scrim);animation:sousFade .2s ease both">
+  <button onClick="{{ closeSheet }}" aria-label="Close" style="flex:1;min-height:40px;border:none;background:none;cursor:pointer"></button>
+  <div data-screen-label="Plan my week" style="max-height:90%;overflow-y:auto;border-radius:36px 36px 0 0;background:var(--color-bg);padding:12px 22px 22px;display:flex;flex-direction:column;gap:14px;animation:sousUp .3s cubic-bezier(.2,.8,.2,1) both">
+    <div style="align-self:center;width:44px;height:5px;border-radius:3px;background:var(--divider)"></div>
+    <div style="font-family:var(--font-heading);font-size:26px;line-height:1.1">Plan my week</div>
+    <div style="font-size:14px;color:var(--muted)">Counting the {{ plannedCount }} already planned; those stay as they are.</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <sc-for list="{{ draftPicks }}" as="p" hint-placeholder-count="3">
+        <div style="padding:16px 18px;border-radius:28px;background:var(--card);display:flex;flex-direction:column;gap:10px">
+          <div><div style="font-family:var(--font-heading);font-size:18px;line-height:1.2">{{ p.title }}</div><div style="font-size:13px;color:var(--muted)">{{ p.reason }}</div></div>
+          <div style="display:flex;gap:8px">
+            <button onClick="{{ p.keep }}" style="min-height:44px;padding:0 18px;border:none;border-radius:999px;background:{{ p.keepBg }};color:{{ p.keepFg }};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">{{ p.keepLabel }}</button>
+            <button onClick="{{ p.swap }}" style="min-height:44px;padding:0 18px;border:none;border-radius:999px;background:var(--color-surface);color:var(--color-text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Swap</button>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="font-size:14px">About <strong>{{ draftTotal }}</strong> for the week of your {{ budgetLabel }} budget.</div>
+    <div style="display:flex;gap:10px">
+      <button onClick="{{ acceptDraft }}" style="flex:1;min-height:52px;border:none;border-radius:999px;background:var(--color-accent);color:var(--accent-ink);font-family:var(--font-heading);font-size:15px;cursor:pointer">{{ draftCta }}</button>
+      <button onClick="{{ draftAgain }}" style="min-height:52px;padding:0 18px;border:1.5px solid var(--divider);border-radius:999px;background:transparent;color:var(--color-text);font-family:var(--font-heading);font-size:15px;cursor:pointer">Draft again</button>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+  <div role="status" style="position:absolute;left:20px;right:20px;top:14px;padding:14px 20px;border-radius:999px;background:var(--color-text);color:var(--color-bg);font-size:14px;font-weight:600;text-align:center;box-shadow:0 12px 32px rgba(12,34,24,.3);animation:sousIn .25s ease both">{{ toast }}</div>
+</sc-if>
+
+</div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:412,&quot;height&quot;:892},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;nav&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;tabs&quot;,&quot;pill&quot;,&quot;drawers&quot;],&quot;default&quot;:&quot;drawers&quot;,&quot;tsType&quot;:&quot;'tabs'|'pill'|'drawers'&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;home&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;tonight&quot;,&quot;strip&quot;,&quot;ledger&quot;],&quot;default&quot;:&quot;ledger&quot;,&quot;tsType&quot;:&quot;'tonight'|'strip'|'ledger'&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;detail&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;classic&quot;,&quot;tabs&quot;,&quot;pantry&quot;],&quot;default&quot;:&quot;pantry&quot;,&quot;tsType&quot;:&quot;'classic'|'tabs'|'pantry'&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+const IC = n => 'https://unpkg.com/lucide-static@latest/icons/' + n + '.svg';
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const FULL = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const BUDGET = 9000;
+const $ = c => '$' + (c / 100).toFixed(2);
+const ing = s => { const [amt, name, aisle, cents] = s.split('|'); return { amt, name, aisle, cents: +cents }; };
+const RECIPES = [
+  { id:'beans', title:'Braised white beans with sage & lemon', min:45, serves:4, source:"Grandma's card", kind:'typed', saved:true, fav:true, cuisine:'Italian', diets:['Vegetarian','Gluten-free'], tags:['weeknight','one pot'], cookedN:6, cookedOn:'Oct 28', note:'Your note from Oct 28: double the lemon.', season:'sage, lemons', why:'uses the sage in your pantry',
+    ing:['2 cans|white beans|Canned & dry|258','1 bunch|sage|Produce|229','2|lemons|Produce|138','4 cloves|garlic|Produce|79','3 tbsp|olive oil|Oils & vinegar|0','1 loaf|crusty bread|Bakery|349','2 oz|parmesan|Dairy|412'],
+    steps:['Warm the olive oil in a wide pot and fry the sage leaves until crisp. Lift them out.','Soften the garlic in the same oil, then add the beans with their liquid and a strip of lemon peel.','Simmer 25 minutes until the liquid turns creamy. Mash a few beans against the side.','Finish with lemon juice, parmesan and the crisp sage. Serve with torn bread.'] },
+  { id:'chicken', title:'Skillet chicken with leeks & mustard', min:35, serves:4, source:'budgetpantry.example', kind:'link', saved:true, cuisine:'French', diets:['Gluten-free'], tags:['weeknight'], cookedN:2, cookedOn:'Sep 30', season:'leeks', why:'leeks are in season',
+    ing:['6|chicken thighs|Meat|689','3|leeks|Produce|357','2 tbsp|dijon mustard|Condiments|0','1 cup|chicken stock|Canned & dry|199','1/2 cup|cream|Dairy|249','1 tbsp|butter|Dairy|0'], steps:[] },
+  { id:'soup', title:'Mushroom barley soup', min:60, serves:6, source:'Open Cookbook', kind:'open', license:'CC BY-SA 4.0', saved:true, cuisine:'Eastern European', diets:['Vegan'], tags:['soup','one pot'], cookedN:0, why:'makes leftovers for lunch',
+    ing:['1 lb|cremini mushrooms|Produce|398','3/4 cup|pearl barley|Canned & dry|219','2|carrots|Produce|98','1|onion|Produce|89','6 cups|vegetable stock|Canned & dry|329','few sprigs|thyme|Produce|199'],
+    steps:['Brown the mushrooms in batches so they colour rather than steam.','Soften the onion and carrots, then stir in the barley and thyme.','Add the stock and simmer 40 minutes, until the barley is tender.'] },
+  { id:'salad', title:'Roasted beet & walnut salad', min:50, serves:4, source:'Open Cookbook', kind:'open', license:'CC BY-SA 4.0', saved:true, cuisine:'American', diets:['Vegetarian','Gluten-free'], tags:['salad'], cookedN:1, cookedOn:'Oct 12', season:'beets', why:'beets are in season',
+    ing:['4|beets|Produce|349','1/2 cup|walnuts|Baking & nuts|429','4 oz|goat cheese|Dairy|399','5 oz|arugula|Produce|299','2 tbsp|sherry vinegar|Oils & vinegar|0'],
+    steps:['Roast the beets whole in foil until a knife slides in, about 40 minutes.','Toast the walnuts. Slip the skins off the beets and cut into wedges.','Toss with vinegar and oil while warm, then pile over arugula with the cheese and nuts.'] },
+  { id:'squash', title:'Miso-glazed squash with brown rice', min:50, serves:4, source:'Cookbook, p. 112', kind:'typed', saved:true, cuisine:'Japanese', diets:['Vegan'], tags:['weeknight'], cookedN:3, cookedOn:'Oct 20', season:'squash', why:'squash is in season; rice is in your pantry',
+    ing:['1|butternut squash|Produce|329','3 tbsp|white miso|International|449','1 1/2 cups|brown rice|Canned & dry|0','4|scallions|Produce|129','1 tbsp|sesame seeds|Baking & nuts|249'],
+    steps:['Start the rice. Cut the squash into thick half-moons, skin on.','Roast at 425°F for 25 minutes, then brush with miso thinned with a little water.','Roast 10 minutes more until lacquered. Scatter with scallions and sesame.'] },
+  { id:'crumble', title:'Apple & oat crumble', min:40, serves:6, source:"Grandma's card", kind:'typed', saved:true, cuisine:'British', diets:['Vegetarian'], tags:['dessert'], cookedN:4, cookedOn:'Nov 1', season:'apples', why:'mostly pantry; apples are in season',
+    ing:['6|apples|Produce|419','1 cup|rolled oats|Canned & dry|0','1/2 cup|brown sugar|Baking & nuts|0','6 tbsp|butter|Dairy|0','1 tsp|cinnamon|Baking & nuts|0'],
+    steps:['Slice the apples into a dish with half the sugar and the cinnamon.','Rub the butter into the oats and remaining sugar until clumpy.','Scatter over the apples and bake at 375°F for 30 minutes.'] },
+  { id:'thai', title:'Coconut soup with greens & lime', min:30, serves:4, source:'Open Cookbook', kind:'open', license:'CC BY-SA 4.0', saved:false, cuisine:'Thai', diets:['Vegan','Gluten-free'], tags:['soup','weeknight'], cookedN:0, why:'30 min; fits your budget',
+    ing:['1 can|coconut milk|International|229','2 tbsp|red curry paste|International|349','1 bunch|chard|Produce|279','2|limes|Produce|118','8 oz|rice noodles|International|289'],
+    steps:['Fry the curry paste in a spoonful of the coconut cream until fragrant.','Add the rest of the coconut milk and 3 cups water; simmer 10 minutes.','Cook the noodles and chard in the broth. Finish with lime.'] },
+  { id:'toast', title:'Soft eggs on garlicky kale toast', min:15, serves:2, source:'weeknightplate.example', kind:'link', saved:false, cuisine:'American', diets:['Vegetarian'], tags:['weeknight'], cookedN:0, season:'kale', why:'15 min; kale is in season',
+    ing:['4|eggs|Dairy|0','1 bunch|kale|Produce|249','4 slices|crusty bread|Bakery|349','2 cloves|garlic|Produce|79'], steps:[] },
+  { id:'gratin', title:'Cabbage & white bean gratin', min:55, serves:6, source:'Open Cookbook', kind:'open', license:'CC BY-SA 4.0', saved:false, cuisine:'French', diets:['Vegetarian'], tags:['one pot'], cookedN:0, season:'cabbage', why:'cabbage is in season',
+    ing:['1 head|savoy cabbage|Produce|299','2 cans|white beans|Canned & dry|258','1 cup|cream|Dairy|249','3 oz|gruyère|Dairy|529','1 cup|breadcrumbs|Bakery|199'],
+    steps:['Wilt the cabbage in butter until sweet.','Fold through the beans and cream, tip into a dish and top with cheese and crumbs.','Bake at 400°F for 25 minutes until bubbling.'] },
+].map(r => ({ ...r, ing: r.ing.map(ing) }));
+const PANTRY = { Staples:['olive oil','salt','garlic','butter','dijon mustard','brown rice','rolled oats','brown sugar','cinnamon','sherry vinegar'], 'Have right now':['sage','eggs','onion','carrots','lemons'] };
+const PANTRY_ON = ['olive oil','salt','garlic','butter','dijon mustard','brown rice','rolled oats','brown sugar','cinnamon','sherry vinegar','sage','eggs'];
+const SEASON = [['Squash','squash'],['Apples','crumble'],['Beets','salad'],['Leeks','chicken'],['Cabbage','gratin'],['Kale','toast']];
+const FILTERS = ['Under 30 min','Vegetarian','In season','Soup','Dessert'];
+const VOICE = "Grandma's lentil stew. Two cups brown lentils, one onion, three carrots, a can of tomatoes. Soften the onion and carrots, add everything else with six cups of water, simmer forty minutes. Serves six.";
+const cap = s => s[0].toUpperCase() + s.slice(1);
+
+class Component extends DCLogic {
+  scrollRef = React.createRef();
+  constructor(props) {
+    super(props);
+    const pantry = {}; PANTRY_ON.forEach(n => pantry[n] = true);
+    const plan = [
+      { id:'p1', rid:'beans', day:0, reviewed:true }, { id:'p2', rid:'chicken', day:1, reviewed:true },
+      { id:'p3', rid:'soup', day:3, reviewed:true }, { id:'p4', rid:'salad', day:null, reviewed:false },
+    ];
+    let list = [];
+    plan.filter(e => e.reviewed).forEach(e => { list = this.merge(list, RECIPES.find(r => r.id === e.rid).ing.filter(i => !pantry[i.name])); });
+    list.push({ id:'m1', name:'Paper towels', amt:'', aisle:'Household', cents:0, checked:false });
+    this.state = { screen:'week', stack:[], rid:'beans', dtab:'ing', recipes:RECIPES, plan, list, pantry, selDay:0, libTag:'All', query:'', filters:{}, newItem:'',
+      sheet:null, addMode:null, url:'', addError:'', busy:false, form:{ title:'', ing:'', steps:'', serves:'', min:'', source:'' }, formNote:'',
+      voice:'idle', words:0, reviewHave:{}, draft:[], locked:{}, skipped:{}, cookedToday:{}, toast:'' };
+  }
+  componentWillUnmount() { clearTimeout(this.tt); clearInterval(this.vt); clearTimeout(this.bt); }
+  merge(list, ings) {
+    const out = list.map(i => ({ ...i }));
+    ings.forEach(i => {
+      const ex = out.find(o => o.name.toLowerCase() === i.name && !o.checked);
+      if (ex) { ex.cents += i.cents; ex.amt = ex.amt + ' + ' + i.amt; }
+      else out.push({ id:'i' + out.length + i.name, name:cap(i.name), amt:i.amt, aisle:i.aisle, cents:i.cents, checked:false });
+    });
+    return out;
+  }
+  toast(t) { clearTimeout(this.tt); this.setState({ toast:t }); this.tt = setTimeout(() => this.setState({ toast:'' }), 2400); }
+  top() { requestAnimationFrame(() => { if (this.scrollRef.current) this.scrollRef.current.scrollTop = 0; }); }
+  go(screen, extra) { this.setState(s => ({ stack:[...s.stack, s.screen], screen, ...extra })); this.top(); }
+  tab(screen) { this.setState({ screen, stack:[], sheet:null }); this.top(); }
+  back() { this.setState(s => ({ screen: s.stack[s.stack.length - 1] || 'week', stack: s.stack.slice(0, -1) })); this.top(); }
+  openRecipe(rid) { this.go('recipe', { rid, dtab:'ing', sheet:null }); }
+  addToPlan(rid) {
+    const r = this.state.recipes.find(x => x.id === rid);
+    this.setState(s => ({ plan:[...s.plan, { id:'p' + Date.now() + rid, rid, day:null, reviewed:false }] }));
+    this.toast('Added to this week. Review it for the list.');
+  }
+  setRecipe(rid, patch) { this.setState(s => ({ recipes: s.recipes.map(r => r.id === rid ? { ...r, ...patch } : r) })); }
+  pool() { const s = this.state; return s.recipes.filter(r => r.saved && !s.plan.some(e => e.rid === r.id)); }
+  openDraft() { this.setState({ sheet:'draft', draft:this.pool().slice(0, 3).map(r => r.id), locked:{}, skipped:{} }); }
+  swap(rid) {
+    const s = this.state, skipped = { ...s.skipped, [rid]:true };
+    let next = this.pool().find(r => !s.draft.includes(r.id) && !skipped[r.id]);
+    if (!next) { next = this.pool().find(r => !s.draft.includes(r.id)); }
+    if (!next) return this.toast('No other saved recipes fit this week.');
+    this.setState({ skipped, draft: s.draft.map(d => d === rid ? next.id : d), locked:{ ...s.locked, [rid]:false } });
+  }
+  draftAgain() {
+    const s = this.state, keep = s.draft.filter(d => s.locked[d]);
+    const rest = this.pool().filter(r => !keep.includes(r.id));
+    const start = rest.findIndex(r => !s.draft.includes(r.id));
+    const rot = start > 0 ? [...rest.slice(start), ...rest.slice(0, start)] : rest.slice().reverse();
+    this.setState({ draft:[...keep, ...rot.slice(0, Math.max(0, 3 - keep.length)).map(r => r.id)] });
+  }
+  acceptDraft() {
+    const d = this.state.draft;
+    this.setState(s => ({ plan:[...s.plan, ...d.map((rid, i) => ({ id:'p' + Date.now() + i, rid, day:null, reviewed:false }))], sheet:null, screen:'plan' }));
+    this.toast(d.length + ' added to your week.');
+  }
+  pendingRows() {
+    const s = this.state;
+    return s.plan.filter(e => !e.reviewed).map(e => {
+      const r = s.recipes.find(x => x.id === e.rid);
+      return { title:r.title, rows:r.ing.map(i => { const key = e.id + '|' + i.name; return { key, i, have: s.reviewHave[key] ?? !!s.pantry[i.name] }; }) };
+    });
+  }
+  confirmReview() {
+    const need = this.pendingRows().flatMap(g => g.rows.filter(r => !r.have).map(r => r.i));
+    this.setState(s => ({ list:this.merge(s.list, need), plan:s.plan.map(e => ({ ...e, reviewed:true })), sheet:null, screen:'list', stack:[], reviewHave:{} }));
+    this.top(); this.toast(need.length + ' item' + (need.length === 1 ? '' : 's') + ' added to your list.');
+  }
+  openAdd(mode) { clearInterval(this.vt); this.setState({ sheet:'add', addMode:mode || null, addError:'', busy:false, url:'', voice:'idle', words:0, formNote:'', form:{ title:'', ing:'', steps:'', serves:'', min:'', source:'' } }); }
+  saveLink() {
+    if (!/^https?:\/\/\S+\.\S+/.test(this.state.url.trim())) return this.setState({ addError:'Paste a link to a recipe page, starting with https://' });
+    this.setState({ busy:true, addError:'' });
+    this.bt = setTimeout(() => { this.setRecipe('thai', { saved:true }); this.setState({ busy:false }); this.openRecipe('thai'); this.toast('Saved to your recipes.'); }, 1100);
+  }
+  readPhoto() {
+    this.setState({ busy:true });
+    this.bt = setTimeout(() => this.setState({ busy:false, addMode:'form', formNote:'Read from your photos. Check it over before saving. Worth a check: “1 tbsp or 1 tsp salt?”',
+      form:{ title:'Buttermilk soda bread', ing:'3 1/2 cups flour\n1 tsp baking soda\n1 tsp salt\n1 3/4 cups buttermilk', steps:'Whisk the dry ingredients.\nStir in the buttermilk until just combined.\nShape, score a cross and bake at 425°F for 35 minutes.', serves:'8', min:'50', source:'' } }), 1300);
+  }
+  toggleVoice() {
+    if (this.state.voice === 'listening') { clearInterval(this.vt); return this.setState({ voice:'done' }); }
+    const n = VOICE.split(' ').length;
+    this.setState({ voice:'listening', words:0 });
+    this.vt = setInterval(() => this.setState(s => { if (s.words + 1 >= n) { clearInterval(this.vt); return { words:n, voice:'done' }; } return { words:s.words + 1 }; }), 110);
+  }
+  useVoice() {
+    this.setState({ addMode:'form', formNote:'Written up from what you said. Check it over before saving.',
+      form:{ title:"Grandma's lentil stew", ing:'2 cups brown lentils\n1 onion\n3 carrots\n1 can tomatoes', steps:'Soften the onion and carrots.\nAdd everything else with 6 cups of water.\nSimmer 40 minutes.', serves:'6', min:'50', source:'Grandma' } });
+  }
+  saveForm() {
+    const f = this.state.form;
+    if (!f.title.trim()) return this.setState({ addError:'Give the recipe a title.' });
+    const id = 'mine' + Date.now();
+    const lines = f.ing.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const m = l.match(/^([\d\/\s.]+\s*(?:cups?|tsp|tbsp|cans?|oz|lb|cloves?)?)\s+(.*)$/i); return { amt:m ? m[1].trim() : '', name:m ? m[2] : l, aisle:'Other', cents:0 }; });
+    const rec = { id, title:f.title.trim(), min:+f.min || 30, serves:+f.serves || 4, source:f.source.trim() || 'Typed in by you', kind:'typed', saved:true, cuisine:'', diets:[], tags:[], cookedN:0, why:'yours', ing:lines, steps:f.steps.split('\n').map(l => l.trim()).filter(Boolean) };
+    this.setState(s => ({ recipes:[rec, ...s.recipes], sheet:null }));
+    this.openRecipe(id); this.toast('Saved. Only you can see it.');
+  }
+  addItem() {
+    const n = this.state.newItem.trim(); if (!n) return;
+    this.setState(s => ({ newItem:'', list:[...s.list, { id:'m' + Date.now(), name:n, amt:'', aisle:'Added by you', cents:0, checked:false }] }));
+  }
+
+  renderVals() {
+    const s = this.state, p = this.props;
+    const theme = p.theme ?? 'dark', nav = p.nav ?? 'drawers', home = p.home ?? 'ledger', detail = p.detail ?? 'pantry';
+    const by = {}; s.recipes.forEach(r => by[r.id] = r);
+    const ON = { bg:'var(--color-accent)', fg:'var(--accent-ink)' }, OFF = { bg:'var(--color-surface)', fg:'var(--color-text)' };
+    const set = patch => () => this.setState(patch);
+    const inPlan = rid => s.plan.some(e => e.rid === rid);
+    const moveEntry = id => () => this.setState(st => ({ plan: st.plan.map(e => e.id === id ? { ...e, day: e.day === null ? 0 : e.day === 6 ? null : e.day + 1 } : e) }));
+    const view = e => { const r = by[e.rid]; return { id:e.id, title:r.title, facts:r.min + ' min · serves ' + r.serves, sub:r.min + ' min' + (e.reviewed ? '' : ' · not on the list yet'),
+      open:() => this.openRecipe(r.id), move:moveEntry(e.id), remove:() => this.setState(st => ({ plan: st.plan.filter(x => x.id !== e.id) })),
+      cooked:() => { this.setState(st => ({ cookedToday:{ ...st.cookedToday, [r.id]:!st.cookedToday[r.id] } })); }, cookedLabel: s.cookedToday[r.id] ? 'Cooked · undo' : 'Cooked it' }; };
+    const days = DAYS.map((d, i) => {
+      const meals = s.plan.filter(e => e.day === i).map(view), sel = s.selDay === i, today = i === 0;
+      return { short:d, date:9 + i, meals, empty:!meals.length, heading:FULL[i] + (today ? ' · tonight' : ''), pick:set({ selDay:i }),
+        pillBg: sel ? 'var(--color-accent)' : 'var(--color-surface)', pillFg: sel ? 'var(--accent-ink)' : 'var(--color-text)', dot: meals.length ? (sel ? 'var(--accent-ink)' : 'var(--color-accent-2)') : 'transparent',
+        rowBg: today ? 'var(--hero)' : meals.length ? 'var(--card)' : 'transparent', rowFg: today ? 'var(--hero-ink)' : 'var(--color-text)',
+        firstTitle: meals.length ? meals[0].title : 'Open', titleOp: meals.length ? 1 : .55, tag: today ? 'Tonight' : meals.length ? '' : '+ Add',
+        act: meals.length ? meals[0].open : () => this.go('find') };
+    });
+    const anyDay = s.plan.filter(e => e.day === null).map(view);
+    const ahead = s.plan.filter(e => e.day !== null && e.day > 0).sort((a, b) => a.day - b.day).slice(0, 4).map(e => ({ day:DAYS[e.day], title:by[e.rid].title, open:() => this.openRecipe(e.rid) }));
+    const planDays = [...days, { heading:'Any day this week', meals:anyDay, empty:false }];
+
+    const toBuy = s.list.filter(i => !i.checked), cart = s.list.filter(i => i.checked);
+    const total = s.list.reduce((a, i) => a + i.cents, 0);
+    const row = i => ({ name:i.name, amt:i.amt ? ' · ' + i.amt : '', price:i.cents ? $(i.cents) : '', toggle:() => this.setState(st => ({ list: st.list.map(x => x.id === i.id ? { ...x, checked:!x.checked } : x) })) });
+    const aisleMap = {}; toBuy.forEach(i => (aisleMap[i.aisle] = aisleMap[i.aisle] || []).push(row(i)));
+    const pending = s.plan.filter(e => !e.reviewed);
+    const groups = this.pendingRows();
+    const need = groups.flatMap(g => g.rows.filter(r => !r.have));
+    const needCost = need.reduce((a, r) => a + r.i.cents, 0);
+
+    const quick = r => { const pl = inPlan(r.id); return { title:r.title, open:() => this.openRecipe(r.id), quick: pl ? () => this.toast('Already in this week’s plan.') : () => this.addToPlan(r.id),
+      qLabel: pl ? '✓ Planned' : '+ Plan', qBg: pl ? 'var(--accent-soft)' : 'transparent', qFg:'var(--color-text)', qBorder: pl ? 'transparent' : 'var(--divider)' }; };
+    const saved = s.recipes.filter(r => r.saved);
+    const tagSet = ['All', 'Favorites', ...new Set(saved.flatMap(r => r.tags))];
+    const library = saved.filter(r => s.libTag === 'All' || (s.libTag === 'Favorites' ? r.fav : r.tags.includes(s.libTag)))
+      .map(r => ({ ...quick(r), meta:[r.source, r.min + ' min', r.fav ? 'favorite' : null].filter(Boolean).join(' · ') }));
+    const q = s.query.trim().toLowerCase();
+    const fits = r => (!q || q.split(/\s+/).every(w => (r.title + ' ' + r.cuisine + ' ' + r.tags.join(' ') + ' ' + r.diets.join(' ') + ' ' + r.ing.map(i => i.name).join(' ')).toLowerCase().includes(w)))
+      && (!s.filters['Under 30 min'] || r.min <= 30) && (!s.filters['Vegetarian'] || r.diets.some(d => d === 'Vegetarian' || d === 'Vegan'))
+      && (!s.filters['In season'] || !!r.season) && (!s.filters['Soup'] || r.tags.includes('soup')) && (!s.filters['Dessert'] || r.tags.includes('dessert'));
+    const found = s.recipes.filter(fits).map(r => ({ ...quick(r), meta:[r.source, r.min + ' min', r.why].join(' · ') }));
+
+    const r = by[s.rid] || s.recipes[0];
+    const have = r.ing.filter(i => s.pantry[i.name]), buy = r.ing.filter(i => !s.pantry[i.name]);
+    const line = (i, priced) => ({ amt:i.amt, name:i.name, price: priced ? (s.pantry[i.name] ? 'have it' : i.cents ? $(i.cents) : '') : '', dot: s.pantry[i.name] && priced ? 'var(--color-accent)' : 'var(--color-accent-2)' });
+    const recGroups = detail === 'pantry'
+      ? [{ heading:'To buy (' + buy.length + ') · ~' + $(buy.reduce((a, i) => a + i.cents, 0)), lines:buy.map(i => line(i, true)) }, { heading:'You have (' + have.length + ')', lines:have.map(i => line(i, true)) }].filter(g => g.lines.length)
+      : [{ heading:'Ingredients', lines:r.ing.map(i => line(i, false)) }];
+    const rPlanned = inPlan(r.id), cookedNow = !!s.cookedToday[r.id], times = r.cookedN + (cookedNow ? 1 : 0);
+    const rec = { title:r.title, facts:[r.source, r.min < 60 ? r.min + ' min' : Math.floor(r.min / 60) + ' h' + (r.min % 60 ? ' ' + r.min % 60 + ' min' : ''), 'serves ' + r.serves].join(' · '),
+      source:r.source, hasNote:!!r.note, note:r.note, hasSeason:!!r.season, season:r.season,
+      cooked: times ? 'Cooked ' + (times === 1 ? 'once' : times + ' times') + ', last on ' + (cookedNow ? 'Nov 9' : r.cookedOn) + '.' : 'Not cooked yet.',
+      cookedBtn: cookedNow ? 'Cooked · undo' : 'Cooked it',
+      chips:[...r.diets.map(d => ({ label:d, bg:'var(--accent-soft)', fg:'var(--color-text)' })), ...(r.cuisine ? [{ label:r.cuisine, bg:'var(--brown-soft)', fg:'var(--brown-ink)' }] : []), ...r.tags.map(t => ({ label:t, bg:'var(--color-surface)', fg:'var(--color-text)' }))],
+      linkOnly:r.kind === 'link', hasLicense:!!r.license, license:r.license, groups:recGroups, steps:r.steps.map((t, i) => ({ n:i + 1, t })),
+      saveLabel: r.saved ? 'Saved' : 'Save', saveToggle:() => { this.setRecipe(r.id, { saved:!r.saved }); this.toast(r.saved ? 'Removed from your recipes.' : 'Saved to your recipes.'); },
+      plan: rPlanned ? () => this.tab('plan') : () => this.addToPlan(r.id), planLabel: rPlanned ? 'In this week · see the plan' : "Add to this week's plan",
+      planBg: rPlanned ? 'var(--accent-soft)' : 'var(--color-accent)', planFg: rPlanned ? 'var(--color-text)' : 'var(--accent-ink)' };
+    const hasSteps = r.steps.length > 0;
+
+    const tabOf = { week:'week', plan:'week', recipes:'recipes', find:'recipes', recipe:'recipes', list:'list', pantry:'pantry' }[s.screen];
+    const tabs = [['week','Week','calendar-days'],['recipes','Recipes','book-open'],['list','List','shopping-basket'],['pantry','Pantry','package']].map(([k, label, icon]) => {
+      const a = tabOf === k;
+      return { label, icon:IC(icon), go:() => (nav === 'drawers' && a && k !== 'week') ? this.tab('week') : this.tab(k), fg: a ? 'var(--color-text)' : 'var(--muted)', pill: a ? 'var(--color-accent)' : 'transparent', iconFg: a ? 'var(--accent-ink)' : 'var(--muted)',
+        hPill: a ? 'var(--hero-ink)' : 'transparent', hFg: a ? '#123524' : 'var(--hero-muted)', activeLabel: a ? label : '',
+        lipH: a ? '62px' : '50px', lipBg: a ? 'var(--color-accent)' : 'var(--color-surface)', lipFg: a ? 'var(--accent-ink)' : 'var(--color-text)', lipLabel: k === 'list' ? 'List · ' + toBuy.length : label };
+    });
+    const drawerOpen = nav === 'drawers' && ['recipes','find','list','pantry'].includes(s.screen);
+    const words = VOICE.split(' ');
+    const draftCost = s.draft.reduce((a, id) => a + by[id].ing.filter(i => !s.pantry[i.name]).reduce((b, i) => b + i.cents, 0), 0);
+    const titles = { link:'Paste a link', share:'From your browser', photo:'Photo of a page', voice:'Say it', form:'Type in a recipe' };
+    const fset = k => e => this.setState(st => ({ form:{ ...st.form, [k]:e.target.value }, addError:'' }));
+
+    return {
+      theme, isDark: theme === 'dark', scrollRef:this.scrollRef, scrollTop: drawerOpen ? '52px' : '0px', scrollRadius: drawerOpen ? '32px 32px 0 0' : '0px', drawerOpen,
+      isWeek:s.screen === 'week', isPlan:s.screen === 'plan', isRecipes:s.screen === 'recipes', isFind:s.screen === 'find', isRecipe:s.screen === 'recipe', isList:s.screen === 'list', isPantry:s.screen === 'pantry',
+      homeTonight:home === 'tonight', homeStrip:home === 'strip', homeLedger:home === 'ledger',
+      detailHero:detail === 'tabs', detailPlain:detail !== 'tabs', detailTabs:detail === 'tabs',
+      navTabs:nav === 'tabs' && s.screen !== 'recipe', navPill:nav === 'pill' && s.screen !== 'recipe', navDrawers:nav === 'drawers' && s.screen !== 'recipe',
+      tabs, tabsL:tabs.slice(0, 2), tabsR:tabs.slice(2), lips:tabs.slice(1),
+      goWeek:() => this.tab('week'), goPlan:() => this.go('plan'), goFind:() => this.go('find'), goList:() => this.tab('list'), back:() => this.back(),
+      openPantryOrPrefs:() => this.toast('Preferences: diets, budget, your store.'), cook:() => this.toast('Cook mode opens here, with timers.'),
+      days, tonight:days[0].meals, noTonight:!days[0].meals.length, ahead, anyDay, hasAnyDay:anyDay.length > 0, planDays, plannedCount:s.plan.length,
+      selDayLabel:FULL[s.selDay] + (s.selDay === 0 ? ' · tonight' : ''), selMeals:days[s.selDay].meals, selEmpty:days[s.selDay].empty,
+      toBuyCount:toBuy.length, totalLabel:'~' + $(total), budgetLabel:'$' + BUDGET / 100, budgetPct:Math.min(100, total / BUDGET * 100) + '%',
+      hasPending:pending.length > 0, pendingCount:pending.length + (pending.length === 1 ? ' recipe is' : ' recipes are'), pendingTitles:pending.map(e => by[e.rid].title).join('; '),
+      openReview:set({ sheet:'review' }), closeSheet:() => { clearInterval(this.vt); this.setState({ sheet:null }); },
+      season:SEASON.map(([name, rid]) => ({ name, recipe:by[rid].title, open:() => this.openRecipe(rid) })),
+      openDraft:() => this.openDraft(), openAdd:() => this.openAdd(),
+      libTags:tagSet.map(t => ({ label:t, pick:set({ libTag:t }), ...(s.libTag === t ? ON : OFF) })), library, libraryEmpty:!library.length,
+      query:s.query, onQuery:e => this.setState({ query:e.target.value }),
+      filters:FILTERS.map(f => ({ label:f, pick:() => this.setState(st => ({ filters:{ ...st.filters, [f]:!st.filters[f] } })), ...(s.filters[f] ? ON : OFF) })),
+      found, foundLabel: found.length ? found.length + ' recipe' + (found.length === 1 ? '' : 's') + ' that fit your preferences' : 'Nothing that fits your preferences matches. Try another ingredient or dish.',
+      rec, toggleFav:() => this.setRecipe(r.id, { fav:!r.fav }), favBg: r.fav ? 'var(--color-accent-2)' : 'var(--color-surface)', favFg: r.fav ? 'var(--color-bg)' : 'var(--color-text)',
+      favBgHero: r.fav ? 'var(--hero-ink)' : 'rgba(243,232,210,.16)', favFgHero: r.fav ? '#7a4a2b' : 'var(--hero-ink)',
+      viewSource:() => this.toast('Opens ' + r.source + ' in your browser.'), markCooked:() => this.setState(st => ({ cookedToday:{ ...st.cookedToday, [r.id]:!st.cookedToday[r.id] } })),
+      tabIng:set({ dtab:'ing' }), tabSteps:set({ dtab:'steps' }),
+      tabIngBg: s.dtab === 'ing' ? ON.bg : 'transparent', tabIngFg: s.dtab === 'ing' ? ON.fg : 'var(--color-text)', tabStepsBg: s.dtab === 'steps' ? ON.bg : 'transparent', tabStepsFg: s.dtab === 'steps' ? ON.fg : 'var(--color-text)',
+      showIng: detail !== 'tabs' || s.dtab === 'ing', showSteps: hasSteps && (detail !== 'tabs' || s.dtab === 'steps'), showLinkNote: !hasSteps && (detail !== 'tabs' || s.dtab === 'steps'),
+      cartLabel:cart.length + ' of ' + s.list.length + ' in the cart', cartPct:(s.list.length ? cart.length / s.list.length * 100 : 0) + '%', cartCount:cart.length, hasCart:cart.length > 0, inCart:cart.map(row),
+      aisles:Object.keys(aisleMap).map(a => ({ aisle:a, items:aisleMap[a] })), allInCart:!toBuy.length && s.list.length > 0,
+      newItem:s.newItem, onNewItem:e => this.setState({ newItem:e.target.value }), onNewItemKey:e => { if (e.key === 'Enter') this.addItem(); }, addItem:() => this.addItem(), addItemOp: s.newItem.trim() ? 1 : .45,
+      shareList:() => this.toast('List copied.'),
+      pantryGroups:Object.keys(PANTRY).map(h => ({ heading:h, items:PANTRY[h].map(n => ({ label:cap(n), pick:() => this.setState(st => ({ pantry:{ ...st.pantry, [n]:!st.pantry[n] } })), ...(s.pantry[n] ? ON : OFF) })) })),
+      sheetAdd:s.sheet === 'add', sheetReview:s.sheet === 'review', sheetDraft:s.sheet === 'draft',
+      addMenu:!s.addMode, addHasMode:!!s.addMode, addHome:() => this.openAdd(), addTitle: s.addMode ? titles[s.addMode] : 'Add a recipe',
+      addLink:s.addMode === 'link', addShare:s.addMode === 'share', addPhoto:s.addMode === 'photo', addVoice:s.addMode === 'voice', addForm:s.addMode === 'form',
+      addOptions:[['link','Paste a link','From any recipe site','link',1],['share','Share from your browser','Tap Share on a page, choose Sous','share-2',0],['photo','Photo of a cookbook page','Sous reads it into a draft','camera',1],['voice','Say it','Dictate a family recipe','mic',0],['form','Type it in','Private to you','pencil',1]]
+        .map(([m, label, sub, icon, g]) => ({ label, sub, icon:IC(icon), go:() => this.openAdd(m), bg: g ? 'var(--accent-soft)' : 'var(--brown-soft)', fg: g ? 'var(--color-text)' : 'var(--brown-ink)' })),
+      url:s.url, onUrl:e => this.setState({ url:e.target.value, addError:'' }), saveLink:() => this.saveLink(), saveLinkLabel: s.busy ? 'Reading the page…' : 'Save recipe',
+      hasAddError:!!s.addError, addError:s.addError,
+      saveShare:() => { this.setRecipe('toast', { saved:true }); this.openRecipe('toast'); this.toast('Saved to your recipes.'); },
+      readPhoto:() => this.readPhoto(), readPhotoLabel: s.busy ? 'Reading your photo…' : 'Take or choose a photo',
+      toggleVoice:() => this.toggleVoice(), useVoice:() => this.useVoice(), voiceDone:s.voice === 'done',
+      micBg: s.voice === 'listening' ? 'var(--color-accent-2)' : 'var(--color-accent)', micAnim: s.voice === 'listening' ? 'sousPulse 1s ease-in-out infinite' : 'none',
+      voiceHint: s.voice === 'idle' ? 'Tap and read the recipe aloud' : s.voice === 'listening' ? 'Listening… tap to stop' : 'Got it.',
+      transcript: s.voice === 'idle' ? 'Title, ingredients, then the steps. Sous sorts it out.' : words.slice(0, s.words).join(' '),
+      form:s.form, hasFormNote:!!s.formNote, formNote:s.formNote, titleBorder: s.addError ? 'var(--color-accent-2)' : 'var(--divider)',
+      onTitle:fset('title'), onIng:fset('ing'), onSteps:fset('steps'), onServes:fset('serves'), onMin:fset('min'), onSource:fset('source'), saveForm:() => this.saveForm(),
+      reviewGroups:groups.map(g => ({ title:g.title, rows:g.rows.map(x => ({ name:cap(x.i.name), amt:x.i.amt, price: x.have || !x.i.cents ? '' : $(x.i.cents), op: x.have ? .55 : 1, label: x.have ? 'Have it' : 'Need it',
+        bg: x.have ? 'var(--accent-soft)' : 'var(--color-accent-2)', fg: x.have ? 'var(--color-text)' : 'var(--color-bg)', toggle:() => this.setState(st => ({ reviewHave:{ ...st.reviewHave, [x.key]:!x.have } })) })) })),
+      reviewTotal:'~' + $(total + needCost), reviewCta: need.length ? 'Add ' + need.length + ' to the list · +' + $(needCost) : 'Nothing to buy · done', confirmReview:() => this.confirmReview(),
+      draftPicks:s.draft.map(id => ({ title:by[id].title, reason:by[id].why, keep:() => this.setState(st => ({ locked:{ ...st.locked, [id]:!st.locked[id] } })), swap:() => this.swap(id),
+        keepLabel: s.locked[id] ? 'Kept' : 'Keep', keepBg: s.locked[id] ? ON.bg : OFF.bg, keepFg: s.locked[id] ? ON.fg : OFF.fg })),
+      draftTotal:$(total + needCost + draftCost), draftCta:'Add ' + s.draft.length + ' to my week', draftAgain:() => this.draftAgain(), acceptDraft:() => this.acceptDraft(),
+      hasToast:!!s.toast, toast:s.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>

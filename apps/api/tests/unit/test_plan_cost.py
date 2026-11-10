@@ -461,6 +461,27 @@ class TestRoute:
         # No store's prices were used, and the page is told why.
         assert (body["store_status"], body["home_zip"]) == ("none_nearby", "02139")
 
+    def test_the_list_has_only_reviewed_entries(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # TYL-150: a new entry reaches the list once it's reviewed.
+        async def fake_inputs(user_id: str, week: date, *a: Any) -> dict[str, Any]:
+            return {
+                "budget_cents": 5000,
+                "entries": [
+                    entry([line(EGGS, 2, None)], id_="done", reviewed=True),
+                    entry([line(RICE, 1, "cup")], id_="new", reviewed=False),
+                ],
+                "ingredients": INGREDIENTS,
+                "prices": PRICES,
+            }
+
+        monkeypatch.setattr(routes, "cost_inputs", fake_inputs)
+        whole = client.get("/plans/2026-10-12/cost").json()
+        listed = client.get("/plans/2026-10-12/cost?list=1").json()
+        assert {i["name"] for i in whole["items"]} == {"eggs", "white rice"}
+        assert {i["name"] for i in listed["items"]} == {"eggs"}
+
     def test_says_what_each_recipe_would_add(self, client: TestClient) -> None:
         resp = client.post("/plans/2026-10-12/added", json={"recipe_ids": [R1, R1]})
         assert resp.status_code == 200

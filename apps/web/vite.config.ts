@@ -20,8 +20,8 @@ export default defineConfig({
         short_name: 'Sous',
         description: 'Plan the week. Shop the deals.',
         // Matches the page behind the system bars (TYL-93); see index.html.
-        theme_color: '#faf8f4',
-        background_color: '#faf8f4',
+        theme_color: '#f5ead8',
+        background_color: '#f5ead8',
         display: 'standalone',
         start_url: '/',
         scope: '/',
@@ -43,7 +43,8 @@ export default defineConfig({
         },
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // Fonts too, so Caprasimo and Figtree work offline (TYL-148).
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // The app shell answers navigations offline, except the API, the
         // PostHog proxy and the static SousBot page, which must always come
         // from the server.

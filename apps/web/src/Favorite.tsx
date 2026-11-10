@@ -1,3 +1,4 @@
+import { Heart } from 'lucide-react'
 import { useState } from 'react'
 import { FREQUENCIES, type Frequency } from './variety.ts'
 
@@ -32,7 +33,7 @@ export function FavoriteControl({
     <span className="favorite">
       <button
         type="button"
-        className="chip heart"
+        className="icon-button heart"
         aria-pressed={favorite !== null}
         aria-label={
           favorite ? `Remove ${title} from favorites` : `Favorite ${title}`
@@ -40,7 +41,12 @@ export function FavoriteControl({
         disabled={busy}
         onClick={() => void change(favorite ? null : 'biweekly')}
       >
-        {favorite ? '♥' : '♡'}
+        <Heart
+          size={20}
+          strokeWidth={2.75}
+          fill={favorite ? 'currentColor' : 'none'}
+          aria-hidden="true"
+        />
       </button>
       {favorite && (
         <>

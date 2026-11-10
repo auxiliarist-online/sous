@@ -20,10 +20,16 @@ import {
   type RecipeFilter,
   type SavedRecipe,
   sameLink,
+  takeRequestedLink,
+  LINK_REQUEST,
 } from './library.ts'
 import { ingredientsFromText, titleFromUrl } from './paste.ts'
 import { recipeInSeason, type Seasons } from './seasons.ts'
 import { Link } from './router.tsx'
+import { navigate } from './navigation.ts'
+import { showToast } from './toast.ts'
+import { openAddSheet } from './addSheet.ts'
+import { Search } from 'lucide-react'
 import { ExternalLink } from './ExternalLink.tsx'
 import type { Shared } from './share.ts'
 import { QuickAdd, type QuickAddApi } from './QuickAdd.tsx'
@@ -139,15 +145,23 @@ export function Library({
 
   // Save a recipe from its link. When the site turns Sous away, or the import
   // fails on our side, offer to save it from pasted ingredients instead.
-  async function save(link: string) {
+  async function save(link: string, open = false) {
     const target = link.trim()
     if (!target) return
     const full = target.includes('://') ? target : `https://${target}`
     setPaste(null)
     try {
       setStatus({ state: 'saving' })
-      setStatus({ state: 'saved', result: await api.save(full) })
+      const result = await api.save(full)
       setUrl('')
+      // From the Add-a-recipe sheet: open it (TYL-151).
+      if (open) {
+        setStatus({ state: 'idle' })
+        navigate(`/recipe/${result.recipe_id}`)
+        showToast('Saved to your recipes.')
+        return
+      }
+      setStatus({ state: 'saved', result })
       refresh()
     } catch (e) {
       const code = e instanceof ImportError ? e.code : 'error'
@@ -207,6 +221,29 @@ export function Library({
     void save(url)
   }
 
+  // A link from the Add-a-recipe sheet (TYL-151): save it now, the user
+  // tapped Save there. Asked for before this page opened, or while it's
+  // open; taken once, so it's saved once.
+  useEffect(() => {
+    const take = () => {
+      const link = takeRequestedLink()
+      if (link) {
+        setUrl(link)
+        void save(link, true)
+      }
+    }
+    take()
+    window.addEventListener(LINK_REQUEST, take)
+    return () => window.removeEventListener(LINK_REQUEST, take)
+    // Only on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The link form shows for a link that arrived or is being saved; adding a
+  // recipe otherwise goes through the Add-a-recipe sheet.
+  const showForm =
+    !!sharedUrl || !!url || status.state !== 'idle' || paste !== null
+
   async function remove(recipe: SavedRecipe) {
     if (!confirm(`Remove “${recipe.title}” from your recipes?`)) return
     await api.remove(recipe.id)
@@ -234,36 +271,41 @@ export function Library({
           <Link to={`/recipe/${alreadySaved.id}`}>{alreadySaved.title}</Link>
         </p>
       )}
-      <form className="card" onSubmit={submit}>
-        <h2>
-          {confirmingShare ? 'Save the recipe you shared?' : 'Add a recipe'}
-        </h2>
-        <label htmlFor="recipe-url">Recipe link</label>
-        <input
-          id="recipe-url"
-          type="text"
-          inputMode="url"
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          placeholder="https://"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-        />
-        <button
-          type="submit"
-          disabled={status.state === 'saving' || !url.trim() || holdShare}
-        >
-          {status.state === 'saving' ? 'Saving…' : 'Save recipe'}
+      <header className="screen-head">
+        <h2 className="screen-title">Your recipes</h2>
+        <button type="button" className="add-pill" onClick={openAddSheet}>
+          + Add
         </button>
-        <p className="muted small">
-          Tip: install Sous on your phone, then share recipes to it from your
-          browser.
-        </p>
-        <Link to="/new" className="small">
-          Or type in a recipe, or read one from cookbook photos
-        </Link>
-      </form>
+      </header>
+      <Link to="/browse" className="search-pill">
+        <Search size={20} strokeWidth={2.75} aria-hidden="true" />
+        Find new recipes: “quick vegetarian dinner”
+      </Link>
+      {showForm && (
+        <form className="panel share-form" onSubmit={submit}>
+          <h3>
+            {confirmingShare ? 'Save the recipe you shared?' : 'Save a recipe'}
+          </h3>
+          <label htmlFor="recipe-url">Recipe link</label>
+          <input
+            id="recipe-url"
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            placeholder="https://"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <button
+            type="submit"
+            disabled={status.state === 'saving' || !url.trim() || holdShare}
+          >
+            {status.state === 'saving' ? 'Reading the page…' : 'Save recipe'}
+          </button>
+        </form>
+      )}
 
       {paste && (
         <PasteRecipe
@@ -298,13 +340,7 @@ export function Library({
         {status.state === 'saved' && <Saved result={status.result} />}
       </div>
 
-      <BrowserImportHelp />
-
-      <section className="card">
-        <h2>Your recipes</h2>
-        <Link to="/browse" className="small">
-          Find more recipes
-        </Link>
+      <section className="saved-recipes" aria-label="Your recipes">
         {listError && (
           <p className="error" role="alert">
             We couldn't load your recipes.{' '}
@@ -316,8 +352,8 @@ export function Library({
         {recipes === null && !listError && <p className="muted">Loading…</p>}
         {recipes?.length === 0 && (
           <p className="muted">
-            Nothing saved yet. Paste a link above, share a recipe to Sous from
-            your browser, or type one in.
+            Nothing saved yet. Tap + Add to paste a link, share a recipe to Sous
+            from your browser, or type one in.
           </p>
         )}
         {!!recipes?.length && (
@@ -343,6 +379,8 @@ export function Library({
           </p>
         )}
       </section>
+
+      <BrowserImportHelp />
     </>
   )
 }
@@ -609,7 +647,22 @@ function Filters({
         value={filter.query}
         onChange={(e) => onChange({ ...filter, query: e.target.value })}
       />
-      <div className="chips" role="group" aria-label="Filters">
+      <div className="chips scroll" role="group" aria-label="Filters">
+        <button
+          type="button"
+          className="chip"
+          aria-pressed={
+            !filter.query &&
+            !filter.diets.length &&
+            !filter.tags.length &&
+            filter.maxMinutes === null &&
+            !filter.favorites &&
+            !filter.inSeason
+          }
+          onClick={() => onChange(NO_FILTER)}
+        >
+          All
+        </button>
         {myDiets.length > 0 && (
           <button
             type="button"
@@ -707,28 +760,32 @@ function RecipeList({
   return (
     <ul className="recipes" aria-label="Your recipes">
       {recipes.map((r) => (
-        <li key={r.id}>
-          <Link to={`/recipe/${r.id}`}>{r.title}</Link>
-          {r.favorite && (
-            <span className="heart-mark" aria-label="a favorite">
-              {' '}
-              ♥
-            </span>
-          )}
-          <span className="muted small">
-            {sourceLabel(r.sourceName, r.sourceUrl, r.sourceNote)}
-            {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
-          </span>
-          <DietChips diets={r.diets} />
-          {r.tags.length > 0 && (
-            <span className="diets" aria-label="Your tags">
-              {r.tags.map((t) => (
-                <span key={t} className="tag">
-                  {t}
+        <li key={r.id} className="recipe-card">
+          <div className="recipe-card-text">
+            <Link to={`/recipe/${r.id}`} className="recipe-card-title">
+              {r.title}
+            </Link>
+            <span className="muted small">
+              {sourceLabel(r.sourceName, r.sourceUrl, r.sourceNote)}
+              {r.totalMinutes ? ` · ${r.totalMinutes} min` : ''}
+              {r.favorite && (
+                <span className="heart-mark" aria-label="a favorite">
+                  {' '}
+                  · favorite
                 </span>
-              ))}
+              )}
             </span>
-          )}
+            <DietChips diets={r.diets} />
+            {r.tags.length > 0 && (
+              <span className="diets" aria-label="Your tags">
+                {r.tags.map((t) => (
+                  <span key={t} className="tag">
+                    {t}
+                  </span>
+                ))}
+              </span>
+            )}
+          </div>
           <QuickAdd api={api} recipeId={r.id} title={r.title} />
           <button
             type="button"

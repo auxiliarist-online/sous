@@ -1,8 +1,13 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Library, type LibraryApi } from './Library.tsx'
-import { ImportError, type ImportResult, type SavedRecipe } from './library.ts'
+import {
+  ImportError,
+  requestLinkSave,
+  type ImportResult,
+  type SavedRecipe,
+} from './library.ts'
 import { weekOf } from './plan.ts'
 
 const DAL: SavedRecipe = {
@@ -83,24 +88,43 @@ describe('Library', () => {
     expect(await screen.findByText(/Nothing saved yet/)).toBeInTheDocument()
   })
 
-  it('saves a pasted link and points to the full recipe on the source', async () => {
+  it('saves a link from the Add-a-recipe sheet and opens it (TYL-151)', async () => {
+    const api = fakeApi()
+    requestLinkSave('example-blog.com/tacos/')
+    render(<Library api={api} />)
+    await waitFor(() =>
+      expect(window.location.pathname).toBe(`/recipe/${SAVED.recipe_id}`),
+    )
+    expect(api.save).toHaveBeenCalledWith('https://example-blog.com/tacos/')
+    // Asked for once: opening the page again doesn't save it again.
+    render(<Library api={api} />)
+    expect(api.save).toHaveBeenCalledTimes(1)
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('saves a link asked for while Your recipes is already open', async () => {
     const api = fakeApi()
     render(<Library api={api} />)
-    await userEvent.type(
-      screen.getByLabelText('Recipe link'),
-      'example-blog.com/tacos/',
+    await screen.findByText(/Nothing saved yet/)
+    act(() => requestLinkSave('https://example-blog.com/soup/'))
+    await waitFor(() =>
+      expect(api.save).toHaveBeenCalledWith('https://example-blog.com/soup/'),
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
-    expect(api.save).toHaveBeenCalledWith('https://example-blog.com/tacos/')
-    const view = await screen.findByRole('link', {
-      name: 'View full recipe on Example Blog',
-    })
-    expect(view).toHaveAttribute('href', SAVED.source_url)
-    expect(
-      screen.getByText('Only you can see this recipe.'),
-    ).toBeInTheDocument()
-    expect(screen.getByLabelText('Recipe link')).toHaveValue('')
-    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(window.location.pathname).toBe(`/recipe/${SAVED.recipe_id}`),
+    )
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('adds a recipe from the sheet, not a link field (TYL-151)', async () => {
+    const api = fakeApi()
+    const open = vi.fn()
+    window.addEventListener('sous:add-recipe', open)
+    render(<Library api={api} />)
+    expect(screen.queryByLabelText('Recipe link')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '+ Add' }))
+    expect(open).toHaveBeenCalled()
+    window.removeEventListener('sous:add-recipe', open)
   })
 
   it("shows the API's explanation when a recipe can't be saved", async () => {
@@ -111,12 +135,9 @@ describe('Library', () => {
         "We couldn't find a recipe on that page.",
       ),
     )
+    // From the Add-a-recipe sheet (TYL-151).
+    requestLinkSave('https://x.example/')
     render(<Library api={api} />)
-    await userEvent.type(
-      screen.getByLabelText('Recipe link'),
-      'https://x.example/',
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       "We couldn't find a recipe on that page.",
     )
@@ -235,12 +256,11 @@ describe('Library', () => {
     async (code, message) => {
       const api = fakeApi()
       api.save.mockRejectedValueOnce(new ImportError(code, message))
-      render(<Library api={api} />)
-      await userEvent.type(
-        screen.getByLabelText('Recipe link'),
+      // From the Add-a-recipe sheet (TYL-151).
+      requestLinkSave(
         'https://www.seriouseats.com/the-best-chili-recipe-5089384',
       )
-      await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+      render(<Library api={api} />)
       expect(
         await screen.findByRole('heading', {
           name: "seriouseats.com doesn't let apps read its recipes",
@@ -283,12 +303,11 @@ describe('Library', () => {
     api.save.mockRejectedValueOnce(
       new ImportError('error', 'Something went wrong saving that recipe.'),
     )
-    render(<Library api={api} />)
-    await userEvent.type(
-      screen.getByLabelText('Recipe link'),
+    // From the Add-a-recipe sheet (TYL-151).
+    requestLinkSave(
       'https://www.easycheesyvegetarian.com/simple-stuffed-mushrooms/',
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+    render(<Library api={api} />)
     expect(
       await screen.findByRole('heading', {
         name: "We couldn't save that recipe from easycheesyvegetarian.com",
@@ -302,12 +321,9 @@ describe('Library', () => {
   it('shows other failures as they are, without the paste form', async () => {
     const api = fakeApi()
     api.save.mockRejectedValueOnce(new Error('Load failed'))
+    // From the Add-a-recipe sheet (TYL-151).
+    requestLinkSave('https://example-blog.com/tacos/')
     render(<Library api={api} />)
-    await userEvent.type(
-      screen.getByLabelText('Recipe link'),
-      'https://example-blog.com/tacos/',
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Load failed')
     expect(screen.queryByLabelText('Ingredients')).toBeNull()
   })
@@ -315,12 +331,9 @@ describe('Library', () => {
   it('can save just the link when nothing is pasted', async () => {
     const api = fakeApi()
     api.save.mockRejectedValueOnce(new ImportError('blocked', 'Blocked.'))
+    // From the Add-a-recipe sheet (TYL-151).
+    requestLinkSave('https://blocked.example/soup/')
     render(<Library api={api} />)
-    await userEvent.type(
-      screen.getByLabelText('Recipe link'),
-      'https://blocked.example/soup/',
-    )
-    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
     await userEvent.click(
       await screen.findByRole('button', { name: 'Save the link for now' }),
     )

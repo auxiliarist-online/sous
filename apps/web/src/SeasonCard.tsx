@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { SavedRecipe } from './library.ts'
 import { Link } from './router.tsx'
+import { Leaf } from 'lucide-react'
 import { inSeasonNow, type Seasons } from './seasons.ts'
 
 export interface SeasonApi {
@@ -45,23 +46,22 @@ export function SeasonCard({ api, now }: { api: SeasonApi; now: Date }) {
 
   if (!items?.length) return null
   return (
-    <section aria-labelledby="in-season">
-      <h3 id="in-season">In season now</h3>
+    <section className="season-card" aria-labelledby="in-season">
+      <h3 id="in-season">
+        <Leaf size={18} strokeWidth={2.75} aria-hidden="true" /> In season now
+      </h3>
       <ul className="season-list">
         {items.map((i) => (
           <li key={i.name}>
             <span className="season-name">{i.name}</span>
-            {i.recipes.length > 0 && (
-              <span className="small">
-                {' · '}
-                {i.recipes.slice(0, 2).map((r, n) => (
-                  <span key={r.id}>
-                    {n > 0 && ', '}
-                    <Link to={`/recipe/${r.id}`}>{r.title}</Link>
-                  </span>
-                ))}
-              </span>
-            )}
+            <span className="small muted">
+              {i.recipes.slice(0, 2).map((r, n) => (
+                <span key={r.id}>
+                  {n > 0 && ', '}
+                  <Link to={`/recipe/${r.id}`}>{r.title}</Link>
+                </span>
+              ))}
+            </span>
           </li>
         ))}
       </ul>

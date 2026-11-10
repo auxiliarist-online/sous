@@ -417,3 +417,24 @@ export function sameLink(a: string, b: string): boolean {
   }
   return norm(a) === norm(b)
 }
+
+// A link the Add-a-recipe sheet asked to save (TYL-151), handed to the
+// recipes page, which saves it with its full flow (the paste fallback when a
+// site turns Sous away). In memory only: a link elsewhere can't trigger it.
+let requestedLink: string | null = null
+
+export const LINK_REQUEST = 'sous:save-link'
+
+/** Ask the recipes page to save this link: when it opens, or now if it's
+ *  open already (it listens for LINK_REQUEST). */
+export function requestLinkSave(url: string): void {
+  requestedLink = url
+  window.dispatchEvent(new Event(LINK_REQUEST))
+}
+
+/** The link asked for, once; null when there isn't one. */
+export function takeRequestedLink(): string | null {
+  const link = requestedLink
+  requestedLink = null
+  return link
+}
