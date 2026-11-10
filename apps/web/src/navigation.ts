@@ -71,6 +71,7 @@ export function cookParams(search: string): {
  *  Recipes. Pages that aren't drawers are null. */
 export type Drawer = 'recipes' | 'list' | 'pantry'
 
+/** The drawer a page opens in, or null for a page that isn't one. */
 export function drawerOf(page: string): Drawer | null {
   if (page === 'library' || page === 'browse') return 'recipes'
   if (page === 'list') return 'list'

@@ -27,6 +27,14 @@ function queryFromAddress(): string {
   return new URLSearchParams(window.location.search).get('q') ?? ''
 }
 
+/** The shortcut chips picked, from the address (f=vegetarian&f=soup). */
+function shortcutsFromAddress(): string[] {
+  const known = new Set(SHORTCUTS.map(([, words]) => words))
+  return new URLSearchParams(window.location.search)
+    .getAll('f')
+    .filter((w) => known.has(w))
+}
+
 function savedScroll(query: string): number | null {
   try {
     const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) ?? 'null') as {
@@ -56,22 +64,31 @@ function saveScroll(query: string) {
 export function Browse({ api }: { api: BrowseApi }) {
   const [query, setQuery] = useState(queryFromAddress)
   // Shortcut chips (TYL-149): words added to the search, which reads them.
-  const [picked, setPicked] = useState<string[]>([])
+  const [picked, setPicked] = useState<string[]>(shortcutsFromAddress)
   // Results live in the cache; this only makes the page re-render.
   const [, setVersion] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const [failed, setFailed] = useState(false)
   const restored = useRef(false)
-  const key = [query.trim(), ...picked].filter(Boolean).join(' ')
+  // The search: what was typed, plus the picked shortcuts it doesn't say.
+  const typed = query.trim()
+  const key = [typed, ...picked.filter((w) => !typed.toLowerCase().includes(w))]
+    .filter(Boolean)
+    .join(' ')
   const results: Results | null = cache.get(key) ?? null
 
-  // Keep the search in the address, so Back and reload return to it.
+  // Keep the search in the address, so Back and reload return to it: what
+  // was typed and the chips picked, apart.
   useEffect(() => {
-    const url = key ? `/browse?q=${encodeURIComponent(key)}` : '/browse'
+    const params = new URLSearchParams()
+    if (typed) params.set('q', typed)
+    for (const w of picked) params.append('f', w)
+    const qs = params.toString()
+    const url = qs ? `/browse?${qs}` : '/browse'
     if (url !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, '', url)
     }
-  }, [key])
+  }, [typed, picked])
 
   useEffect(() => {
     if (cache.has(key)) return

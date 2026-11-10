@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   dayName,
   dollars,
@@ -51,6 +51,9 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   // Bumped to load the week again (after last week's meals move in).
   const [version, setVersion] = useState(0)
   const [reviewing, setReviewing] = useState(false)
+  // Not on the list yet; the same array while the plan doesn't change, so an
+  // open review keeps its answers.
+  const pending = useMemo(() => unreviewed(entries), [entries])
 
   useEffect(() => {
     let live = true
@@ -66,7 +69,8 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
         setCostFailed(false) // a new request: an earlier failure no longer holds
         // The cost comes from the API; home works without it.
         if (e.length)
-          api.planCost(week).then(
+          // The list's own cost: the meals reviewed for it (TYL-150).
+          api.listCost(week).then(
             (c) => live && setCost(c),
             () => live && setCostFailed(true),
           )
@@ -98,7 +102,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   const days = weekDays(week)
   const tonight = entries.filter((e) => e.day === day)
   const anyDay = entries.filter((e) => e.day === null)
-  // What the list holds from the plan (items Sous couldn't match aren't on it).
+  // What the list holds: the reviewed meals' items (unmatched ones aren't on it).
   const toBuy = cost ? plannedItems(cost) : []
   const n = entries.length
 
@@ -240,7 +244,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
             </p>
           )}
           <PendingNotice
-            entries={unreviewed(entries)}
+            entries={pending}
             onReview={() => setReviewing(true)}
           />
           <Link to="/list" className="button">
@@ -252,7 +256,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
         <ReviewSheet
           api={api}
           week={week}
-          entries={unreviewed(entries)}
+          entries={pending}
           onClose={() => setReviewing(false)}
         />
       )}

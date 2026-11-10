@@ -156,4 +156,30 @@ describe('Browse', () => {
     expect(api.addToPlan).toHaveBeenCalledTimes(2)
     expect(await screen.findByRole('status')).toHaveTextContent('Planned')
   })
+
+  it('keeps the chips apart from what was typed, in the address (TYL-149)', async () => {
+    window.history.replaceState(null, '', '/browse?q=beans&f=vegetarian')
+    const api = fakeApi()
+    const { unmount } = render(<Browse api={api} />)
+    expect(screen.getByLabelText('Search recipes')).toHaveValue('beans')
+    expect(screen.getByRole('button', { name: 'Vegetarian' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await waitFor(() =>
+      expect(api.searchCatalog).toHaveBeenLastCalledWith('beans vegetarian', 0),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Soup' }))
+    await waitFor(() =>
+      expect(window.location.search).toBe('?q=beans&f=vegetarian&f=soup'),
+    )
+    unmount()
+    // Typed already: a chip doesn't say it twice.
+    window.history.replaceState(null, '', '/browse?q=vegetarian&f=vegetarian')
+    render(<Browse api={fakeApi()} />)
+    await waitFor(() =>
+      expect(window.location.search).toBe('?q=vegetarian&f=vegetarian'),
+    )
+    window.history.replaceState(null, '', '/')
+  })
 })

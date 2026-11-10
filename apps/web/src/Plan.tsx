@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { filterRecipes, NO_FILTER, type SavedRecipe } from './library.ts'
 import {
   addDays,
@@ -214,6 +214,8 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   // Today, for "· tonight" (taken once, like the week).
   const [todayIso] = useState(() => isoDate(new Date()))
   const [reviewing, setReviewing] = useState(false)
+  // Not on the list yet, kept stable so an open review keeps its answers.
+  const pending = useMemo(() => unreviewed(entries), [entries])
 
   return (
     <section className="plan" aria-busy={busy}>
@@ -252,14 +254,14 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
       </div>
       <PendingNotice
         long
-        entries={unreviewed(entries)}
+        entries={pending}
         onReview={() => setReviewing(true)}
       />
       {reviewing && entries && (
         <ReviewSheet
           api={api}
           week={week}
-          entries={unreviewed(entries)}
+          entries={pending}
           onClose={() => setReviewing(false)}
         />
       )}

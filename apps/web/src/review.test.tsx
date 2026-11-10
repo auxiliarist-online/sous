@@ -254,4 +254,25 @@ describe('ReviewSheet (TYL-150)', () => {
     )
     expect(onDone).not.toHaveBeenCalled()
   })
+
+  it('says when the recipes can’t load, and tries again', async () => {
+    const api = reviewApi()
+    api.recipe.mockRejectedValueOnce(new Error('down'))
+    render(
+      <ReviewSheet
+        api={api}
+        week={WEEK}
+        entries={[entry('a', 'Beet salad')]}
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "We couldn't load these recipes.",
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(
+      await screen.findByRole('region', { name: 'Beet salad' }),
+    ).toBeInTheDocument()
+  })
 })

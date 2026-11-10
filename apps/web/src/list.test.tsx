@@ -1024,7 +1024,7 @@ describe('Home', () => {
 
   it('says so when the cost can’t be worked out', async () => {
     const api = homeApi([entry('1', '2026-10-14', 'Red lentil dal')])
-    vi.mocked(api.planCost).mockRejectedValue(new Error('down'))
+    vi.mocked(api.listCost).mockRejectedValue(new Error('down'))
     render(<Home api={api} now={now} />)
     expect(
       await screen.findByText(/couldn't work out the cost just now/),

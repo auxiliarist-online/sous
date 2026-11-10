@@ -401,6 +401,11 @@ button.back {
   animation: sheet-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* The panel takes focus when it opens; its controls show their own. */
+.sheet:focus {
+  outline: none;
+}
+
 .sheet-body {
   overflow-y: auto;
   padding: 0 var(--gutter) 1rem;
@@ -720,6 +725,12 @@ span.quick-add {
 
 .quick-add.failed {
   color: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  .quick-add.failed {
+    color: #f2b8b5;
+  }
 }
 
 .recipe-card .remove {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Library, type LibraryApi } from './Library.tsx'
@@ -99,6 +99,20 @@ describe('Library', () => {
     // Asked for once: opening the page again doesn't save it again.
     render(<Library api={api} />)
     expect(api.save).toHaveBeenCalledTimes(1)
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('saves a link asked for while Your recipes is already open', async () => {
+    const api = fakeApi()
+    render(<Library api={api} />)
+    await screen.findByText(/Nothing saved yet/)
+    act(() => requestLinkSave('https://example-blog.com/soup/'))
+    await waitFor(() =>
+      expect(api.save).toHaveBeenCalledWith('https://example-blog.com/soup/'),
+    )
+    await waitFor(() =>
+      expect(window.location.pathname).toBe(`/recipe/${SAVED.recipe_id}`),
+    )
     window.history.replaceState(null, '', '/')
   })
 

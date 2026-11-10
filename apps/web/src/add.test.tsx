@@ -136,6 +136,22 @@ describe('Add a recipe (TYL-151)', () => {
   })
 })
 
+describe('sheets', () => {
+  it('take focus, close on Escape, and give focus back', async () => {
+    const onClose = vi.fn()
+    const opener = document.createElement('button')
+    document.body.append(opener)
+    opener.focus()
+    const { unmount } = render(<AddRecipeSheet api={api()} onClose={onClose} />)
+    expect(screen.getByRole('dialog', { name: 'Add a recipe' })).toHaveFocus()
+    await userEvent.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalled()
+    unmount()
+    expect(opener).toHaveFocus()
+    opener.remove()
+  })
+})
+
 describe('draftFromSpeech', () => {
   it('splits the title, ingredients and steps at the words people say', () => {
     expect(

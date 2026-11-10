@@ -168,6 +168,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     }
   }, [api, id, version])
 
+  // Add the recipe to this week, and say how it went.
   async function plan() {
     setPlanned('adding')
     try {

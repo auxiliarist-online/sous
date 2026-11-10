@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useRef,
   useState,
@@ -139,14 +140,56 @@ export function Sheet({
   head?: ReactNode
 }) {
   const id = useId()
+  const panel = useRef<HTMLElement>(null)
+
+  // A modal dialog: focus moves into it, Tab stays inside, Escape closes it,
+  // and focus goes back to where it was on close.
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    panel.current?.focus()
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab' || !panel.current) return
+      const focusable = panel.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      } else if (!panel.current.contains(document.activeElement)) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', key)
+    return () => {
+      document.removeEventListener('keydown', key)
+      before?.focus?.()
+    }
+    // Once per opening: a new onClose each render doesn't reset focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <>
       <div className="sheet-scrim" onClick={onClose} aria-hidden="true" />
       <section
+        ref={panel}
         className="sheet"
         role="dialog"
         aria-modal="true"
         aria-labelledby={id}
+        tabIndex={-1}
       >
         <span className="grab" aria-hidden="true" />
         <div className="sheet-body">

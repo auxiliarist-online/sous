@@ -21,6 +21,7 @@ import {
   type SavedRecipe,
   sameLink,
   takeRequestedLink,
+  LINK_REQUEST,
 } from './library.ts'
 import { ingredientsFromText, titleFromUrl } from './paste.ts'
 import { recipeInSeason, type Seasons } from './seasons.ts'
@@ -221,13 +222,19 @@ export function Library({
   }
 
   // A link from the Add-a-recipe sheet (TYL-151): save it now, the user
-  // tapped Save there. Taken once, so it's saved once.
+  // tapped Save there. Asked for before this page opened, or while it's
+  // open; taken once, so it's saved once.
   useEffect(() => {
-    const link = takeRequestedLink()
-    if (link) {
-      setUrl(link)
-      void save(link, true)
+    const take = () => {
+      const link = takeRequestedLink()
+      if (link) {
+        setUrl(link)
+        void save(link, true)
+      }
     }
+    take()
+    window.addEventListener(LINK_REQUEST, take)
+    return () => window.removeEventListener(LINK_REQUEST, take)
     // Only on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

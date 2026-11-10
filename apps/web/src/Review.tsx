@@ -109,7 +109,11 @@ export function ReviewSheet({
   // The user's answers, by ingredient: true is "Have it".
   const [have, setHave] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState(false)
+  // Saving the answers failed (the sheet stays open to try again).
   const [failed, setFailed] = useState(false)
+  // Loading the recipes failed; bumping `attempt` loads them again.
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -150,7 +154,7 @@ export function ReviewSheet({
         setHave(answers)
         setGroups(out)
       },
-      () => live && setFailed(true),
+      () => live && setLoadFailed(true),
     )
     // Prices and the list's total: the sheet works without them.
     api.planCost(week).then(
@@ -184,7 +188,7 @@ export function ReviewSheet({
     return () => {
       live = false
     }
-  }, [api, week, entries])
+  }, [api, week, entries, attempt])
 
   const needed = [
     ...new Set(
@@ -275,7 +279,23 @@ export function ReviewSheet({
         Pantry items are ticked for you. Tap anything to change it; only what
         you need goes on the list.
       </p>
-      {groups === null && !failed && <p className="muted">Loading…</p>}
+      {loadFailed ? (
+        <p className="error" role="alert">
+          We couldn't load these recipes.{' '}
+          <button
+            type="button"
+            className="link"
+            onClick={() => {
+              setLoadFailed(false)
+              setAttempt((n) => n + 1)
+            }}
+          >
+            Try again
+          </button>
+        </p>
+      ) : (
+        groups === null && <p className="muted">Loading…</p>
+      )}
       {(groups ?? []).map((g) => (
         <section key={g.entry.id} aria-label={g.entry.title}>
           <h3 className="kicker">{g.entry.title}</h3>

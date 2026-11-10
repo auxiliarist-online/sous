@@ -112,6 +112,7 @@ export function AddRecipeSheet({
 
 /** The five ways in, each with what it does. */
 function Menu({ onPick }: { onPick: (m: Mode) => void }) {
+  // One way in: its icon, name and what it does.
   const row = (m: Mode, icon: ReactNode, sub: string, brown: boolean) => (
     <li key={m}>
       <button type="button" className="add-way" onClick={() => onPick(m)}>
@@ -146,6 +147,7 @@ function FromLink({ onClose }: { onClose: () => void }) {
   const [url, setUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  // Check the link, hand it to Your recipes to save, and go there.
   function submit(e: FormEvent) {
     e.preventDefault()
     const link = url.trim()
@@ -214,6 +216,7 @@ function FromVoice({ onDraft }: { onDraft: (d: PhotoDraft) => void }) {
   // Stop listening when the sheet closes.
   useEffect(() => () => rec.current?.stop(), [])
 
+  // Start listening (wiring up what was heard, errors and the end), or stop.
   function toggle() {
     if (state === 'listening') {
       rec.current?.stop()

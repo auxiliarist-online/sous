@@ -423,9 +423,13 @@ export function sameLink(a: string, b: string): boolean {
 // site turns Sous away). In memory only: a link elsewhere can't trigger it.
 let requestedLink: string | null = null
 
-/** Ask the recipes page to save this link when it opens. */
+export const LINK_REQUEST = 'sous:save-link'
+
+/** Ask the recipes page to save this link: when it opens, or now if it's
+ *  open already (it listens for LINK_REQUEST). */
 export function requestLinkSave(url: string): void {
   requestedLink = url
+  window.dispatchEvent(new Event(LINK_REQUEST))
 }
 
 /** The link asked for, once; null when there isn't one. */
