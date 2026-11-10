@@ -190,6 +190,9 @@ async def sizes(
     return {"ingredient_id": found["ingredient_id"], "sizes": [asdict(o) for o in found["sizes"]]}
 
 
+# Ratings ahead of others in the pool, best first.
+RATED = {"love": 0, "up": 1}
+
 # The most saved recipes a draft considers: favorites that are due first, then
 # the ones not had lately, newest saved first.
 DRAFT_POOL = 100
@@ -232,7 +235,16 @@ async def draft(
         for r in found.get("candidates") or []
     ]
     locked = [str(r) for r in body.locked]
-    pool.sort(key=lambda c: (c.recipe_id not in locked, not c.due, c.weeks_ago is not None))
+    # Kept ones first, then favorites due, then what the user loved or liked
+    # (TYL-16), so the cap below can't drop them before their bonus counts.
+    pool.sort(
+        key=lambda c: (
+            c.recipe_id not in locked,
+            not c.due,
+            RATED.get(c.rating or "", len(RATED)),
+            c.weeks_ago is not None,
+        )
+    )
     # Left out: ones that break the user's rules, and ones they rated down
     # after cooking (TYL-16), unless they kept it themselves.
     pool = [
