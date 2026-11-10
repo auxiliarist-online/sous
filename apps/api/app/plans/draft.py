@@ -28,6 +28,10 @@ REPEAT_PROTEIN = 10_000_000  # each dinner past two with the same main protein
 REPEAT_CUISINE = 10_000_000  # each dinner past two of the same cuisine
 REPEAT_STYLE = 10_000_000  # each dinner past two of the same cooking style
 FAVORITE_DUE = 1500  # a favorite back on its rhythm (a bonus)
+# What the user thought when they last cooked it (TYL-16), as bonuses; one
+# they rated down isn't drafted at all.
+LOVED = 800
+LIKED = 300
 RECENT = 2000  # a recipe had lately (Variety.repeat_weeks) that isn't a favorite due
 # Seasons (TYL-70): a little for each seasonal item in season, a little against
 # each out of season; "Cook with the seasons" turns both up.
@@ -111,6 +115,8 @@ class Candidate:
     # Its seasonal produce in season the week planned, and how many aren't.
     in_season: list[str] = field(default_factory=list)
     out_of_season: int = 0
+    # The user's latest rating of it: "love", "up" or "down" (TYL-16).
+    rating: str | None = None
 
     @property
     def due(self) -> bool:
@@ -243,6 +249,7 @@ class Week:
                 score -= FAVORITE_DUE
             elif self.recent(c):
                 score += RECENT
+            score -= LOVED if c.rating == "love" else LIKED if c.rating == "up" else 0
             score -= self.seasons * IN_SEASON * min(SEASON_CAP, len(c.in_season))
             score += self.seasons * OUT_OF_SEASON * c.out_of_season
         self._memo[picks] = (score, cost)
@@ -431,6 +438,8 @@ def reason(week: Week, picks: frozenset[str], recipe_id: str) -> str:
             return "A favorite you haven't had lately"
         weeks = "week" if c.weeks_ago == 1 else "weeks"
         return f"A favorite, last had {c.weeks_ago} {weeks} ago"
+    if c.rating == "love":
+        return "You loved it last time"
     if c.in_season and not c.out_of_season:
         return "In season: " + ", ".join(c.in_season[:3])
     without = {i.ingredient_id: i.cents for i in week.cost(picks - {recipe_id}).items}
