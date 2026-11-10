@@ -56,6 +56,7 @@ import {
   places,
   sendOp,
   syncList,
+  itemSizes,
   ownItemPrices,
 } from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
@@ -221,6 +222,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     loadList: (week) => loadList(db, week),
     sendListOp: (op) => sendOp(db, op),
     ownItemPrices: (week, items) => ownItemPrices(session, week, items),
+    itemSizes: (name) => itemSizes(session, name),
     places: () => places(db, userId),
     addPlace: (name) => addPlace(db, userId, name),
     pantry: () => loadPantry(db),

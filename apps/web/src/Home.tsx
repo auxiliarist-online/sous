@@ -12,12 +12,15 @@ import { SeasonCard, type SeasonApi } from './SeasonCard.tsx'
 import type { Cooked, CookedApi } from './cooked.ts'
 import { cookPath } from './navigation.ts'
 import { Link } from './router.tsx'
+import { CarryOver } from './CarryOver.tsx'
 
 export interface HomeApi extends CookedApi, SeasonApi {
   /** The week's planned recipes. */
   plan(weekStart: string): Promise<PlanEntry[]>
   /** The week's buy list and cost against the budget. */
   planCost(weekStart: string): Promise<PlanCost>
+  /** Move a planned meal to another week (last week's, uncooked: TYL-147). */
+  moveEntry(id: string, weekStart: string): Promise<void>
 }
 
 /** Today as YYYY-MM-DD, in the user's time zone. */
@@ -40,6 +43,8 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   const [failed, setFailed] = useState(false)
   // Tonight's meals already cooked (TYL-68), by plan entry.
   const [cooked, setCooked] = useState<Record<string, Cooked> | null>(null)
+  // Bumped to load the week again (after last week's meals move in).
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -64,7 +69,7 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
     return () => {
       live = false
     }
-  }, [api, week])
+  }, [api, week, version])
 
   if (failed) {
     return (
@@ -79,6 +84,12 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
     return (
       <section className="card home">
         <h2>This week</h2>
+        <CarryOver
+          key={week}
+          api={api}
+          week={week}
+          onMoved={() => setVersion((v) => v + 1)}
+        />
         <p className="muted">Nothing planned yet.</p>
         <Link to="/plan" className="button">
           Plan this week
@@ -101,6 +112,12 @@ export function Home({ api, now }: { api: HomeApi; now?: Date }) {
   return (
     <section className="card home">
       <h2>This week</h2>
+      <CarryOver
+        key={week}
+        api={api}
+        week={week}
+        onMoved={() => setVersion((v) => v + 1)}
+      />
 
       <section aria-labelledby="tonight">
         <h3 id="tonight">Tonight</h3>

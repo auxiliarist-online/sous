@@ -844,11 +844,18 @@ button.danger:not(.link) {
 
 .list-item {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  /* The item, its price, Edit, and Size for an item the user typed. */
+  grid-template-columns: 1fr repeat(3, auto);
   align-items: center;
   gap: 0.5rem;
   border-bottom: 1px solid
     color-mix(in srgb, var(--color-secondary) 15%, transparent);
+}
+
+/* The store's sizes for a typed item (TYL-142), under it. */
+.list-item .size-picker {
+  grid-column: 1 / -1;
+  margin: 0 0 0.5rem;
 }
 
 .list-check {
@@ -937,6 +944,18 @@ button.danger:not(.link) {
   padding: 0.5rem 0.75rem;
   border-radius: 10px;
   background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
+}
+
+/* Last week's uncooked meals, offered for this week (TYL-147). */
+.carry-over {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.carry-over h3 {
+  margin: 0 0 0.25rem;
 }
 
 /* Cook mode (TYL-75): big type and big targets, for a phone on the counter. */
