@@ -159,7 +159,7 @@ function FromLink({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <form className="add-form" onSubmit={submit}>
+    <form className="add-form" noValidate onSubmit={submit}>
       <label htmlFor="add-url" className="visually-hidden">
         Recipe link
       </label>

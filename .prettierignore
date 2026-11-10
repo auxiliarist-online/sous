@@ -2,3 +2,6 @@ node_modules
 dist
 apps/api
 package-lock.json
+
+# The design handoff, kept as delivered (TYL-148).
+docs/design_handoff_sous_mobile/
