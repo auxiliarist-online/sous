@@ -229,6 +229,12 @@ Users get three kinds of control (TYL-32):
 - When a plan is priced, `app/plans/live_prices.py` looks up the matched products for the user's store (their primary store, else the Asheville Harris Teeter during the beta), in batches of 50, and adds `store_api` quotes and the real package sizes to that request only. A sale price is valid until it ends. If Kroger fails, the plan is priced from estimates.
 - Kroger credentials are server-side API env only. Limits: Products 10,000 calls a day.
 
+### Substitutions (TYL-77)
+
+- `substitutions` is Sous's own swap guide (`apps/api/data/substitutions.csv`, built by `apps/api/scripts/build_substitutions.py`): from one ingredient to another, with a factor (in the recipe's unit, or "1 tbsp flaxseed per egg" with `to_unit` and `per_unit`), extras used in small amounts, what it's for (any, baking, cooking), how well it works, and a note.
+- `user_recipe_swaps` holds the swap a user chose for an ingredient in a recipe (owner-only; the swap must be for that ingredient). `plan_cost_inputs()` sends them, and the buy list buys the swapped-in ingredients instead.
+- `recipe_swap_fit(recipe, user)` says how many swaps make a recipe that the user's rules exclude fit, and which swaps fix each line: a swap counts only if what it brings in, extras too, clears every rule, and allergies stay strict ("may contain" never clears one). Find shows those recipes as `swaps`, after the ones that fit as they are; plan drafts and "or" lines still use `recipe_fit_for_user()` as before.
+
 ### Crawling (TYL-26)
 
 - `crawl_pages` is the queue: one row per sitemap URL with its `lastmod` and what happened when we fetched it. `crawl_enqueue()` adds new URLs and re-queues a page only when its `lastmod` moves forward; blocked and disallowed pages are never re-queued automatically.

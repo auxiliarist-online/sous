@@ -1943,7 +1943,20 @@ button.danger:not(.link) {
   padding: 0;
 }
 
+/* A line, and "Out of it?" beside it (TYL-77). */
+.cook-ingredients li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cook-ingredients li button.link {
+  flex: none;
+  align-self: center;
+}
+
 .cook-ingredients label {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -2441,4 +2454,55 @@ button.heart[aria-pressed='true'] {
   .starter-kits legend {
     grid-column: 1 / -1;
   }
+}
+
+/* Swaps (TYL-77): a line's marker, and the sheet's options as cards. */
+.tag.swap-to-fit {
+  margin-left: 0.375rem;
+  background: var(--color-brown-soft);
+  color: var(--color-brown-ink);
+  vertical-align: 1px;
+}
+
+.swap-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+button.swap-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  width: 100%;
+  min-height: 0;
+  padding: 14px 18px;
+  border: 1.5px solid var(--color-divider);
+  border-radius: 24px;
+  background: var(--color-card);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  text-align: left;
+}
+
+button.swap-option[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.swap-name {
+  font-weight: 700;
+}
+
+.swap-option .tags {
+  margin: 0;
+}
+
+.tag.fit {
+  background: var(--color-accent-soft);
 }

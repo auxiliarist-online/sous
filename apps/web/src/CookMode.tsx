@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CookedButton } from './Cooked.tsx'
 import type { CookedApi } from './cooked.ts'
 import {
@@ -15,9 +15,28 @@ import { sourceLabel } from './library.ts'
 import { isoDate, SCALES, scaledLine, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
+import { SwapSheet } from './SwapSheet.tsx'
+import { swapText, type Swap } from './swaps.ts'
+import type { IngredientLine } from './sous.ts'
+import type { PantryEntry } from './pantry.ts'
 
 export interface CookApi extends CookedApi {
   recipe(id: string): Promise<RecipeDetail | null>
+  /** Swaps (TYL-77): the user's for the recipe show in the checklist, and
+   *  "Out of it?" offers the rest. */
+  swapsFor?(ingredientIds: string[]): Promise<Swap[]>
+  /** The swaps the user chose for the recipe, by the ingredient swapped
+   *  out. */
+  recipeSwaps?(recipeId: string): Promise<Record<string, string>>
+  /** Save a swap for an ingredient in the recipe; null goes back to the
+   *  recipe's own. */
+  setRecipeSwap?(
+    recipeId: string,
+    fromId: string,
+    swapId: string | null,
+  ): Promise<void>
+  /** The pantry, for which swaps the user has on hand. */
+  pantry?(): Promise<PantryEntry[]>
 }
 
 /** Cook mode (TYL-75): big type, the screen kept on, the ingredients to
@@ -46,6 +65,20 @@ export function CookMode({
   // The day cooking started (tests pass one).
   const [today] = useState(() => isoDate(now ?? new Date()))
   const awake = useWakeLock()
+  // Swaps (TYL-77): those for the recipe's ingredients, the user's choices
+  // by the ingredient swapped out, what's on hand, and the line whose swaps
+  // are open.
+  const [swaps, setSwaps] = useState<Swap[]>([])
+  const [chosen, setChosen] = useState<Record<string, string>>({})
+  const [have, setHave] = useState<Set<string> | null>(null)
+  const [outOf, setOutOf] = useState<IngredientLine | null>(null)
+  // Swaps chosen here that couldn't be saved: they stay on this screen, and
+  // can be sent again.
+  const [unsaved, setUnsaved] = useState<Record<string, string | null>>({})
+  // Swaps chosen here, so loading the saved ones doesn't undo them.
+  const touched = useRef(new Set<string>())
+  // Saves on their way, by ingredient: each waits for the one before.
+  const writes = useRef(new Map<string, Promise<void>>())
 
   useEffect(() => {
     let live = true
@@ -53,10 +86,89 @@ export function CookMode({
       (r) => live && setRecipe(r),
       () => live && setFailed(true),
     )
+    // Swaps are extra: without them the recipe's own lines show.
+    if (api.recipeSwaps)
+      api.recipeSwaps(id).then(
+        (saved) => {
+          if (!live) return
+          setChosen((now) => {
+            const next = { ...saved }
+            for (const from of touched.current)
+              if (now[from]) next[from] = now[from]
+              else delete next[from]
+            return next
+          })
+        },
+        () => {},
+      )
+    // What's on hand, for ranking swaps: the pantry where it can be read.
+    const stocked = api.pantry
+      ? api
+          .pantry()
+          .then((p) =>
+            p.filter((e) => e.status === 'have').map((e) => e.ingredientId),
+          )
+      : api.onHandIn(id).then((items) => items.map((i) => i.ingredientId))
+    stocked.then(
+      (ids) => live && setHave(new Set(ids)),
+      () => {},
+    )
     return () => {
       live = false
     }
   }, [api, id])
+
+  // The recipe's ingredients, for their swaps.
+  const ingredientKey = (recipe?.ingredients ?? [])
+    .flatMap((l) => (l.ingredientId ? [l.ingredientId] : []))
+    .join(',')
+  useEffect(() => {
+    let live = true
+    if (ingredientKey && api.swapsFor)
+      api.swapsFor([...new Set(ingredientKey.split(','))]).then(
+        (s) => live && setSwaps(s),
+        () => {},
+      )
+    return () => {
+      live = false
+    }
+  }, [api, ingredientKey])
+
+  // Swap a line's ingredient (or go back) on this screen, and save it for
+  // next time; if that fails, say so and keep it here to send again.
+  function chooseSwap(fromId: string, swapId: string | null) {
+    touched.current.add(fromId)
+    setChosen((c) => {
+      const next = { ...c }
+      if (swapId) next[fromId] = swapId
+      else delete next[fromId]
+      return next
+    })
+    setOutOf(null)
+    save(fromId, swapId)
+  }
+
+  // Send one swap, noting it as unsaved until it goes through.
+  function save(fromId: string, swapId: string | null) {
+    const send = api.setRecipeSwap
+    if (!send) return
+    const write = (writes.current.get(fromId) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => send(id, fromId, swapId))
+    writes.current.set(fromId, write)
+    write.then(
+      () =>
+        setUnsaved((u) => {
+          if (!(fromId in u) || u[fromId] !== swapId) return u
+          const next = { ...u }
+          delete next[fromId]
+          return next
+        }),
+      () => setUnsaved((u) => ({ ...u, [fromId]: swapId })),
+    )
+  }
+  const swapFor = (fromId: string | null | undefined) =>
+    fromId ? swaps.find((s) => s.id === chosen[fromId]) : undefined
 
   if (failed)
     return (
@@ -93,6 +205,28 @@ export function CookMode({
         </p>
       </header>
 
+      {/* Swaps that couldn't be saved, on every screen of cook mode. */}
+      {Object.keys(unsaved).length > 0 && (
+        <p role="alert" className="error small">
+          We couldn't save{' '}
+          {Object.keys(unsaved).length === 1
+            ? 'a swap'
+            : `${Object.keys(unsaved).length} swaps`}
+          : they're only in cook mode for now.{' '}
+          <button
+            type="button"
+            className="link"
+            onClick={() =>
+              Object.entries(unsaved).forEach(([from, swap]) =>
+                save(from, swap),
+              )
+            }
+          >
+            Try again
+          </button>
+        </p>
+      )}
+
       {at === -1 && (
         <>
           <div className="chips" role="group" aria-label="Size">
@@ -118,11 +252,54 @@ export function CookMode({
                     checked={checked.has(line.lineNo)}
                     onChange={() => toggle(line.lineNo)}
                   />
-                  <span>{scaledLine(line, scale)}</span>
+                  <span>
+                    {swapFor(line.ingredientId) ? (
+                      <>
+                        <s>{scaledLine(line, scale)}</s> →{' '}
+                        {swapText(
+                          {
+                            ...line,
+                            quantity:
+                              line.quantity != null
+                                ? line.quantity * scale
+                                : null,
+                          },
+                          swapFor(line.ingredientId)!,
+                        )}
+                      </>
+                    ) : (
+                      scaledLine(line, scale)
+                    )}
+                  </span>
                 </label>
+                {swaps.some((w) => w.fromId === line.ingredientId) && (
+                  <button
+                    type="button"
+                    className="link small"
+                    aria-label={`Out of ${line.name ?? line.rawText}?`}
+                    onClick={() => setOutOf(line)}
+                  >
+                    {swapFor(line.ingredientId) ? 'Change' : 'Out of it?'}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
+          {outOf?.ingredientId && (
+            <SwapSheet
+              line={{
+                ...outOf,
+                quantity:
+                  outOf.quantity != null ? outOf.quantity * scale : null,
+              }}
+              swaps={swaps.filter((w) => w.fromId === outOf.ingredientId)}
+              chosen={chosen[outOf.ingredientId] ?? null}
+              fixes={[]}
+              have={have}
+              onChoose={(swapId) => chooseSwap(outOf.ingredientId!, swapId)}
+              onClose={() => setOutOf(null)}
+            />
+          )}
           {steps.length > 0 ? (
             <button
               type="button"
