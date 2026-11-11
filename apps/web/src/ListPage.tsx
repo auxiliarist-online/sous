@@ -66,12 +66,15 @@ export interface ListApi extends ReviewApi {
   ownItemPrices(weekStart: string, items: OwnItem[]): Promise<OwnPrices>
   /** The sizes a typed item comes in at the user's store (TYL-142). */
   itemSizes(name: string): Promise<SizeOption[]>
-  /** For local first (TYL-71): the setting and home zip, the directory, the
-   *  user's favorites, and where they've said to buy things. */
+  /** For local first (TYL-71): the setting and home zip. */
   preferences(): Promise<Preferences>
+  /** The local food directory. */
   localPlaces(): Promise<LocalPlace[]>
+  /** The ids of the user's favorite places. */
   favoritePlaces(): Promise<string[]>
+  /** Where the user has said to buy things, by ingredient. */
   localPreferences(): Promise<Record<string, LocalPrefer>>
+  /** Remember where to buy an ingredient, or (null) let the list decide. */
   setLocalPreference(
     ingredientId: string,
     prefer: LocalPrefer | null,
@@ -140,6 +143,7 @@ export function ListPage({
   // The time, for the places' hours: kept current while the list is open
   // (tests fix it).
   const [clock, setClock] = useState(() => now ?? new Date())
+  // Tick once a minute.
   useEffect(() => {
     if (now) return
     const tick = setInterval(() => setClock(new Date()), 60_000)
@@ -148,6 +152,9 @@ export function ListPage({
   // Where-to-buy saves still on their way, by ingredient: each waits for the
   // one before, so they land in the order they were made.
   const writes = useRef(new Map<string, Promise<void>>())
+  // What's known to be saved, by ingredient: where a failed save goes back
+  // to (undefined: nothing said, the list decides).
+  const confirmed = useRef(new Map<string, LocalPrefer | undefined>())
   // The week's meals not on the list yet (TYL-150), and the review sheet.
   const [waiting, setWaiting] = useState<PlanEntry[]>([])
   const [reviewing, setReviewing] = useState(false)
@@ -200,6 +207,7 @@ export function ListPage({
       api.favoritePlaces(),
       api.localPreferences(),
     ]).then(
+      // All four in: local first can work.
       ([p, places, favorites, prefer]) =>
         live &&
         setLocal({
@@ -226,6 +234,7 @@ export function ListPage({
           .sort()
           .join(',')
       : ''
+  // Load them whenever the list's ingredients change.
   useEffect(() => {
     let live = true
     if (localKey)
@@ -242,7 +251,10 @@ export function ListPage({
   // if it can't be saved.
   async function preferAt(ingredientId: string, prefer: LocalPrefer) {
     if (!local) return
-    const before = local.prefer[ingredientId]
+    // Loaded with the list, so it's what's saved until a save here.
+    if (!confirmed.current.has(ingredientId))
+      confirmed.current.set(ingredientId, local.prefer[ingredientId])
+    // Show where to buy it.
     const set = (p: LocalPrefer | undefined) =>
       setLocal((l) => {
         if (!l) return l
@@ -258,9 +270,11 @@ export function ListPage({
     writes.current.set(ingredientId, write)
     try {
       await write
+      confirmed.current.set(ingredientId, prefer)
     } catch {
-      // Undo only if nothing newer was asked for since.
-      if (writes.current.get(ingredientId) === write) set(before)
+      // Only the newest change goes back, and to what's saved.
+      if (writes.current.get(ingredientId) === write)
+        set(confirmed.current.get(ingredientId))
       setMessage("We couldn't save where to buy that. Try again.")
     } finally {
       if (writes.current.get(ingredientId) === write)

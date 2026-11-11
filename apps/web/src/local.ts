@@ -298,6 +298,7 @@ const MEAL_TIME: Record<string, string> = {
   snack: '15:00',
   dinner: '17:00',
 }
+/** When a meal is ("HH:MM"). */
 const mealTime = (meal: string | null) => MEAL_TIME[meal ?? 'dinner'] ?? '17:00'
 
 /** Which of two needs comes first. */

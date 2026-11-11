@@ -1137,6 +1137,37 @@ describe('local first on the list (TYL-71)', () => {
     ).toBeInTheDocument()
   })
 
+  it('goes back to what’s saved when queued moves all fail', async () => {
+    let fail: () => void = () => {}
+    const api = local({
+      setLocalPreference: vi.fn(
+        () =>
+          new Promise<void>(
+            (_, reject) => (fail = () => reject(new Error('down'))),
+          ),
+      ),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Buy eggs at the supermarket',
+      }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Buy eggs at City Market' }),
+    )
+    fail()
+    await waitFor(() => expect(api.setLocalPreference).toHaveBeenCalledTimes(2))
+    fail()
+    expect(
+      await screen.findByText("We couldn't save where to buy that. Try again."),
+    ).toBeInTheDocument()
+    // Nothing was saved: the list decides, and the market sells eggs.
+    expect(
+      screen.getByRole('list', { name: 'City Market' }),
+    ).toBeInTheDocument()
+  })
+
   it('moves an item to the supermarket and back, remembering it', async () => {
     const api = local()
     render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)

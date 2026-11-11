@@ -57,6 +57,7 @@ export function Welcome({
   const [step, setStep] = useState(0)
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle')
 
+  // Load what the steps offer: diets and cuisines, kits, local places.
   useEffect(() => {
     let live = true
     // Without the diet and cuisine lists those steps are empty, but setup

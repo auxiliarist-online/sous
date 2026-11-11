@@ -466,4 +466,31 @@ describe('the Local page while it’s open (TYL-69)', () => {
     await waitFor(() => expect(order).toEqual(['add', 'remove']))
     expect(heart).toHaveAttribute('aria-pressed', 'false')
   })
+
+  it('goes back to what’s saved when queued saves all fail', async () => {
+    let fail: () => void = () => {}
+    const api = {
+      ...localApi(),
+      setFavoritePlace: vi.fn(
+        () =>
+          new Promise<void>(
+            (_, reject) => (fail = () => reject(new Error('down'))),
+          ),
+      ),
+    }
+    render(<LocalPage api={api} now={WED} />)
+    const heart = await screen.findByRole('button', {
+      name: 'Favorite Corner Bakery',
+    })
+    await userEvent.click(heart) // add
+    await userEvent.click(heart) // and take back
+    fail() // the add fails; the take-back then runs, and fails too
+    await waitFor(() => expect(api.setFavoritePlace).toHaveBeenCalledTimes(2))
+    fail()
+    expect(
+      await screen.findByText("We couldn't save that favorite. Try again."),
+    ).toBeInTheDocument()
+    // Never saved: not a favorite.
+    expect(heart).toHaveAttribute('aria-pressed', 'false')
+  })
 })

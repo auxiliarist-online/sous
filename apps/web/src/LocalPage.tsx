@@ -14,6 +14,7 @@ export interface LocalApi {
   localPlaces(): Promise<LocalPlace[]>
   /** The ids of the user's favorite places. */
   favoritePlaces(): Promise<string[]>
+  /** Make a place a favorite, or not. */
   setFavoritePlace(placeId: string, favorite: boolean): Promise<void>
 }
 
@@ -58,6 +59,7 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
   // The time, for "open now": kept current while the page is open (tests
   // fix it).
   const [clock, setClock] = useState(() => now ?? new Date())
+  // Tick once a minute.
   useEffect(() => {
     if (now) return
     const tick = setInterval(() => setClock(new Date()), 60_000)
@@ -68,7 +70,12 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
   const tapped = useRef(new Map<string, boolean>())
   // Saves still on their way, by place: each waits for the one before.
   const writes = useRef(new Map<string, Promise<void>>())
+  // What's known to be saved, by place: where a failed save goes back to.
+  const confirmed = useRef(new Map<string, boolean>())
+  // Places with a save that went through: newer than the first load.
+  const savedHere = useRef(new Set<string>())
 
+  // Load the directory and the user's favorites.
   useEffect(() => {
     let live = true
     api.localPlaces().then(
@@ -80,6 +87,10 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
       (f) => {
         if (!live) return
         const saved = new Set(f)
+        // What was saved before any tap here.
+        for (const id of confirmed.current.keys())
+          if (!savedHere.current.has(id))
+            confirmed.current.set(id, saved.has(id))
         for (const [id, on] of tapped.current)
           if (on) saved.add(id)
           else saved.delete(id)
@@ -92,15 +103,18 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
     }
   }, [api])
 
-  // Favorite a place or not, at once, undoing it if saving fails.
+  // Favorite a place or not, at once; if saving fails, go back to what's
+  // known to be saved.
   async function toggle(id: string) {
     const on = !favorites.has(id)
+    // The favorites with this place in or out.
     const flip = (set: Set<string>, add: boolean) => {
       const next = new Set(set)
       if (add) next.add(id)
       else next.delete(id)
       return next
     }
+    if (!confirmed.current.has(id)) confirmed.current.set(id, !on)
     setFavorites((f) => flip(f, on))
     tapped.current.set(id, on)
     setSaveFailed(false)
@@ -110,11 +124,14 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
     writes.current.set(id, write)
     try {
       await write
+      confirmed.current.set(id, on)
+      savedHere.current.add(id)
     } catch {
-      // Undo only if nothing newer was asked for since.
+      // Only the newest change goes back, and to what's saved.
       if (writes.current.get(id) === write) {
-        setFavorites((f) => flip(f, !on))
-        tapped.current.set(id, !on)
+        const saved = confirmed.current.get(id) ?? !on
+        setFavorites((f) => flip(f, saved))
+        tapped.current.set(id, saved)
       }
       setSaveFailed(true)
     } finally {
@@ -139,10 +156,12 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
     )
   }
 
+  // Whether it opens (or is open) later today.
   const today = (p: LocalPlace) => {
     const next = nextOpen(p, clock)
     return !!next && next.day.toDateString() === clock.toDateString()
   }
+  // When it next opens, as a number to sort by.
   const soonest = (p: LocalPlace) => {
     const next = nextOpen(p, clock)
     return next
@@ -168,6 +187,7 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
         a.name.localeCompare(b.name),
     )
 
+  // One of the "Show" chips.
   const chip = (value: Show, label: string) => (
     <button
       type="button"
