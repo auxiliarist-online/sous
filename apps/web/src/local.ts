@@ -283,6 +283,30 @@ export interface LocalPlan<T extends LocalItem> {
   elsewhere: Map<string, { place: LocalPlace; why: string | null }>
 }
 
+/** When a planned meal needs an ingredient: its day ("YYYY-MM-DD") and
+ *  meal (breakfast, lunch, dinner, snack, or null for unsaid). */
+export interface Needed {
+  day: string
+  meal: string | null
+}
+
+// When each meal is, for whether a place opening that day is in time; an
+// unsaid meal counts as dinner.
+const MEAL_TIME: Record<string, string> = {
+  breakfast: '08:00',
+  lunch: '12:00',
+  snack: '15:00',
+  dinner: '17:00',
+}
+const mealTime = (meal: string | null) => MEAL_TIME[meal ?? 'dinner'] ?? '17:00'
+
+/** Which of two needs comes first. */
+function sooner(a: Needed, b: Needed): boolean {
+  return (
+    a.day < b.day || (a.day === b.day && mealTime(a.meal) < mealTime(b.meal))
+  )
+}
+
 /** "YYYY-MM-DD" for a date (local time). */
 function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -307,8 +331,8 @@ export function planLocal<T extends LocalItem>(
     favorites: Set<string>
     /** Each ingredient's categories (egg, fish...). */
     contains: Record<string, string[]>
-    /** The first day ("YYYY-MM-DD") a planned meal needs each ingredient. */
-    neededBy: Record<string, string>
+    /** The first planned meal that needs each ingredient. */
+    neededBy: Record<string, Needed>
     prefer: Record<string, LocalPrefer>
     now: Date
   },
@@ -345,12 +369,17 @@ export function planLocal<T extends LocalItem>(
       elsewhere.set(item.id, { place, why: null })
       continue
     }
-    const next = opens.get(place.id)!.day
+    const { day: next, hours } = opens.get(place.id)!
     const needed = neededBy[item.ingredientId]
-    // A meal day already past sets no deadline.
-    const late = !!needed && needed >= isoDay(now) && isoDay(next) > needed
+    // Too late: it opens after the meal's day, or that day but not before
+    // the meal. A meal day already past sets no deadline.
+    const late =
+      !!needed &&
+      needed.day >= isoDay(now) &&
+      (isoDay(next) > needed.day ||
+        (isoDay(next) === needed.day && hours.opens >= mealTime(needed.meal)))
     if (late && choice !== 'local') {
-      const neededDay = new Date(`${needed}T12:00`)
+      const neededDay = new Date(`${needed.day}T12:00`)
       const soon = next.getTime() - now.getTime() < 7 * 86_400_000
       elsewhere.set(item.id, {
         place,
@@ -410,15 +439,16 @@ export async function setLocalPreference(
 }
 
 /** What matching the list needs from the database: each ingredient's
- *  categories, and the first day a planned (dated) meal of the week needs
- *  it. */
+ *  categories, and the first planned (dated) meal of the week that needs it.
+ *  For an "or" line, only the option the week buys counts; one still
+ *  waiting for a choice isn't on the list yet. */
 export async function localInputs(
   db: SupabaseClient,
   week: string,
   ingredientIds: string[],
 ): Promise<{
   contains: Record<string, string[]>
-  neededBy: Record<string, string>
+  neededBy: Record<string, Needed>
 }> {
   const [ingredients, plan] = await Promise.all([
     ingredientIds.length
@@ -427,7 +457,7 @@ export async function localInputs(
     db
       .from('meal_plans')
       .select(
-        'entries:meal_plan_entries(planned_for, recipe:recipes(lines:recipe_ingredients(ingredient_id)))',
+        'choices, entries:meal_plan_entries(planned_for, meal, recipe:recipes(lines:recipe_ingredients(line_no, ingredient_id, is_optional)))',
       )
       .eq('week_start', week)
       .maybeSingle(),
@@ -440,22 +470,40 @@ export async function localInputs(
       r.contains ?? [],
     ]),
   )
-  const neededBy: Record<string, string> = {}
-  const entries =
-    (
-      plan.data as {
-        entries: {
-          planned_for: string | null
-          recipe: { lines: { ingredient_id: string | null }[] } | null
+  const neededBy: Record<string, Needed> = {}
+  const data = plan.data as {
+    choices: Record<string, string> | null
+    entries: {
+      planned_for: string | null
+      meal: string | null
+      recipe: {
+        lines: {
+          line_no: number
+          ingredient_id: string | null
+          is_optional: boolean
         }[]
       } | null
-    )?.entries ?? []
-  for (const e of entries) {
+    }[]
+  } | null
+  const choices = data?.choices ?? {}
+  for (const e of data?.entries ?? []) {
     if (!e.planned_for) continue
-    for (const l of e.recipe?.lines ?? []) {
-      const id = l.ingredient_id
-      if (id && (!neededBy[id] || e.planned_for < neededBy[id]))
-        neededBy[id] = e.planned_for
+    const need = { day: e.planned_for, meal: e.meal ?? null }
+    // The line's options, by line.
+    const byLine = new Map<number, string[]>()
+    for (const l of e.recipe?.lines ?? [])
+      if (l.ingredient_id && !l.is_optional)
+        byLine.set(l.line_no, [
+          ...(byLine.get(l.line_no) ?? []),
+          l.ingredient_id,
+        ])
+    for (const options of byLine.values()) {
+      const id =
+        options.length === 1
+          ? options[0]
+          : choices[[...new Set(options)].sort().join(',')]
+      if (id && (!neededBy[id] || sooner(need, neededBy[id])))
+        neededBy[id] = need
     }
   }
   return { contains, neededBy }

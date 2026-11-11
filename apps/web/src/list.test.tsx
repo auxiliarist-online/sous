@@ -1091,6 +1091,52 @@ describe('local first on the list (TYL-71)', () => {
     expect(api.localInputs).toHaveBeenCalledWith(WEEK, ['i-eggs', 'i-rice'])
   })
 
+  it('says local prices are the store’s, and shares the local places', async () => {
+    const api = local({
+      listCost: vi.fn(async () => ({
+        ...COST,
+        items: [buy('eggs', { aisle: 'dairy_eggs', cents: 399 })],
+      })),
+    })
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    const stop = await screen.findByRole('list', { name: 'City Market' })
+    expect(within(stop).getByText(/store/)).toHaveTextContent('store $3.99')
+    await userEvent.click(screen.getByRole('button', { name: 'Share list' }))
+    const text = writeText.mock.calls[0][0]
+    expect(text).toMatch(/City Market\n☐ eggs/)
+  })
+
+  it('saves moves of an item in the order they were made', async () => {
+    const order: string[] = []
+    let first: () => void = () => {}
+    const api = local({
+      setLocalPreference: vi.fn(async (_id: string, prefer) => {
+        if (prefer === 'store')
+          await new Promise<void>((resolve) => (first = resolve))
+        order.push(String(prefer))
+      }),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Buy eggs at the supermarket',
+      }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Buy eggs at City Market' }),
+    )
+    first()
+    await waitFor(() => expect(order).toEqual(['store', 'local']))
+    expect(
+      screen.getByRole('list', { name: 'City Market' }),
+    ).toBeInTheDocument()
+  })
+
   it('moves an item to the supermarket and back, remembering it', async () => {
     const api = local()
     render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
@@ -1116,7 +1162,7 @@ describe('local first on the list (TYL-71)', () => {
     const api = local({
       localInputs: vi.fn(async () => ({
         contains: { 'i-eggs': ['egg'] },
-        neededBy: { 'i-eggs': '2026-10-15' },
+        neededBy: { 'i-eggs': { day: '2026-10-15', meal: null } },
       })),
     })
     render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)

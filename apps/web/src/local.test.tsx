@@ -8,6 +8,7 @@ import {
   nextOpen,
   openingText,
   openThisWeekend,
+  localInputs,
   planLocal,
   sellsCategory,
   type LocalPlace,
@@ -321,18 +322,30 @@ describe('local first matching (TYL-71)', () => {
     const kale = it_('kale', 'kale', 'produce')
     const late = planLocal([kale], {
       ...args,
-      neededBy: { 'i-kale': '2026-11-12' },
+      neededBy: { 'i-kale': { day: '2026-11-12', meal: null } },
       prefer: {},
     })
     expect(late.stops).toEqual([])
     expect(late.elsewhere.get('kale')?.why).toBe(
       "City Market opens Sat; it's needed Thu",
     )
+    // Saturday breakfast is before the market opens at 9; Saturday dinner
+    // isn't.
+    const sat = (meal: string) =>
+      planLocal([kale], {
+        ...args,
+        neededBy: { 'i-kale': { day: '2026-11-14', meal } },
+        prefer: {},
+      })
+    expect(sat('breakfast').elsewhere.get('kale')?.why).toBe(
+      "City Market opens Sat; it's needed Sat",
+    )
+    expect(sat('dinner').stops).toHaveLength(1)
     // A meal day already past sets no deadline.
     expect(
       planLocal([kale], {
         ...args,
-        neededBy: { 'i-kale': '2026-11-09' },
+        neededBy: { 'i-kale': { day: '2026-11-09', meal: null } },
         prefer: {},
       }).stops,
     ).toHaveLength(1)
@@ -346,9 +359,111 @@ describe('local first matching (TYL-71)', () => {
     expect(
       planLocal([kale], {
         ...args,
-        neededBy: { 'i-kale': '2026-11-12' },
+        neededBy: { 'i-kale': { day: '2026-11-12', meal: null } },
         prefer: { 'i-kale': 'local' },
       }).stops,
     ).toHaveLength(1)
+  })
+})
+
+describe('when a meal needs it (TYL-71)', () => {
+  // A stand-in for the two reads localInputs makes.
+  function fakeDb(plan: unknown) {
+    const result = (data: unknown) => ({
+      in: async () => ({ data, error: null }),
+      eq: () => ({ maybeSingle: async () => ({ data: plan, error: null }) }),
+    })
+    return {
+      from: (table: string) => ({
+        select: () =>
+          result(
+            table === 'ingredients' ? [{ id: 'i-kale', contains: [] }] : [],
+          ),
+      }),
+    } as unknown as Parameters<typeof localInputs>[0]
+  }
+
+  it('takes the first meal, and only the option the week buys', async () => {
+    const line = (line_no: number, ingredient_id: string) => ({
+      line_no,
+      ingredient_id,
+      is_optional: false,
+    })
+    const db = fakeDb({
+      // Almond milk or oat milk: the week chose oat milk.
+      choices: { 'i-almond,i-oat': 'i-oat' },
+      entries: [
+        {
+          planned_for: '2026-11-13',
+          meal: 'dinner',
+          recipe: { lines: [line(0, 'i-kale')] },
+        },
+        {
+          planned_for: '2026-11-13',
+          meal: 'lunch',
+          recipe: {
+            lines: [line(0, 'i-kale'), line(1, 'i-almond'), line(1, 'i-oat')],
+          },
+        },
+        {
+          planned_for: null,
+          meal: null,
+          recipe: { lines: [line(0, 'i-leek')] },
+        },
+      ],
+    })
+    const { neededBy, contains } = await localInputs(db, '2026-11-09', [
+      'i-kale',
+    ])
+    expect(contains).toEqual({ 'i-kale': [] })
+    expect(neededBy).toEqual({
+      'i-kale': { day: '2026-11-13', meal: 'lunch' },
+      'i-oat': { day: '2026-11-13', meal: 'lunch' },
+    })
+  })
+})
+
+describe('the Local page while it’s open (TYL-69)', () => {
+  it('keeps a heart tapped while favorites load', async () => {
+    let answer: (ids: string[]) => void = () => {}
+    const api = {
+      ...localApi(),
+      favoritePlaces: vi.fn(
+        () => new Promise<string[]>((resolve) => (answer = resolve)),
+      ),
+    }
+    render(<LocalPage api={api} now={WED} />)
+    const heart = await screen.findByRole('button', {
+      name: 'Favorite Corner Bakery',
+    })
+    await userEvent.click(heart)
+    answer(['p1'])
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Favorite City Market' }),
+      ).toHaveAttribute('aria-pressed', 'true'),
+    )
+    expect(heart).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('saves a place’s changes in the order they were made', async () => {
+    const order: string[] = []
+    let first: () => void = () => {}
+    const api = {
+      ...localApi(),
+      setFavoritePlace: vi.fn(async (_id: string, on: boolean) => {
+        if (on) await new Promise<void>((resolve) => (first = resolve))
+        order.push(on ? 'add' : 'remove')
+      }),
+    }
+    render(<LocalPage api={api} now={WED} />)
+    const heart = await screen.findByRole('button', {
+      name: 'Favorite Corner Bakery',
+    })
+    await userEvent.click(heart)
+    await userEvent.click(heart)
+    first()
+    await waitFor(() => expect(order).toEqual(['add', 'remove']))
+    expect(heart).toHaveAttribute('aria-pressed', 'false')
   })
 })

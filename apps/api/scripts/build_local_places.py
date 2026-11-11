@@ -70,6 +70,16 @@ def parse_days(text: str) -> list[int]:
     return sorted(out)
 
 
+def real_day(month_day: str) -> bool:
+    """Whether "MM-DD" is a day some year has (02-29 is, 04-31 isn't)."""
+    month, day = (int(x) for x in month_day.split("-"))
+    try:
+        date(2024, month, day)  # a leap year
+    except ValueError:
+        return False
+    return True
+
+
 def parse_hours(text: str) -> list[dict[str, object]]:
     """The hours column as the table's JSON: one entry per "; "-separated
     part, each with its days, opening and closing times, and season."""
@@ -86,6 +96,8 @@ def parse_hours(text: str) -> list[dict[str, object]]:
             "closes": m["closes"],
         }
         if m["from"]:
+            if not (real_day(m["from"]) and real_day(m["to"])):
+                raise ValueError(f"no such day in {part.strip()!r}")
             entry["from"], entry["to"] = m["from"], m["to"]
         out.append(entry)
     return out

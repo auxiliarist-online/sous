@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Heart, MapPin } from 'lucide-react'
 import {
   KIND_NAMES,
@@ -55,7 +55,19 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
   } | null>(null)
   const [locating, setLocating] = useState<'idle' | 'busy' | 'failed'>('idle')
   const [saveFailed, setSaveFailed] = useState(false)
-  const [clock] = useState(() => now ?? new Date())
+  // The time, for "open now": kept current while the page is open (tests
+  // fix it).
+  const [clock, setClock] = useState(() => now ?? new Date())
+  useEffect(() => {
+    if (now) return
+    const tick = setInterval(() => setClock(new Date()), 60_000)
+    return () => clearInterval(tick)
+  }, [now])
+  // Hearts tapped here, by place (true: a favorite now), so loading the
+  // saved favorites doesn't undo a tap made while they loaded.
+  const tapped = useRef(new Map<string, boolean>())
+  // Saves still on their way, by place: each waits for the one before.
+  const writes = useRef(new Map<string, Promise<void>>())
 
   useEffect(() => {
     let live = true
@@ -65,7 +77,14 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
     )
     // Without favorites the directory still shows.
     api.favoritePlaces().then(
-      (f) => live && setFavorites(new Set(f)),
+      (f) => {
+        if (!live) return
+        const saved = new Set(f)
+        for (const [id, on] of tapped.current)
+          if (on) saved.add(id)
+          else saved.delete(id)
+        setFavorites(saved)
+      },
       () => {},
     )
     return () => {
@@ -83,12 +102,23 @@ export function LocalPage({ api, now }: { api: LocalApi; now?: Date }) {
       return next
     }
     setFavorites((f) => flip(f, on))
+    tapped.current.set(id, on)
     setSaveFailed(false)
+    const write = (writes.current.get(id) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => api.setFavoritePlace(id, on))
+    writes.current.set(id, write)
     try {
-      await api.setFavoritePlace(id, on)
+      await write
     } catch {
-      setFavorites((f) => flip(f, !on))
+      // Undo only if nothing newer was asked for since.
+      if (writes.current.get(id) === write) {
+        setFavorites((f) => flip(f, !on))
+        tapped.current.set(id, !on)
+      }
       setSaveFailed(true)
+    } finally {
+      if (writes.current.get(id) === write) writes.current.delete(id)
     }
   }
 

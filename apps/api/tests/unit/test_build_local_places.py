@@ -34,6 +34,10 @@ def test_days_take_names_ranges_and_lists() -> None:
     assert parse_days("Fri-Mon") == [0, 1, 5, 6]
 
 
+def test_a_leap_day_is_a_day() -> None:
+    assert parse_hours("Sat 09:00-12:00 02-29..03-01")[0]["from"] == "02-29"
+
+
 def test_hours_keep_their_season() -> None:
     assert parse_hours("Sat 09:00-12:00 04-04..11-28; Sat 10:00-13:00 12-05..03-27") == [
         {"days": [6], "opens": "09:00", "closes": "12:00", "from": "04-04", "to": "11-28"},
@@ -63,6 +67,8 @@ def test_a_place_becomes_an_upsert(tmp_path: Path) -> None:
         ("Sat 09:00", "Saturday 09:00"),  # day name
         ("09:00-12:00", "12:00-09:00"),  # closes before it opens
         ("04-04..11-28", "04-31..13-01"),  # not a month-day
+        ("04-04..11-28", "04-31..11-28"),  # April has 30 days
+        ("04-04..11-28", "02-30..11-28"),  # nor February 30
         ("28801", "2880"),  # zip
         ("35.6", "135.6"),  # latitude
         ("https://example.org", "http://example.org"),  # source not https
