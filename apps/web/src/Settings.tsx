@@ -485,18 +485,20 @@ export function Settings({
         />
       </Section>
 
+      {/* The result shows with the button, which stays in view. */}
       <div className="settings-save">
+        <p
+          aria-live="polite"
+          className={status === 'error' ? 'error small' : 'small'}
+        >
+          {status === 'saved' && 'Saved.'}
+          {status === 'error' &&
+            "We couldn't save your preferences. Try again."}
+        </p>
         <button type="submit" disabled={status === 'saving'}>
           {status === 'saving' ? 'Saving…' : 'Save preferences'}
         </button>
       </div>
-      <p
-        aria-live="polite"
-        className={status === 'error' ? 'error' : 'muted small'}
-      >
-        {status === 'saved' && 'Saved.'}
-        {status === 'error' && "We couldn't save your preferences. Try again."}
-      </p>
       {offer.length > 0 && (
         <KitOffer
           // A new offer starts over, all of it checked.

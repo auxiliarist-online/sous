@@ -1175,6 +1175,23 @@ fieldset.pref legend + * {
   box-shadow: var(--shadow-card);
 }
 
+.settings-save p {
+  margin: 0 0 0.5rem;
+  text-align: center;
+}
+
+.settings-save p:empty {
+  display: none;
+}
+
+/* On a card so it reads over the form scrolling behind it. */
+.settings-save p:not(:empty) {
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--color-card);
+  box-shadow: var(--shadow-card);
+}
+
 label.check {
   display: flex;
   align-items: flex-start;
