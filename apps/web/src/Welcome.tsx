@@ -128,13 +128,13 @@ export function Welcome({
       case 1:
         return (
           <>
-            <h3 className="small">Allergies: always left out</h3>
+            <h3 className="kicker">Allergies: always left out</h3>
             <ChipGroup
               options={CATEGORIES}
               selected={prefs.allergens}
               onChange={(allergens) => set({ allergens })}
             />
-            <h3 className="small">Also avoid</h3>
+            <h3 className="kicker">Also avoid</h3>
             <ChipGroup
               options={CATEGORIES}
               selected={prefs.avoid}
@@ -162,7 +162,7 @@ export function Welcome({
       case 3:
         return (
           <>
-            <h3 className="small">Favorites</h3>
+            <h3 className="kicker">Favorites</h3>
             <IngredientPicker
               id="welcome-favorites"
               label="Favorite ingredients"
@@ -170,7 +170,7 @@ export function Welcome({
               onChange={(favoriteIngredients) => set({ favoriteIngredients })}
               search={api.searchIngredients}
             />
-            <h3 className="small">Rather skip</h3>
+            <h3 className="kicker">Rather skip</h3>
             <IngredientPicker
               id="welcome-dislikes"
               label="Disliked ingredients"
@@ -229,8 +229,8 @@ export function Welcome({
   }
 
   return (
-    <section className="card welcome" aria-labelledby="welcome-title">
-      <p className="muted small">
+    <section className="card screen welcome" aria-labelledby="welcome-title">
+      <p className="kicker">
         Step {step + 1} of {TITLES.length}
       </p>
       <progress
@@ -238,7 +238,9 @@ export function Welcome({
         value={step + 1}
         aria-label="Setup progress"
       />
-      <h2 id="welcome-title">{TITLES[step]}</h2>
+      <h2 id="welcome-title" className="screen-title">
+        {TITLES[step]}
+      </h2>
       {optionsFailed && (step === 0 || step === 2) && (
         <p role="alert" className="muted small">
           We couldn't load the list. Skip this step for now; it's in Preferences
@@ -248,7 +250,11 @@ export function Welcome({
       {current(step)}
       <div className="welcome-nav">
         {step > 0 && (
-          <button type="button" className="link" onClick={() => go(step - 1)}>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => go(step - 1)}
+          >
             Back
           </button>
         )}
@@ -268,7 +274,7 @@ export function Welcome({
       </div>
       <button
         type="button"
-        className="link small"
+        className="link small welcome-skip"
         disabled={status === 'saving'}
         onClick={() => void finish(prefs, sawKits ? checked : [])}
       >
