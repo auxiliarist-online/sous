@@ -2510,13 +2510,22 @@ describe('find: search by intent, ranked for the user (Find)', () => {
     const titles = (await search('eggs')).map((r) => r.title)
     assert.deepEqual(
       titles.filter((t) => t.startsWith('Find ')),
-      ['Find Frittata', 'Find Sponge Cake', 'Find Mystery Egg Pie'],
+      // The chicken dish fits with a swap (TYL-77): after what fits.
+      [
+        'Find Frittata',
+        'Find Sponge Cake',
+        'Find Chicken and Egg Rice',
+        'Find Mystery Egg Pie',
+      ],
     )
   })
 
-  it("leaves out recipes that break the user's diet, and puts unsure ones last", async () => {
+  it("marks recipes that break the user's diet, and puts unsure ones last", async () => {
     const rows = await search('eggs')
-    assert.ok(!rows.some((r) => r.title === 'Find Chicken and Egg Rice'))
+    // Chicken swaps for tofu (TYL-77): shown, saying so.
+    const rice = rows.find((r) => r.title === 'Find Chicken and Egg Rice')
+    assert.equal(rice.fit, 'swaps')
+    assert.ok(rice.why.includes('fits with 1 swap'))
     const pie = rows.find((r) => r.title === 'Find Mystery Egg Pie')
     assert.equal(pie.fit, 'unknown')
     assert.ok(pie.why.includes('not every ingredient could be checked'))
@@ -4267,5 +4276,194 @@ describe('past choices in recommendations (TYL-16)', () => {
       pool.candidates.find((c) => c.recipe_id === loved).rating,
       'love',
     )
+  })
+})
+
+describe('substitutions (TYL-77)', () => {
+  const SAM = '00000000-0000-0000-0000-000000007701'
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1)', [SAM])
+  })
+
+  it('loads every swap, readable by anyone', async () => {
+    const { rows } = await as('anon', null, () =>
+      db.query(
+        `select s.factor, s.to_unit, s.per_unit, t.name as to_name,
+           (select array_agg(i.name) from ingredients i where i.id = any(s.extras)) as extras
+         from substitutions s join ingredients t on t.id = s.to_ingredient_id
+         where s.key = 'eggs > flaxseed + water'`,
+      ),
+    )
+    assert.deepEqual(rows[0], {
+      factor: '1',
+      to_unit: 'tbsp',
+      per_unit: 'each',
+      to_name: 'flaxseed',
+      extras: ['water'],
+    })
+    const {
+      rows: [{ n }],
+    } = await db.query('select count(*)::int as n from substitutions')
+    assert.ok(n >= 200)
+  })
+
+  it('keeps a user’s swaps per recipe, for that ingredient only', async () => {
+    const buttermilk = await ingredient('buttermilk')
+    const stew = await recipe('Buttermilk biscuits (TYL-77)', [[buttermilk]])
+    const {
+      rows: [swap],
+    } = await db.query(
+      "select id from substitutions where key = 'buttermilk > whole milk + lemon juice'",
+    )
+    const {
+      rows: [other],
+    } = await db.query(
+      "select id from substitutions where key = 'butter > ghee'",
+    )
+    await as('authenticated', SAM, () =>
+      db.query(
+        'insert into user_recipe_swaps (recipe_id, from_ingredient_id, substitution_id) values ($1, $2, $3)',
+        [stew, buttermilk, swap.id],
+      ),
+    )
+    // A swap for another ingredient doesn't fit.
+    await assert.rejects(
+      as('authenticated', SAM, () =>
+        db.query(
+          'update user_recipe_swaps set substitution_id = $1 where recipe_id = $2',
+          [other.id, stew],
+        ),
+      ),
+      /foreign key/,
+    )
+    const { rows: seen } = await as('authenticated', BOB, () =>
+      db.query('select * from user_recipe_swaps'),
+    )
+    assert.equal(seen.length, 0)
+
+    // The buy list gets the swap, and what it swaps in.
+    const {
+      rows: [plan],
+    } = await db.query(
+      `insert into meal_plans (user_id, week_start) values ($1, '2026-11-09') returning id`,
+      [SAM],
+    )
+    await db.query(
+      'insert into meal_plan_entries (meal_plan_id, recipe_id, scale, reviewed) values ($1, $2, 1, true)',
+      [plan.id, stew],
+    )
+    const {
+      rows: [{ r }],
+    } = await db.query("select plan_cost_inputs($1, '2026-11-09') as r", [SAM])
+    const swaps = r.entries[0].swaps
+    const milk = (
+      await db.query("select id from ingredients where name = 'whole milk'")
+    ).rows[0].id
+    assert.equal(swaps[buttermilk].to, milk)
+    assert.equal(swaps[buttermilk].extras.length, 1)
+    assert.ok(r.ingredients[milk])
+    assert.ok(r.ingredients[swaps[buttermilk].extras[0]])
+  })
+})
+
+describe('fits with swaps (TYL-77)', () => {
+  const VI = '00000000-0000-0000-0000-000000007702'
+  const NUT = '00000000-0000-0000-0000-000000007703'
+  const id = async (name) =>
+    (await db.query('select id from ingredients where name = $1', [name]))
+      .rows[0].id
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1), ($2)', [VI, NUT])
+    await db.query(
+      "insert into user_diets (user_id, diet_slug) values ($1, 'vegan')",
+      [VI],
+    )
+    await db.query(
+      "insert into profiles (user_id, allergens) values ($1, '{tree_nut}')",
+      [NUT],
+    )
+  })
+
+  it('counts the swaps that make a recipe fit, and which fix what', async () => {
+    const butter = await id('butter')
+    const honey = await id('honey')
+    const cake = await recipe('Honey butter cake (TYL-77)', [
+      [butter],
+      [honey],
+      [await id('all-purpose flour')],
+    ])
+    const {
+      rows: [{ f }],
+    } = await db.query('select recipe_swap_fit($1, $2) as f', [cake, VI])
+    assert.equal(f.count, 2)
+    const swapsTo = async (ids) =>
+      (
+        await db.query(
+          `select t.name from substitutions s join ingredients t on t.id = s.to_ingredient_id
+           where s.id = any($1) order by t.name`,
+          [ids],
+        )
+      ).rows.map((r) => r.name)
+    const forButter = await swapsTo(f.fixes[butter])
+    assert.ok(forButter.includes('vegan butter'))
+    // Ghee is still dairy.
+    assert.ok(!forButter.includes('ghee'))
+    assert.ok((await swapsTo(f.fixes[honey])).includes('maple syrup'))
+    // It doesn't fit as it is.
+    const {
+      rows: [{ fit }],
+    } = await db.query('select recipe_fit_for_user($1, $2) as fit', [cake, VI])
+    assert.equal(fit, 'excluded')
+  })
+
+  it('is null when a recipe fits already, or can’t be fixed', async () => {
+    const plain = await recipe('Plain flour thing (TYL-77)', [
+      [await id('all-purpose flour')],
+    ])
+    const lamb = await recipe('Lamb stew (TYL-77)', [[await id('lamb')]])
+    const { rows } = await db.query(
+      'select recipe_swap_fit($1, $3) as a, recipe_swap_fit($2, $3) as b',
+      [plain, lamb, VI],
+    )
+    assert.deepEqual(rows[0], { a: null, b: null })
+  })
+
+  it('clears an allergy only with something free of it', async () => {
+    const almond = await id('almond milk')
+    const smoothie = await recipe('Almond smoothie (TYL-77)', [[almond]])
+    const {
+      rows: [{ f }],
+    } = await db.query('select recipe_swap_fit($1, $2) as f', [smoothie, NUT])
+    assert.equal(f.count, 1)
+    const { rows } = await db.query(
+      `select t.name from substitutions s join ingredients t on t.id = s.to_ingredient_id
+       where s.id = any($1)`,
+      [f.fixes[almond]],
+    )
+    assert.deepEqual(
+      rows.map((r) => r.name),
+      ['oat milk'],
+    )
+  })
+
+  it('shows them in Find, after what fits, saying how many swaps', async () => {
+    const rows = await as(
+      'authenticated',
+      VI,
+      async () =>
+        (await db.query("select * from search_recipes('honey butter cake')"))
+          .rows,
+    )
+    const cake = rows.find((r) => r.title === 'Honey butter cake (TYL-77)')
+    assert.equal(cake.fit, 'swaps')
+    assert.ok(cake.why.includes('fits with 2 swaps'))
+    const {
+      rows: [{ f }],
+    } = await as('authenticated', VI, async () =>
+      db.query('select my_recipe_swap_fit($1) as f', [cake.id]),
+    )
+    assert.equal(f.count, 2)
   })
 })

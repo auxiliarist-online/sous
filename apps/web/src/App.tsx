@@ -13,6 +13,12 @@ import { CookMode, TimerBar } from './CookMode.tsx'
 import { offlineCooked } from './cookedQueue.ts'
 import { PantryPage, type PantryApi } from './PantryPage.tsx'
 import {
+  loadRecipeSwaps,
+  loadSwapFit,
+  loadSwaps,
+  setRecipeSwap,
+} from './swaps.ts'
+import {
   importPage,
   importRecipe,
   importText,
@@ -166,6 +172,11 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     savePreferences: (p) => savePreferences(db, userId, p),
     options: () => referenceOptions(db),
     setMyCuisines: (recipeId, slugs) => setMyCuisines(db, recipeId, slugs),
+    swapsFor: (ids) => loadSwaps(db, ids),
+    recipeSwaps: (recipeId) => loadRecipeSwaps(db, recipeId),
+    setRecipeSwap: (recipeId, fromId, swapId) =>
+      setRecipeSwap(db, userId, recipeId, fromId, swapId),
+    swapFit: (recipeId) => loadSwapFit(db, recipeId),
     searchIngredients: (q) => searchIngredients(db, q),
     plan: (week) => loadPlan(db, week),
     addToPlan: (week, id, scale, day) => addToPlan(db, week, id, scale, day),

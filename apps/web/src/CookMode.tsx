@@ -15,9 +15,13 @@ import { sourceLabel } from './library.ts'
 import { isoDate, SCALES, scaledLine, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
+import { swapText, type Swap } from './swaps.ts'
 
 export interface CookApi extends CookedApi {
   recipe(id: string): Promise<RecipeDetail | null>
+  /** The user's swaps for the recipe (TYL-77), shown in the checklist. */
+  swapsFor?(ingredientIds: string[]): Promise<Swap[]>
+  recipeSwaps?(recipeId: string): Promise<Record<string, string>>
 }
 
 /** Cook mode (TYL-75): big type, the screen kept on, the ingredients to
@@ -46,6 +50,8 @@ export function CookMode({
   // The day cooking started (tests pass one).
   const [today] = useState(() => isoDate(now ?? new Date()))
   const awake = useWakeLock()
+  // The swaps the user chose (TYL-77), by the ingredient swapped out.
+  const [swapped, setSwapped] = useState<Record<string, Swap>>({})
 
   useEffect(() => {
     let live = true
@@ -53,6 +59,26 @@ export function CookMode({
       (r) => live && setRecipe(r),
       () => live && setFailed(true),
     )
+    // Swaps are extra: without them the recipe's own lines show.
+    if (api.recipeSwaps && api.swapsFor) {
+      const { recipeSwaps, swapsFor } = api
+      recipeSwaps(id).then(
+        async (chosen) => {
+          const from = Object.keys(chosen)
+          if (!from.length) return
+          const swaps = await swapsFor(from)
+          if (live)
+            setSwapped(
+              Object.fromEntries(
+                swaps
+                  .filter((s) => chosen[s.fromId] === s.id)
+                  .map((s) => [s.fromId, s]),
+              ),
+            )
+        },
+        () => {},
+      )
+    }
     return () => {
       live = false
     }
@@ -118,7 +144,25 @@ export function CookMode({
                     checked={checked.has(line.lineNo)}
                     onChange={() => toggle(line.lineNo)}
                   />
-                  <span>{scaledLine(line, scale)}</span>
+                  <span>
+                    {line.ingredientId && swapped[line.ingredientId] ? (
+                      <>
+                        <s>{scaledLine(line, scale)}</s> →{' '}
+                        {swapText(
+                          {
+                            ...line,
+                            quantity:
+                              line.quantity != null
+                                ? line.quantity * scale
+                                : null,
+                          },
+                          swapped[line.ingredientId],
+                        )}
+                      </>
+                    ) : (
+                      scaledLine(line, scale)
+                    )}
+                  </span>
                 </label>
               </li>
             ))}
