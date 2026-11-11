@@ -144,6 +144,8 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
   const touched = useRef(new Set<string>())
   const confirmed = useRef(new Map<string, string | undefined>())
   const writes = useRef(new Map<string, Promise<void>>())
+  // Ingredients with a save that went through here: newer than the load.
+  const savedHere = useRef(new Set<string>())
   const [adds, setAdds] = useState<{
     cents: number
     estimated: boolean
@@ -217,15 +219,24 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       api.recipeSwaps(id).then(
         (saved) => {
           if (!live) return
-          // What was saved before any choice here.
-          for (const from of Object.keys(saved))
-            if (!touched.current.has(from))
+          // What's saved, unless a save here went through since: what a
+          // failed save goes back to.
+          const ids = new Set([
+            ...Object.keys(saved),
+            ...confirmed.current.keys(),
+          ])
+          for (const from of ids)
+            if (!savedHere.current.has(from))
               confirmed.current.set(from, saved[from])
           setChosen((now) => {
             const next = { ...saved }
+            // A choice made here stands while its save is on its way, or
+            // once it went through; after a failed one, what's saved shows.
             for (const from of touched.current)
-              if (now[from]) next[from] = now[from]
-              else delete next[from]
+              if (writes.current.has(from) || savedHere.current.has(from)) {
+                if (now[from]) next[from] = now[from]
+                else delete next[from]
+              }
             return next
           })
         },
@@ -273,6 +284,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     try {
       await write
       confirmed.current.set(fromId, swapId ?? undefined)
+      savedHere.current.add(fromId)
       setSwapVersion((v) => v + 1)
       showToast(
         swapId

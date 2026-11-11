@@ -205,6 +205,28 @@ export function CookMode({
         </p>
       </header>
 
+      {/* Swaps that couldn't be saved, on every screen of cook mode. */}
+      {Object.keys(unsaved).length > 0 && (
+        <p role="alert" className="error small">
+          We couldn't save{' '}
+          {Object.keys(unsaved).length === 1
+            ? 'a swap'
+            : `${Object.keys(unsaved).length} swaps`}
+          : they're only in cook mode for now.{' '}
+          <button
+            type="button"
+            className="link"
+            onClick={() =>
+              Object.entries(unsaved).forEach(([from, swap]) =>
+                save(from, swap),
+              )
+            }
+          >
+            Try again
+          </button>
+        </p>
+      )}
+
       {at === -1 && (
         <>
           <div className="chips" role="group" aria-label="Size">
@@ -263,26 +285,6 @@ export function CookMode({
               </li>
             ))}
           </ul>
-          {Object.keys(unsaved).length > 0 && (
-            <p role="alert" className="error small">
-              We couldn't save{' '}
-              {Object.keys(unsaved).length === 1
-                ? 'a swap'
-                : `${Object.keys(unsaved).length} swaps`}
-              : they're on this screen only.{' '}
-              <button
-                type="button"
-                className="link"
-                onClick={() =>
-                  Object.entries(unsaved).forEach(([from, swap]) =>
-                    save(from, swap),
-                  )
-                }
-              >
-                Try again
-              </button>
-            </p>
-          )}
           {outOf?.ingredientId && (
             <SwapSheet
               line={{

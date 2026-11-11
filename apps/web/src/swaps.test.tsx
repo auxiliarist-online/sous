@@ -311,6 +311,30 @@ describe('swaps on the recipe page, carefully (TYL-77)', () => {
     expect(screen.getByText(/→ 1 cup whole milk/)).toBeInTheDocument()
   })
 
+  it('goes back to the saved swap when an early choice fails', async () => {
+    let answer: (c: Record<string, string>) => void = () => {}
+    const api = recipeApi({
+      recipeSwaps: vi.fn(
+        () => new Promise<Record<string, string>>((r) => (answer = r)),
+      ),
+      setRecipeSwap: vi.fn(async () => {
+        throw new Error('down')
+      }),
+    })
+    render(<RecipePage id={PANCAKES.id} api={api} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Swap buttermilk' }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /1 cup whole milk/ }),
+    )
+    await waitFor(() => expect(api.setRecipeSwap).toHaveBeenCalled())
+    // The saved swap arrives after the failed choice: it's what shows.
+    answer({ 'i-buttermilk': 's2' })
+    expect(await screen.findByText(/→ ¾ cup plain yogurt/)).toBeInTheDocument()
+    expect(screen.queryByText(/→ 1 cup whole milk/)).not.toBeInTheDocument()
+  })
+
   it('undoes only the swap that failed, back to what’s saved', async () => {
     let fail: () => void = () => {}
     const api = recipeApi({
@@ -394,15 +418,42 @@ describe('swaps in cook mode (TYL-77)', () => {
       screen.getByRole('button', { name: /1 cup whole milk/ }),
     )
     expect(
-      await screen.findByText(/they're on this screen only/),
+      await screen.findByText(/they're only in cook mode for now/),
     ).toBeInTheDocument()
     expect(screen.getByText(/→ 1 cup whole milk/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     await waitFor(() =>
       expect(
-        screen.queryByText(/they're on this screen only/),
+        screen.queryByText(/they're only in cook mode for now/),
       ).not.toBeInTheDocument(),
     )
     expect(api.setRecipeSwap).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps saying a swap wasn’t saved during the steps', async () => {
+    let fail: () => void = () => {}
+    const api = {
+      ...cookApi(),
+      setRecipeSwap: vi.fn(
+        () =>
+          new Promise<void>(
+            (_, reject) => (fail = () => reject(new Error('down'))),
+          ),
+      ),
+    }
+    render(<CookMode api={api} id={PANCAKES.id} scale={1} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Out of buttermilk?' }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /1 cup whole milk/ }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Start the steps' }),
+    )
+    fail()
+    expect(
+      await screen.findByText(/they're only in cook mode for now/),
+    ).toBeInTheDocument()
   })
 })
