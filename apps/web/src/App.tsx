@@ -16,7 +16,10 @@ import { LocalPage, type LocalApi } from './LocalPage.tsx'
 import {
   loadFavoritePlaces,
   loadLocalPlaces,
+  loadLocalPreferences,
+  localInputs,
   setFavoritePlace,
+  setLocalPreference,
 } from './local.ts'
 import {
   importPage,
@@ -244,6 +247,10 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     favoritePlaces: () => loadFavoritePlaces(db),
     setFavoritePlace: (id, favorite) =>
       setFavoritePlace(db, userId, id, favorite),
+    localPreferences: () => loadLocalPreferences(db),
+    setLocalPreference: (id, prefer) =>
+      setLocalPreference(db, userId, id, prefer),
+    localInputs: (week, ids) => localInputs(db, week, ids),
     sendFeedback: (message, page, kind) =>
       sendFeedback(db, session, {
         message,

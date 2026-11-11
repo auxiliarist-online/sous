@@ -8,6 +8,8 @@ import {
   nextOpen,
   openingText,
   openThisWeekend,
+  planLocal,
+  sellsCategory,
   type LocalPlace,
 } from './local.ts'
 import { LocalPage, type LocalApi } from './LocalPage.tsx'
@@ -236,5 +238,117 @@ describe('Setup’s local places (TYL-69)', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await screen.findByText(/Step 6 of 7/)
     expect(screen.queryByText('Local places you like')).not.toBeInTheDocument()
+  })
+})
+
+describe('local first matching (TYL-71)', () => {
+  const coop = place({
+    id: 'c1',
+    name: 'Co-op',
+    kind: 'co_op',
+    sells: ['groceries'],
+    hours: [{ days: [0, 1, 2, 3, 4, 5, 6], opens: '08:00', closes: '20:00' }],
+  })
+  const it_ = (
+    id: string,
+    name: string,
+    aisle: string | null,
+    storeId: string | null = null,
+  ) => ({ id, ingredientId: `i-${id}`, name, aisle, storeId })
+
+  it('sorts items by what each favorite sells', () => {
+    expect(sellsCategory({ name: 'eggs', aisle: 'dairy_eggs' }, ['egg'])).toBe(
+      'eggs',
+    )
+    expect(
+      sellsCategory({ name: 'butter', aisle: 'dairy_eggs' }, ['dairy']),
+    ).toBe('dairy')
+    expect(
+      sellsCategory({ name: 'trout', aisle: 'meat_seafood' }, ['fish']),
+    ).toBe('seafood')
+    expect(sellsCategory({ name: 'sourdough', aisle: 'bakery' })).toBe('bread')
+    expect(sellsCategory({ name: 'local honey', aisle: 'pantry' })).toBe(
+      'honey',
+    )
+    expect(sellsCategory({ name: 'cumin', aisle: 'spices' })).toBeNull()
+
+    const plan = planLocal(
+      [
+        it_('kale', 'kale', 'produce'),
+        it_('bread', 'sourdough', 'bakery'),
+        it_('cumin', 'cumin', 'spices'),
+        // Put somewhere by the user: that stands.
+        it_('leek', 'leeks', 'produce', 'my-stand'),
+      ],
+      {
+        places: [place(), bakery, coop],
+        favorites: new Set(['p1', 'p2']),
+        contains: {},
+        neededBy: {},
+        prefer: {},
+        now: WED,
+      },
+    )
+    // The bakery is open now, the market Saturday.
+    expect(
+      plan.stops.map((s) => [s.place.name, s.items.map((i) => i.id)]),
+    ).toEqual([
+      ['Corner Bakery', ['bread']],
+      ['City Market', ['kale']],
+    ])
+  })
+
+  it('prefers a specialist to a full grocery opening as soon', () => {
+    const plan = planLocal([it_('bread', 'sourdough', 'bakery')], {
+      places: [bakery, coop],
+      favorites: new Set(['p2', 'c1']),
+      contains: {},
+      neededBy: {},
+      prefer: {},
+      now: new Date(2026, 10, 11, 7, 0),
+    })
+    // The co-op opens at 8, the bakery at 7:30.
+    expect(plan.stops[0].place.name).toBe('Corner Bakery')
+  })
+
+  it('keeps an item back for a meal before the market, or when asked', () => {
+    const args = {
+      places: [place()],
+      favorites: new Set(['p1']),
+      contains: {},
+      now: WED,
+    }
+    const kale = it_('kale', 'kale', 'produce')
+    const late = planLocal([kale], {
+      ...args,
+      neededBy: { 'i-kale': '2026-11-12' },
+      prefer: {},
+    })
+    expect(late.stops).toEqual([])
+    expect(late.elsewhere.get('kale')?.why).toBe(
+      "City Market opens Sat; it's needed Thu",
+    )
+    // A meal day already past sets no deadline.
+    expect(
+      planLocal([kale], {
+        ...args,
+        neededBy: { 'i-kale': '2026-11-09' },
+        prefer: {},
+      }).stops,
+    ).toHaveLength(1)
+    const kept = planLocal([kale], {
+      ...args,
+      neededBy: {},
+      prefer: { 'i-kale': 'store' },
+    })
+    expect(kept.stops).toEqual([])
+    expect(kept.elsewhere.get('kale')).toEqual({ place: place(), why: null })
+    expect(
+      planLocal([kale], {
+        ...args,
+        neededBy: { 'i-kale': '2026-11-12' },
+        prefer: { 'i-kale': 'local' },
+      }).stops,
+    ).toHaveLength(1)
   })
 })

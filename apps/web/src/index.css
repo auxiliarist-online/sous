@@ -1808,6 +1808,17 @@ button.danger:not(.link) {
   border-bottom: 1px solid var(--color-divider);
 }
 
+/* Why an item a local favorite sells stays at the supermarket (TYL-71). */
+.list-item .list-local-why {
+  grid-column: 1 / -1;
+  margin: -0.25rem 0 0.5rem;
+}
+
+/* A local place's group: when it's next open, under its name. */
+.list-local > .small {
+  margin: -0.25rem 0 0.25rem;
+}
+
 /* The store's sizes for a typed item (TYL-142), under it. */
 .list-item .size-picker {
   grid-column: 1 / -1;

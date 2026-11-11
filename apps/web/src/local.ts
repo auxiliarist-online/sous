@@ -231,3 +231,232 @@ export function milesBetween(
       Math.sin(dLng / 2) ** 2
   return 3958.8 * 2 * Math.asin(Math.sqrt(s))
 }
+
+/** Where the user wants an ingredient bought (TYL-71): at a favorite local
+ *  place even when it opens after the meal, or at the supermarket. */
+export type LocalPrefer = 'local' | 'store'
+
+/** What the directory calls a list item, from its aisle, its ingredient's
+ *  categories (`contains`) and its name; null for what local places aren't
+ *  matched on (spices, cans and the like). */
+export function sellsCategory(
+  item: { name: string; aisle: string | null },
+  contains: string[] = [],
+): string | null {
+  const name = item.name.toLowerCase()
+  if (/\bhoney\b/.test(name)) return 'honey'
+  switch (item.aisle) {
+    case 'produce':
+      return 'produce'
+    case 'dairy_eggs':
+      return contains.includes('egg') && /\beggs?\b/.test(name)
+        ? 'eggs'
+        : 'dairy'
+    case 'meat_seafood':
+      return contains.includes('fish') || contains.includes('shellfish')
+        ? 'seafood'
+        : 'meat'
+    case 'bakery':
+      return 'bread'
+  }
+  if (/\b(flour|cornmeal|grits|rolled oats|oats)\b/.test(name)) return 'grains'
+  return null
+}
+
+/** A list item, as far as local first needs one. */
+export interface LocalItem {
+  id: string
+  ingredientId: string | null
+  name: string
+  aisle: string | null
+  /** A place the user picked for it themselves: that stands. */
+  storeId: string | null
+}
+
+/** What the list suggests (TYL-71): favorite places with the items to get
+ *  there, in the order they next open; items left at the supermarket that a
+ *  favorite sells, with a note when it's because of timing; and the count. */
+export interface LocalPlan<T extends LocalItem> {
+  stops: { place: LocalPlace; items: T[] }[]
+  /** Items at the supermarket a favorite could take, by item id: the place,
+   *  and why it isn't there ("Opens Sat; needed Wed"), if it's timing. */
+  elsewhere: Map<string, { place: LocalPlace; why: string | null }>
+}
+
+/** "YYYY-MM-DD" for a date (local time). */
+function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Sort the items to buy between favorite local places and the supermarket.
+ *  Each item goes to the favorite that sells it and opens soonest
+ *  (a specialist before a full grocery when they open together), unless the
+ *  user keeps it at the supermarket, or that place won't open before the
+ *  first meal that needs it (unless the user asked for it there anyway). */
+export function planLocal<T extends LocalItem>(
+  items: T[],
+  {
+    places,
+    favorites,
+    contains,
+    neededBy,
+    prefer,
+    now,
+  }: {
+    places: LocalPlace[]
+    favorites: Set<string>
+    /** Each ingredient's categories (egg, fish...). */
+    contains: Record<string, string[]>
+    /** The first day ("YYYY-MM-DD") a planned meal needs each ingredient. */
+    neededBy: Record<string, string>
+    prefer: Record<string, LocalPrefer>
+    now: Date
+  },
+): LocalPlan<T> {
+  const mine = places.filter((p) => favorites.has(p.id))
+  const opens = new Map(mine.map((p) => [p.id, nextOpen(p, now)] as const))
+  const byPlace = new Map<string, T[]>()
+  const elsewhere: LocalPlan<T>['elsewhere'] = new Map()
+  for (const item of items) {
+    if (!item.ingredientId || item.storeId) continue
+    const category = sellsCategory(item, contains[item.ingredientId])
+    if (!category) continue
+    const sellers = mine
+      .filter(
+        (p) =>
+          opens.get(p.id) &&
+          (p.sells.includes(category) ||
+            (p.sells.includes('groceries') && category !== 'honey')),
+      )
+      .sort((a, b) => {
+        const x = opens.get(a.id)!
+        const y = opens.get(b.id)!
+        return (
+          x.day.getTime() - y.day.getTime() ||
+          x.hours.opens.localeCompare(y.hours.opens) ||
+          Number(a.sells.includes('groceries')) -
+            Number(b.sells.includes('groceries'))
+        )
+      })
+    const place = sellers[0]
+    if (!place) continue
+    const choice = prefer[item.ingredientId]
+    if (choice === 'store') {
+      elsewhere.set(item.id, { place, why: null })
+      continue
+    }
+    const next = opens.get(place.id)!.day
+    const needed = neededBy[item.ingredientId]
+    // A meal day already past sets no deadline.
+    const late = !!needed && needed >= isoDay(now) && isoDay(next) > needed
+    if (late && choice !== 'local') {
+      const neededDay = new Date(`${needed}T12:00`)
+      const soon = next.getTime() - now.getTime() < 7 * 86_400_000
+      elsewhere.set(item.id, {
+        place,
+        why: `${place.name} ${soon ? `opens ${WEEKDAYS[next.getDay()]}` : `is closed until ${MONTHS[next.getMonth()]} ${next.getDate()}`}; it's needed ${WEEKDAYS[neededDay.getDay()]}`,
+      })
+      continue
+    }
+    byPlace.set(place.id, [...(byPlace.get(place.id) ?? []), item])
+  }
+  const stops = mine
+    .filter((p) => byPlace.has(p.id))
+    .sort(
+      (a, b) =>
+        opens.get(a.id)!.day.getTime() - opens.get(b.id)!.day.getTime() ||
+        opens
+          .get(a.id)!
+          .hours.opens.localeCompare(opens.get(b.id)!.hours.opens),
+    )
+    .map((place) => ({ place, items: byPlace.get(place.id)! }))
+  return { stops, elsewhere }
+}
+
+/** Where the user wants things bought, by ingredient (TYL-71). */
+export async function loadLocalPreferences(
+  db: SupabaseClient,
+): Promise<Record<string, LocalPrefer>> {
+  const { data, error } = await db
+    .from('user_local_preferences')
+    .select('ingredient_id, prefer')
+  if (error) throw error
+  return Object.fromEntries(
+    (data as { ingredient_id: string; prefer: LocalPrefer }[]).map((r) => [
+      r.ingredient_id,
+      r.prefer,
+    ]),
+  )
+}
+
+/** Remember where to buy an ingredient: local, the supermarket, or (null)
+ *  let the list decide. */
+export async function setLocalPreference(
+  db: SupabaseClient,
+  userId: string,
+  ingredientId: string,
+  prefer: LocalPrefer | null,
+): Promise<void> {
+  const { error } = prefer
+    ? await db
+        .from('user_local_preferences')
+        .upsert({ user_id: userId, ingredient_id: ingredientId, prefer })
+    : await db
+        .from('user_local_preferences')
+        .delete()
+        .eq('user_id', userId)
+        .eq('ingredient_id', ingredientId)
+  if (error) throw error
+}
+
+/** What matching the list needs from the database: each ingredient's
+ *  categories, and the first day a planned (dated) meal of the week needs
+ *  it. */
+export async function localInputs(
+  db: SupabaseClient,
+  week: string,
+  ingredientIds: string[],
+): Promise<{
+  contains: Record<string, string[]>
+  neededBy: Record<string, string>
+}> {
+  const [ingredients, plan] = await Promise.all([
+    ingredientIds.length
+      ? db.from('ingredients').select('id, contains').in('id', ingredientIds)
+      : Promise.resolve({ data: [], error: null }),
+    db
+      .from('meal_plans')
+      .select(
+        'entries:meal_plan_entries(planned_for, recipe:recipes(lines:recipe_ingredients(ingredient_id)))',
+      )
+      .eq('week_start', week)
+      .maybeSingle(),
+  ])
+  if (ingredients.error) throw ingredients.error
+  if (plan.error) throw plan.error
+  const contains = Object.fromEntries(
+    (ingredients.data as { id: string; contains: string[] }[]).map((r) => [
+      r.id,
+      r.contains ?? [],
+    ]),
+  )
+  const neededBy: Record<string, string> = {}
+  const entries =
+    (
+      plan.data as {
+        entries: {
+          planned_for: string | null
+          recipe: { lines: { ingredient_id: string | null }[] } | null
+        }[]
+      } | null
+    )?.entries ?? []
+  for (const e of entries) {
+    if (!e.planned_for) continue
+    for (const l of e.recipe?.lines ?? []) {
+      const id = l.ingredient_id
+      if (id && (!neededBy[id] || e.planned_for < neededBy[id]))
+        neededBy[id] = e.planned_for
+    }
+  }
+  return { contains, neededBy }
+}
