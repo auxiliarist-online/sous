@@ -227,17 +227,39 @@ describe('swaps on the recipe page (TYL-77)', () => {
 })
 
 describe('swaps in cook mode (TYL-77)', () => {
+  const cookApi = (chosen: Record<string, string> = {}) => ({
+    recipe: vi.fn(async () => PANCAKES),
+    recipeSwaps: vi.fn(async () => chosen),
+    swapsFor: vi.fn(async () => [MILK, YOGURT, FLAX]),
+    setRecipeSwap: vi.fn(async () => {}),
+    ...fakeCookedApi(),
+  })
+
   it('shows the chosen swaps at the planned size', async () => {
-    const api = {
-      recipe: vi.fn(async () => PANCAKES),
-      recipeSwaps: vi.fn(async () => ({ 'i-eggs': 's3' })),
-      swapsFor: vi.fn(async () => [FLAX]),
-      ...fakeCookedApi(),
-    }
+    const api = cookApi({ 'i-eggs': 's3' })
     render(<CookMode api={api} id={PANCAKES.id} scale={2} />)
     expect(
       await screen.findByText(/→ 4 tbsp flaxseed \+ water/),
     ).toBeInTheDocument()
-    expect(api.swapsFor).toHaveBeenCalledWith(['i-eggs'])
+    expect(api.swapsFor).toHaveBeenCalledWith(['i-buttermilk', 'i-eggs'])
+  })
+
+  it('offers swaps for something you’re out of, and keeps the one chosen', async () => {
+    const api = cookApi()
+    render(<CookMode api={api} id={PANCAKES.id} scale={2} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Out of buttermilk?' }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /2 cups whole milk \+ lemon juice/ }),
+    )
+    expect(api.setRecipeSwap).toHaveBeenCalledWith(
+      PANCAKES.id,
+      'i-buttermilk',
+      's1',
+    )
+    expect(
+      screen.getByText(/→ 2 cups whole milk \+ lemon juice/),
+    ).toBeInTheDocument()
   })
 })

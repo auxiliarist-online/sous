@@ -15,13 +15,21 @@ import { sourceLabel } from './library.ts'
 import { isoDate, SCALES, scaledLine, type Scale } from './plan.ts'
 import { Link } from './router.tsx'
 import { ingredientLines, type RecipeDetail } from './sous.ts'
+import { SwapSheet } from './SwapSheet.tsx'
 import { swapText, type Swap } from './swaps.ts'
+import type { IngredientLine } from './sous.ts'
 
 export interface CookApi extends CookedApi {
   recipe(id: string): Promise<RecipeDetail | null>
-  /** The user's swaps for the recipe (TYL-77), shown in the checklist. */
+  /** Swaps (TYL-77): the user's for the recipe show in the checklist, and
+   *  "Out of it?" offers the rest. */
   swapsFor?(ingredientIds: string[]): Promise<Swap[]>
   recipeSwaps?(recipeId: string): Promise<Record<string, string>>
+  setRecipeSwap?(
+    recipeId: string,
+    fromId: string,
+    swapId: string | null,
+  ): Promise<void>
 }
 
 /** Cook mode (TYL-75): big type, the screen kept on, the ingredients to
@@ -50,8 +58,13 @@ export function CookMode({
   // The day cooking started (tests pass one).
   const [today] = useState(() => isoDate(now ?? new Date()))
   const awake = useWakeLock()
-  // The swaps the user chose (TYL-77), by the ingredient swapped out.
-  const [swapped, setSwapped] = useState<Record<string, Swap>>({})
+  // Swaps (TYL-77): those for the recipe's ingredients, the user's choices
+  // by the ingredient swapped out, what's on hand, and the line whose swaps
+  // are open.
+  const [swaps, setSwaps] = useState<Swap[]>([])
+  const [chosen, setChosen] = useState<Record<string, string>>({})
+  const [have, setHave] = useState<Set<string> | null>(null)
+  const [outOf, setOutOf] = useState<IngredientLine | null>(null)
 
   useEffect(() => {
     let live = true
@@ -60,29 +73,50 @@ export function CookMode({
       () => live && setFailed(true),
     )
     // Swaps are extra: without them the recipe's own lines show.
-    if (api.recipeSwaps && api.swapsFor) {
-      const { recipeSwaps, swapsFor } = api
-      recipeSwaps(id).then(
-        async (chosen) => {
-          const from = Object.keys(chosen)
-          if (!from.length) return
-          const swaps = await swapsFor(from)
-          if (live)
-            setSwapped(
-              Object.fromEntries(
-                swaps
-                  .filter((s) => chosen[s.fromId] === s.id)
-                  .map((s) => [s.fromId, s]),
-              ),
-            )
-        },
+    if (api.recipeSwaps)
+      api.recipeSwaps(id).then(
+        (c) => live && setChosen(c),
         () => {},
       )
-    }
+    api.onHandIn(id).then(
+      (items) => live && setHave(new Set(items.map((i) => i.ingredientId))),
+      () => {},
+    )
     return () => {
       live = false
     }
   }, [api, id])
+
+  // The recipe's ingredients, for their swaps.
+  const ingredientKey = (recipe?.ingredients ?? [])
+    .flatMap((l) => (l.ingredientId ? [l.ingredientId] : []))
+    .join(',')
+  useEffect(() => {
+    let live = true
+    if (ingredientKey && api.swapsFor)
+      api.swapsFor([...new Set(ingredientKey.split(','))]).then(
+        (s) => live && setSwaps(s),
+        () => {},
+      )
+    return () => {
+      live = false
+    }
+  }, [api, ingredientKey])
+
+  // Swap a line's ingredient (or go back), keeping it for next time when
+  // it can be saved.
+  function chooseSwap(fromId: string, swapId: string | null) {
+    setChosen((c) => {
+      const next = { ...c }
+      if (swapId) next[fromId] = swapId
+      else delete next[fromId]
+      return next
+    })
+    setOutOf(null)
+    api.setRecipeSwap?.(id, fromId, swapId).catch(() => {})
+  }
+  const swapFor = (fromId: string | null | undefined) =>
+    fromId ? swaps.find((s) => s.id === chosen[fromId]) : undefined
 
   if (failed)
     return (
@@ -145,7 +179,7 @@ export function CookMode({
                     onChange={() => toggle(line.lineNo)}
                   />
                   <span>
-                    {line.ingredientId && swapped[line.ingredientId] ? (
+                    {swapFor(line.ingredientId) ? (
                       <>
                         <s>{scaledLine(line, scale)}</s> →{' '}
                         {swapText(
@@ -156,7 +190,7 @@ export function CookMode({
                                 ? line.quantity * scale
                                 : null,
                           },
-                          swapped[line.ingredientId],
+                          swapFor(line.ingredientId)!,
                         )}
                       </>
                     ) : (
@@ -164,9 +198,34 @@ export function CookMode({
                     )}
                   </span>
                 </label>
+                {swaps.some((w) => w.fromId === line.ingredientId) && (
+                  <button
+                    type="button"
+                    className="link small"
+                    aria-label={`Out of ${line.name ?? line.rawText}?`}
+                    onClick={() => setOutOf(line)}
+                  >
+                    {swapFor(line.ingredientId) ? 'Change' : 'Out of it?'}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
+          {outOf?.ingredientId && (
+            <SwapSheet
+              line={{
+                ...outOf,
+                quantity:
+                  outOf.quantity != null ? outOf.quantity * scale : null,
+              }}
+              swaps={swaps.filter((w) => w.fromId === outOf.ingredientId)}
+              chosen={chosen[outOf.ingredientId] ?? null}
+              fixes={[]}
+              have={have}
+              onChoose={(swapId) => chooseSwap(outOf.ingredientId!, swapId)}
+              onClose={() => setOutOf(null)}
+            />
+          )}
           {steps.length > 0 ? (
             <button
               type="button"
