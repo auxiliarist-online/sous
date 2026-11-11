@@ -74,3 +74,7 @@ from (values
   ('yardlong beans', 91, null)
 ) as v(name, grams_per_cup, grams_per_each)
 where lower(i.name) = v.name;
+
+-- Recompute the recipe lines' grams from the new weights (Find's ranking
+-- reads them).
+select public.refresh_line_grams();

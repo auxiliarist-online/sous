@@ -9,7 +9,6 @@ butter,vegan butter,1,,,,any,good,Use the same amount; works in baking too.
 butter,coconut oil,1,,,,baking,good,"Same amount: solid coconut oil for pastry, melted for cakes. Tastes faintly of coconut."
 butter,ghee,1,,,,cooking,good,Same amount. Ghee has almost no milk solids but is still dairy.
 butter,vegetable oil,0.75,,,,any,pinch,¾ as much oil. Fine in muffins and quick breads; not for cookies or pastry.
-butter,applesauce,0.5,,,,baking,pinch,Replace up to half the butter in cakes and muffins; they come out denser and moister.
 eggs,flaxseed,1,tbsp,each,water,baking,good,"Per egg: 1 tbsp ground flaxseed and 3 tbsp water, rested 5 minutes. For binding, not for rising."
 eggs,chia seeds,1,tbsp,each,water,baking,good,"Per egg: 1 tbsp chia seeds and 3 tbsp water, rested 10 minutes."
 eggs,applesauce,0.25,cup,each,,baking,pinch,"¼ cup per egg, in sweet bakes. Adds moisture, not lift."
@@ -87,7 +86,7 @@ powdered sugar,sugar,1,,,cornstarch,baking,pinch,Blend 1 cup sugar with 1 tbsp c
 corn syrup,golden syrup,1,,,,baking,good,Same amount.
 corn syrup,honey,1,,,,baking,pinch,Same amount; browns faster.
 molasses,maple syrup,1,,,,baking,pinch,Same amount; milder.
-all-purpose flour,whole wheat flour,0.75,,,,baking,pinch,Replace up to ¾; denser and nuttier.
+all-purpose flour,whole wheat flour,1,,,,baking,pinch,Same amount; denser and nuttier.
 all-purpose flour,rice flour,1,,,xanthan gum,baking,pinch,Gluten-free: rice flour with ¼ tsp xanthan gum per cup. Grittier; best in cookies and pancakes.
 all-purpose flour,almond flour,1,,,,baking,pinch,Gluten-free in cookies and quick breads; they spread more.
 all-purpose flour,cornstarch,0.5,,,,cooking,good,For thickening only: half as much cornstarch.
@@ -197,7 +196,7 @@ vegetable oil,olive oil,1,,,,cooking,good,Same amount.
 vegetable oil,avocado oil,1,,,,any,good,Same amount; good for high heat.
 olive oil,avocado oil,1,,,,any,good,Same amount.
 sesame oil,olive oil,1,,,sesame seeds,cooking,pinch,Olive oil with toasted sesame seeds; sesame oil's flavor is hard to match.
-canned tomatoes,tomatoes,1.5,,,,cooking,good,"About 1½ lb fresh tomatoes per 28 oz can, peeled and chopped."
+canned tomatoes,tomatoes,1.5,lb,can,,cooking,good,"1½ lb fresh tomatoes per 28 oz can, peeled and chopped."
 tomato sauce,tomato paste,0.5,,,water,cooking,good,"Half tomato paste, half water."
 tomato paste,ketchup,1,,,,cooking,pinch,Same amount; sweeter.
 gochujang,sriracha,1,,,miso paste,cooking,pinch,Sriracha with a little miso.

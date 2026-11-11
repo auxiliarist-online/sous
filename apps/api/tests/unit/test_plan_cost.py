@@ -559,3 +559,12 @@ class TestSwaps:
         }
         cost = cost_of(entry([line(BASIL, 1, "bunch")], swaps=swaps))
         assert item(cost, "carrots").amount_unknown
+
+    def test_a_swap_per_can_needs_no_conversion(self) -> None:
+        swaps = {
+            RICE: {"to": CARROTS, "factor": 1.5, "to_unit": "lb", "per_unit": "can", "extras": []}
+        }
+        cost = cost_of(entry([line(RICE, 2, "can")], swaps=swaps))
+        carrots = item(cost, "carrots")
+        assert carrots.quantity == pytest.approx(3)
+        assert carrots.unit == "lb"

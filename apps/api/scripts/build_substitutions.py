@@ -30,7 +30,7 @@ MIGRATIONS = API.parent.parent / "supabase" / "migrations"
 
 USES = {"any", "baking", "cooking"}
 QUALITY = {"good", "pinch"}
-UNITS = {"each", "tsp", "tbsp", "cup", "oz", "lb", "g", "ml", "clove"}
+UNITS = {"each", "tsp", "tbsp", "cup", "oz", "lb", "g", "ml", "clove", "can"}
 
 
 def sql_text(s: str) -> str:

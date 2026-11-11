@@ -17,6 +17,7 @@ import {
   ownCuisines,
 } from './sous.ts'
 import type { Swap, SwapFit } from './swaps.ts'
+import type { PantryEntry } from './pantry.ts'
 import { fakeCookedApi } from './cookedFake.ts'
 import { fakePantryApi } from './pantryFake.ts'
 
@@ -136,6 +137,7 @@ describe('RecipePage', () => {
       async (_id: string, _from: string, _swap: string | null) => {},
     ),
     swapFit: vi.fn(async (_id: string): Promise<SwapFit | null> => null),
+    pantry: vi.fn(async (): Promise<PantryEntry[]> => []),
     addedCosts: vi.fn(async () => ({
       budgetCents: null,
       totalCents: 0,

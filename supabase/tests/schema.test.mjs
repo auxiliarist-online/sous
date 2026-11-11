@@ -4411,6 +4411,31 @@ describe('fits with swaps (TYL-77)', () => {
     // Ghee is still dairy.
     assert.ok(!forButter.includes('ghee'))
     assert.ok((await swapsTo(f.fixes[honey])).includes('maple syrup'))
+    assert.equal(f.chosen, false)
+    // With the user's swaps, every line is checked as it will be cooked.
+    const swapId = async (key) =>
+      (await db.query('select id from substitutions where key = $1', [key]))
+        .rows[0].id
+    const choose = (from, key) =>
+      as('authenticated', VI, async () =>
+        db.query(
+          `insert into user_recipe_swaps (recipe_id, from_ingredient_id, substitution_id)
+           values ($1, $2, $3)
+           on conflict (user_id, recipe_id, from_ingredient_id)
+           do update set substitution_id = excluded.substitution_id`,
+          [cake, from, await swapId(key)],
+        ),
+      )
+    const chosen = async () =>
+      (await db.query('select recipe_swap_fit($1, $2) as f', [cake, VI]))
+        .rows[0].f.chosen
+    await choose(butter, 'butter > vegan butter')
+    assert.equal(await chosen(), false) // the honey's still there
+    await choose(honey, 'honey > maple syrup')
+    assert.equal(await chosen(), true)
+    // Butter swapped for ghee is still dairy.
+    await choose(butter, 'butter > ghee')
+    assert.equal(await chosen(), false)
     // It doesn't fit as it is.
     const {
       rows: [{ fit }],

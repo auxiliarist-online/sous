@@ -261,12 +261,17 @@ def _swapped(
     factor = _float(swap.get("factor")) or 1.0
     unit = line.get("unit")
     if quantity is not None and swap.get("to_unit"):
-        per = _convert(
-            quantity,
-            unit or "each",
-            swap["per_unit"],
-            conversions[from_id],
-            own_units.get(from_id),
+        # Already in the swap's "per" unit (a can of tomatoes), or converted.
+        per = (
+            quantity
+            if (unit or "each") == swap["per_unit"]
+            else _convert(
+                quantity,
+                unit or "each",
+                swap["per_unit"],
+                conversions[from_id],
+                own_units.get(from_id),
+            )
         )
         quantity, unit = (per * factor, swap["to_unit"]) if per is not None else (None, None)
     elif quantity is not None:

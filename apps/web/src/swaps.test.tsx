@@ -6,6 +6,7 @@ import { fakeCookedApi } from './cookedFake.ts'
 import { RecipePage, type RecipePageApi } from './RecipePage.tsx'
 import type { IngredientLine, RecipeDetail } from './sous.ts'
 import { swapText, type Swap, type SwapFit } from './swaps.ts'
+import type { PantryEntry } from './pantry.ts'
 
 const line = (
   lineNo: number,
@@ -47,6 +48,7 @@ const swap = (over: Partial<Swap>): Swap => ({
   toUnit: null,
   perUnit: null,
   extras: ['lemon juice'],
+  extraIds: ['i-lemon'],
   uses: 'any',
   quality: 'good',
   note: 'Stir 1 tbsp lemon juice into each cup of milk.',
@@ -59,6 +61,7 @@ const YOGURT = swap({
   toName: 'plain yogurt',
   factor: 0.75,
   extras: [],
+  extraIds: [],
   quality: 'pinch',
   note: 'Thin it with milk.',
 })
@@ -70,6 +73,7 @@ const FLAX = swap({
   toUnit: 'tbsp',
   perUnit: 'each',
   extras: ['water'],
+  extraIds: ['i-water'],
   uses: 'baking',
   note: 'Per egg: 1 tbsp ground flaxseed and 3 tbsp water.',
 })
@@ -109,6 +113,14 @@ describe('swap text (TYL-77)', () => {
   })
 })
 
+const have = (ingredientId: string): PantryEntry => ({
+  ingredientId,
+  name: ingredientId,
+  status: 'have',
+  kind: 'on_hand',
+  group: null,
+})
+
 function recipeApi(
   over: Partial<RecipePageApi> = {},
 ): RecipePageApi & Record<string, ReturnType<typeof vi.fn>> {
@@ -130,6 +142,7 @@ function recipeApi(
     recipeSwaps: vi.fn(async () => ({})),
     setRecipeSwap: vi.fn(async () => {}),
     swapFit: vi.fn(async (): Promise<SwapFit | null> => null),
+    pantry: vi.fn(async () => []),
     ...fakeCookedApi(),
     ...over,
   } as unknown as RecipePageApi & Record<string, ReturnType<typeof vi.fn>>
@@ -137,11 +150,10 @@ function recipeApi(
 
 describe('swaps on the recipe page (TYL-77)', () => {
   it('offers swaps for a line, and keeps the one chosen', async () => {
+    // The pantry has yogurt, which the recipe doesn't use.
     const api = recipeApi({
-      onHandIn: vi.fn(async () => [
-        { ingredientId: 'i-yogurt', name: 'plain yogurt' },
-      ]),
-    } as Partial<RecipePageApi>)
+      pantry: vi.fn(async () => [have('i-yogurt')]),
+    })
     render(<RecipePage id={PANCAKES.id} api={api} />)
     await userEvent.click(
       await screen.findByRole('button', { name: 'Swap buttermilk' }),
@@ -183,7 +195,18 @@ describe('swaps on the recipe page (TYL-77)', () => {
   it('says how many swaps make it fit, and marks those lines', async () => {
     const api = recipeApi({
       recipeFits: vi.fn(async () => ({ [PANCAKES.id]: 'excluded' as const })),
-      swapFit: vi.fn(async () => ({ count: 1, fixes: { 'i-eggs': ['s3'] } })),
+      swapFit: vi
+        .fn()
+        .mockResolvedValueOnce({
+          count: 1,
+          fixes: { 'i-eggs': ['s3'] },
+          chosen: false,
+        })
+        .mockResolvedValue({
+          count: 1,
+          fixes: { 'i-eggs': ['s3'] },
+          chosen: true,
+        }),
     })
     render(<RecipePage id={PANCAKES.id} api={api} />)
     expect(
@@ -226,6 +249,98 @@ describe('swaps on the recipe page (TYL-77)', () => {
   })
 })
 
+describe('swaps on the recipe page, carefully (TYL-77)', () => {
+  it('trusts the server on fit: a swap that brings something back doesn’t pass', async () => {
+    const api = recipeApi({
+      recipeFits: vi.fn(async () => ({ [PANCAKES.id]: 'excluded' as const })),
+      // The fixing swap is chosen, but another swap brought something back.
+      recipeSwaps: vi.fn(async () => ({ 'i-eggs': 's3' })),
+      swapFit: vi.fn(async () => ({
+        count: 1,
+        fixes: { 'i-eggs': ['s3'] },
+        chosen: false,
+      })),
+    })
+    render(<RecipePage id={PANCAKES.id} api={api} />)
+    expect(
+      await screen.findByText(/Fits your diets and allergies with 1 swap/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: "Add to this week's plan anyway" }),
+    ).toBeInTheDocument()
+  })
+
+  it('reloads the cost after a swap, and puts a swapped line by what’s in the pantry', async () => {
+    const api = recipeApi({
+      onHandIn: vi.fn(async () => [
+        { ingredientId: 'i-buttermilk', name: 'buttermilk' },
+      ]),
+      pantry: vi.fn(async () => [have('i-buttermilk')]),
+    } as Partial<RecipePageApi>)
+    render(<RecipePage id={PANCAKES.id} api={api} />)
+    await screen.findByText('You have (1)')
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Swap buttermilk' }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /1 cup whole milk/ }),
+    )
+    // No milk at home: it's to buy now.
+    await waitFor(() =>
+      expect(screen.queryByText('You have (1)')).not.toBeInTheDocument(),
+    )
+    await waitFor(() => expect(api.addedCosts).toHaveBeenCalledTimes(2))
+  })
+
+  it('keeps a swap chosen while the saved ones load', async () => {
+    let answer: (c: Record<string, string>) => void = () => {}
+    const api = recipeApi({
+      recipeSwaps: vi.fn(
+        () => new Promise<Record<string, string>>((r) => (answer = r)),
+      ),
+    })
+    render(<RecipePage id={PANCAKES.id} api={api} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Swap buttermilk' }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /1 cup whole milk/ }),
+    )
+    answer({ 'i-eggs': 's3' })
+    expect(await screen.findByText(/→ 2 tbsp flaxseed/)).toBeInTheDocument()
+    expect(screen.getByText(/→ 1 cup whole milk/)).toBeInTheDocument()
+  })
+
+  it('undoes only the swap that failed, back to what’s saved', async () => {
+    let fail: () => void = () => {}
+    const api = recipeApi({
+      recipeSwaps: vi.fn(async () => ({ 'i-buttermilk': 's2' })),
+      setRecipeSwap: vi.fn(async (_r: string, from: string) => {
+        if (from === 'i-buttermilk')
+          await new Promise<void>(
+            (_, reject) => (fail = () => reject(new Error('down'))),
+          )
+      }),
+    })
+    render(<RecipePage id={PANCAKES.id} api={api} />)
+    expect(await screen.findByText(/→ ¾ cup plain yogurt/)).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Swap buttermilk' }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /1 cup whole milk/ }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Swap eggs' }))
+    await userEvent.click(
+      screen.getByRole('button', { name: /2 tbsp flaxseed/ }),
+    )
+    fail()
+    // Buttermilk goes back to the saved yogurt; the eggs' swap stays.
+    expect(await screen.findByText(/→ ¾ cup plain yogurt/)).toBeInTheDocument()
+    expect(screen.getByText(/→ 2 tbsp flaxseed/)).toBeInTheDocument()
+  })
+})
+
 describe('swaps in cook mode (TYL-77)', () => {
   const cookApi = (chosen: Record<string, string> = {}) => ({
     recipe: vi.fn(async () => PANCAKES),
@@ -261,5 +376,33 @@ describe('swaps in cook mode (TYL-77)', () => {
     expect(
       screen.getByText(/→ 2 cups whole milk \+ lemon juice/),
     ).toBeInTheDocument()
+  })
+
+  it('says when a swap couldn’t be saved, keeps it here, and tries again', async () => {
+    const api = {
+      ...cookApi(),
+      setRecipeSwap: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('down'))
+        .mockResolvedValue(undefined),
+    }
+    render(<CookMode api={api} id={PANCAKES.id} scale={1} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Out of buttermilk?' }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /1 cup whole milk/ }),
+    )
+    expect(
+      await screen.findByText(/they're on this screen only/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/→ 1 cup whole milk/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/they're on this screen only/),
+      ).not.toBeInTheDocument(),
+    )
+    expect(api.setRecipeSwap).toHaveBeenCalledTimes(2)
   })
 })

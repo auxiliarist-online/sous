@@ -20,8 +20,10 @@ $$;
 
 -- How a recipe fits the user with swaps: null when it fits without any, or
 -- when some line can't be fixed (or can't be checked); otherwise how many
--- lines need a swap, and the swaps that fix each, by ingredient:
--- {"count": 1, "fixes": {"<butter id>": ["<swap id>", ...]}}.
+-- lines need a swap, the swaps that fix each (by ingredient), and whether
+-- it fits with the swaps the user chose for it, every line checked with
+-- what's swapped in, extras too:
+-- {"count": 1, "fixes": {"<butter id>": ["<swap id>", ...]}, "chosen": false}.
 create function public.recipe_swap_fit(p_recipe_id uuid, p_user_id uuid) returns jsonb
 language sql stable as $$
   with rules as (
@@ -60,6 +62,23 @@ language sql stable as $$
     where o.line_no in (
       select line_no from options group by line_no having not bool_or(clear))
   ),
+  -- Each option as the user will cook it: what they swapped in (and its
+  -- extras), or the recipe's own ingredient.
+  chosen_options as (
+    select o.line_no,
+      case when s.id is null then o.clear
+        else public.ingredient_clears(s.to_ingredient_id, r.excludes, r.allergens, r.strict)
+          and not exists (
+            select 1 from unnest(s.extras) x
+            where not public.ingredient_clears(x, r.excludes, r.allergens, r.strict))
+      end as clear
+    from options o
+    cross join rules r
+    left join public.user_recipe_swaps us
+      on us.user_id = p_user_id and us.recipe_id = p_recipe_id
+      and us.from_ingredient_id = o.ingredient_id
+    left join public.substitutions s on s.id = us.substitution_id
+  ),
   lines as (
     select line_no,
       bool_or(swaps is not null) as fixable,
@@ -72,7 +91,9 @@ language sql stable as $$
     when exists (select 1 from lines where not fixable) then null
     else jsonb_build_object(
       'count', (select count(*) from lines),
-      'fixes', (select jsonb_object_agg(k, v) from lines, jsonb_each(fixes) as e(k, v)))
+      'fixes', (select jsonb_object_agg(k, v) from lines, jsonb_each(fixes) as e(k, v)),
+      'chosen', (select bool_and(ok) from (
+        select bool_or(clear) as ok from chosen_options group by line_no) l))
   end
 $$;
 

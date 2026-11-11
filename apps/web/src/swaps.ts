@@ -15,18 +15,21 @@ export interface Swap {
   factor: number
   toUnit: string | null
   perUnit: string | null
-  /** What else it takes, in small amounts ("lemon juice"). */
+  /** What else it takes, in small amounts ("lemon juice"), and their ids. */
   extras: string[]
+  extraIds: string[]
   uses: 'any' | 'baking' | 'cooking'
   quality: 'good' | 'pinch'
   note: string
 }
 
-/** How a recipe fits the user with swaps: how many lines need one, and the
- *  swaps that fix each, by the ingredient swapped out. */
+/** How a recipe fits the user with swaps: how many lines need one, the
+ *  swaps that fix each (by the ingredient swapped out), and whether it fits
+ *  with the swaps the user chose, every line checked as it will be cooked. */
 export interface SwapFit {
   count: number
   fixes: Record<string, string[]>
+  chosen: boolean
 }
 
 /** The swaps for these ingredients, best first. */
@@ -78,6 +81,7 @@ export async function loadSwaps(
     toUnit: r.to_unit,
     perUnit: r.per_unit,
     extras: r.extras.flatMap((x) => (names.has(x) ? [names.get(x)!] : [])),
+    extraIds: r.extras,
     uses: r.uses,
     quality: r.quality,
     note: r.note,

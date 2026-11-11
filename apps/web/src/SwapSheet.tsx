@@ -22,6 +22,8 @@ export function SwapSheet({
   onChoose: (swapId: string | null) => void
   onClose: () => void
 }) {
+  // Lower sorts first: +4 for a swap that doesn't make the recipe fit (when
+  // some do), +2 for one not on hand, +1 for "in a pinch".
   const rank = (s: Swap) =>
     (fixes.length && !fixes.includes(s.id) ? 4 : 0) +
     (have?.has(s.toId) ? 0 : 2) +
