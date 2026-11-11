@@ -394,6 +394,8 @@ export interface Preferences {
   cookWithSeasons: boolean
   /** How much to mix things up (TYL-66). */
   variety: VarietySettings
+  /** Suggest favorite local places first on the shopping list (TYL-71). */
+  localFirst: boolean
 }
 
 export const NO_PREFERENCES: Preferences = {
@@ -410,6 +412,7 @@ export const NO_PREFERENCES: Preferences = {
   dislikedIngredients: [],
   cookWithSeasons: false,
   variety: DEFAULT_VARIETY,
+  localFirst: true,
 }
 
 /** Diet categories a user can mark as allergies or things to avoid. */
@@ -444,7 +447,7 @@ export async function loadPreferences(
     db
       .from('profiles')
       .select(
-        'allergens, avoid_categories, strict_may_contain, household_size, weekly_budget_cents, home_zip, cook_with_seasons, mix_proteins, mix_cuisines, mix_styles, repeat_weeks',
+        'allergens, avoid_categories, strict_may_contain, household_size, weekly_budget_cents, home_zip, cook_with_seasons, mix_proteins, mix_cuisines, mix_styles, repeat_weeks, local_first',
       )
       .eq('user_id', userId)
       .maybeSingle(),
@@ -471,6 +474,7 @@ export async function loadPreferences(
     mix_cuisines?: boolean | null
     mix_styles?: boolean | null
     repeat_weeks?: number | null
+    local_first?: boolean | null
   } | null
   return {
     saved: !!p,
@@ -482,6 +486,7 @@ export async function loadPreferences(
     weeklyBudgetCents: p?.weekly_budget_cents ?? null,
     homeZip: p?.home_zip ?? null,
     cookWithSeasons: p?.cook_with_seasons ?? false,
+    localFirst: p?.local_first ?? true,
     variety: {
       proteins: p?.mix_proteins ?? DEFAULT_VARIETY.proteins,
       cuisines: p?.mix_cuisines ?? DEFAULT_VARIETY.cuisines,
@@ -537,6 +542,7 @@ export async function savePreferences(
     mix_cuisines: p.variety.cuisines,
     mix_styles: p.variety.styles,
     repeat_weeks: p.variety.repeatWeeks,
+    local_first: p.localFirst,
   })
   if (profile.error) throw profile.error
   await replaceRows(db, 'user_diets', userId, 'diet_slug', p.diets)

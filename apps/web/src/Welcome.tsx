@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { KIND_NAMES, nearAsheville, type LocalPlace } from './local.ts'
+import type { LocalApi } from './LocalPage.tsx'
 import { kitItems, kitsFor, type Kit, type PantryItem } from './pantry.ts'
 import { StarterKits } from './PantryKits.tsx'
 import {
@@ -10,8 +12,9 @@ import {
 import { StorePicker } from './StorePicker.tsx'
 import { CATEGORIES, type Option, type Preferences } from './sous.ts'
 
-/** Setup needs what Preferences does, the pantry's kits included. */
-export type WelcomeApi = SettingsApi
+/** Setup needs what Preferences does, the pantry's kits included, and the
+ *  local places to pick favorites from. */
+export type WelcomeApi = SettingsApi & LocalApi
 
 const TITLES = [
   'How do you eat?',
@@ -44,6 +47,9 @@ export function Welcome({
   const [optionsFailed, setOptionsFailed] = useState(false)
   const [catalog, setCatalog] = useState<PantryItem[]>([])
   const [kits, setKits] = useState<Kit[]>([])
+  const [places, setPlaces] = useState<LocalPlace[]>([])
+  // Local places picked as favorites (TYL-69).
+  const [favoritePlaces, setFavoritePlaces] = useState<string[]>([])
   // What's been unchecked in the starter kits: everything else shown is kept.
   const [unchecked, setUnchecked] = useState<string[]>([])
   // The kits are only kept if the user got to see them.
@@ -51,6 +57,7 @@ export function Welcome({
   const [step, setStep] = useState(0)
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle')
 
+  // Load what the steps offer: diets and cuisines, kits, local places.
   useEffect(() => {
     let live = true
     // Without the diet and cuisine lists those steps are empty, but setup
@@ -70,6 +77,12 @@ export function Welcome({
         setCatalog(c)
         setKits(k)
       },
+      () => {},
+    )
+    // Only for the shopping step, near Asheville; it's left out if they
+    // don't load.
+    api.localPlaces().then(
+      (p) => live && setPlaces(p),
       () => {},
     )
     return () => {
@@ -98,8 +111,9 @@ export function Welcome({
   async function finish(chosen: Preferences, pantryHave: string[]) {
     setStatus('saving')
     try {
-      // The pantry first: saving preferences is what ends setup.
+      // The pantry and places first: saving preferences is what ends setup.
       await api.keepStaples(pantryHave)
+      for (const id of favoritePlaces) await api.setFavoritePlace(id, true)
       const saved = { ...chosen, saved: true }
       await api.savePreferences(saved)
       onDone(saved)
@@ -192,11 +206,43 @@ export function Welcome({
         )
       case 5:
         return (
-          <StorePicker
-            api={api}
-            zip={prefs.homeZip}
-            onZip={(homeZip) => set({ homeZip })}
-          />
+          <>
+            <StorePicker
+              api={api}
+              zip={prefs.homeZip}
+              onZip={(homeZip) => set({ homeZip })}
+            />
+            {nearAsheville(prefs.homeZip) && places.length > 0 && (
+              <>
+                <h3 className="kicker">Local places you like</h3>
+                <p className="muted small">
+                  Markets, bakeries and butchers around Asheville. Pick any you
+                  shop at.
+                </p>
+                <div className="chips">
+                  {places.map((p) => {
+                    const on = favoritePlaces.includes(p.id)
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="chip"
+                        aria-pressed={on}
+                        title={KIND_NAMES[p.kind]}
+                        onClick={() =>
+                          setFavoritePlaces((f) =>
+                            on ? f.filter((id) => id !== p.id) : [...f, p.id],
+                          )
+                        }
+                      >
+                        {p.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </>
         )
       case 6:
         return (

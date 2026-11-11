@@ -186,6 +186,9 @@ function welcomeApi(): WelcomeApi & Record<string, ReturnType<typeof vi.fn>> {
     searchIngredients: vi.fn(async () => []),
     exportMyData: vi.fn(async () => '{"profile": null}'),
     deleteMyAccount: vi.fn(async () => {}),
+    localPlaces: vi.fn(async () => []),
+    favoritePlaces: vi.fn(async () => []),
+    setFavoritePlace: vi.fn(async () => {}),
     ...fakePantryApi(),
   } as unknown as WelcomeApi & Record<string, ReturnType<typeof vi.fn>>
 }

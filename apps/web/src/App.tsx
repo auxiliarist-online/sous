@@ -12,6 +12,15 @@ import { ListPage, type ListApi } from './ListPage.tsx'
 import { CookMode, TimerBar } from './CookMode.tsx'
 import { offlineCooked } from './cookedQueue.ts'
 import { PantryPage, type PantryApi } from './PantryPage.tsx'
+import { LocalPage, type LocalApi } from './LocalPage.tsx'
+import {
+  loadFavoritePlaces,
+  loadLocalPlaces,
+  loadLocalPreferences,
+  localInputs,
+  setFavoritePlace,
+  setLocalPreference,
+} from './local.ts'
 import {
   importPage,
   importRecipe,
@@ -133,7 +142,8 @@ export type SousApi = LibraryApi &
   PlanApi &
   BrowseApi &
   FeedbackApi &
-  HistoryApi & {
+  HistoryApi &
+  LocalApi & {
     /** Forget the cached seasons: the home zip (the region) may have changed. */
     resetSeasons(): void
   }
@@ -233,6 +243,14 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     places: () => places(db, userId),
     addPlace: (name) => addPlace(db, userId, name),
     pantry: () => loadPantry(db),
+    localPlaces: () => loadLocalPlaces(db),
+    favoritePlaces: () => loadFavoritePlaces(db),
+    setFavoritePlace: (id, favorite) =>
+      setFavoritePlace(db, userId, id, favorite),
+    localPreferences: () => loadLocalPreferences(db),
+    setLocalPreference: (id, prefer) =>
+      setLocalPreference(db, userId, id, prefer),
+    localInputs: (week, ids) => localInputs(db, week, ids),
     sendFeedback: (message, page, kind) =>
       sendFeedback(db, session, {
         message,
@@ -381,6 +399,15 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         <PantryPage api={api} prefs={prefs ?? undefined} />
       )}
       {at.page === 'history' && <History api={api} />}
+      {at.page === 'local' && (
+        <>
+          <Link to="/" className="back">
+            <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
+            This week
+          </Link>
+          <LocalPage api={api} />
+        </>
+      )}
       {at.page === 'settings' && (
         <>
           <Link to="/" className="back">

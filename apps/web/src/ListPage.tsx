@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   aisleName,
   applyOp,
@@ -30,6 +30,15 @@ import {
 import { PendingNotice, ReviewSheet, type ReviewApi } from './Review.tsx'
 import { Link } from './router.tsx'
 import { Share2 } from 'lucide-react'
+import {
+  nearAsheville,
+  openingText,
+  planLocal,
+  type LocalPlace,
+  type LocalPrefer,
+  type Needed,
+} from './local.ts'
+import type { Preferences } from './sous.ts'
 import { seasonOf, type Seasons } from './seasons.ts'
 
 /** A place an item can be bought: the user's store, or one they added. */
@@ -57,6 +66,36 @@ export interface ListApi extends ReviewApi {
   ownItemPrices(weekStart: string, items: OwnItem[]): Promise<OwnPrices>
   /** The sizes a typed item comes in at the user's store (TYL-142). */
   itemSizes(name: string): Promise<SizeOption[]>
+  /** For local first (TYL-71): the setting and home zip. */
+  preferences(): Promise<Preferences>
+  /** The local food directory. */
+  localPlaces(): Promise<LocalPlace[]>
+  /** The ids of the user's favorite places. */
+  favoritePlaces(): Promise<string[]>
+  /** Where the user has said to buy things, by ingredient. */
+  localPreferences(): Promise<Record<string, LocalPrefer>>
+  /** Remember where to buy an ingredient, or (null) let the list decide. */
+  setLocalPreference(
+    ingredientId: string,
+    prefer: LocalPrefer | null,
+  ): Promise<void>
+  /** Each ingredient's categories, and the first day a meal needs it. */
+  localInputs(
+    weekStart: string,
+    ingredientIds: string[],
+  ): Promise<{
+    contains: Record<string, string[]>
+    neededBy: Record<string, Needed>
+  }>
+}
+
+/** What local first works from, once loaded. */
+interface LocalSetup {
+  on: boolean
+  homeZip: string | null
+  places: LocalPlace[]
+  favorites: Set<string>
+  prefer: Record<string, LocalPrefer>
 }
 
 /** A list with any changes still waiting to be sent applied, as the user
@@ -72,11 +111,14 @@ export function ListPage({
   api,
   week,
   user,
+  now,
 }: {
   api: ListApi
   week: string
   /** Whose list: what's kept on the phone is kept per account. */
   user: string
+  /** For tests: when "now" is, for the local places' hours. */
+  now?: Date
 }) {
   const [list, setList] = useState<ListState | null>(() =>
     cachedList(user, week),
@@ -92,6 +134,27 @@ export function ListPage({
   const [showRemoved, setShowRemoved] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [seasons, setSeasons] = useState<Seasons | null>(null)
+  const [local, setLocal] = useState<LocalSetup | null>(null)
+  const [localInfo, setLocalInfo] = useState<{
+    key: string
+    contains: Record<string, string[]>
+    neededBy: Record<string, Needed>
+  }>()
+  // The time, for the places' hours: kept current while the list is open
+  // (tests fix it).
+  const [clock, setClock] = useState(() => now ?? new Date())
+  // Tick once a minute.
+  useEffect(() => {
+    if (now) return
+    const tick = setInterval(() => setClock(new Date()), 60_000)
+    return () => clearInterval(tick)
+  }, [now])
+  // Where-to-buy saves still on their way, by ingredient: each waits for the
+  // one before, so they land in the order they were made.
+  const writes = useRef(new Map<string, Promise<void>>())
+  // What's known to be saved, by ingredient: where a failed save goes back
+  // to (undefined: nothing said, the list decides).
+  const confirmed = useRef(new Map<string, LocalPrefer | undefined>())
   // The week's meals not on the list yet (TYL-150), and the review sheet.
   const [waiting, setWaiting] = useState<PlanEntry[]>([])
   const [reviewing, setReviewing] = useState(false)
@@ -133,6 +196,91 @@ export function ListPage({
       live = false
     }
   }, [api])
+
+  // Local first (TYL-71): the list works without it, so a failure just
+  // leaves everything at the supermarket.
+  useEffect(() => {
+    let live = true
+    Promise.all([
+      api.preferences(),
+      api.localPlaces(),
+      api.favoritePlaces(),
+      api.localPreferences(),
+    ]).then(
+      // All four in: local first can work.
+      ([p, places, favorites, prefer]) =>
+        live &&
+        setLocal({
+          on: p.localFirst,
+          homeZip: p.homeZip,
+          places,
+          favorites: new Set(favorites),
+          prefer,
+        }),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
+  // The plan's ingredients (what's matched), for their categories and days.
+  const localKey =
+    local?.on && local.favorites.size && list
+      ? [
+          ...new Set(
+            list.items.flatMap((i) => (i.ingredientId ? [i.ingredientId] : [])),
+          ),
+        ]
+          .sort()
+          .join(',')
+      : ''
+  // Load them whenever the list's ingredients change.
+  useEffect(() => {
+    let live = true
+    if (localKey)
+      api.localInputs(week, localKey.split(',')).then(
+        (info) => live && setLocalInfo({ key: localKey, ...info }),
+        () => {},
+      )
+    return () => {
+      live = false
+    }
+  }, [api, week, localKey])
+
+  // Remember where to buy an ingredient, showing it at once and undoing it
+  // if it can't be saved.
+  async function preferAt(ingredientId: string, prefer: LocalPrefer) {
+    if (!local) return
+    // Loaded with the list, so it's what's saved until a save here.
+    if (!confirmed.current.has(ingredientId))
+      confirmed.current.set(ingredientId, local.prefer[ingredientId])
+    // Show where to buy it.
+    const set = (p: LocalPrefer | undefined) =>
+      setLocal((l) => {
+        if (!l) return l
+        const next = { ...l.prefer }
+        if (p) next[ingredientId] = p
+        else delete next[ingredientId]
+        return { ...l, prefer: next }
+      })
+    set(prefer)
+    const write = (writes.current.get(ingredientId) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => api.setLocalPreference(ingredientId, prefer))
+    writes.current.set(ingredientId, write)
+    try {
+      await write
+      confirmed.current.set(ingredientId, prefer)
+    } catch {
+      // Only the newest change goes back, and to what's saved.
+      if (writes.current.get(ingredientId) === write)
+        set(confirmed.current.get(ingredientId))
+      setMessage("We couldn't save where to buy that. Try again.")
+    } finally {
+      if (writes.current.get(ingredientId) === write)
+        writes.current.delete(ingredientId)
+    }
+  }
 
   // Send any changes made offline, then bring the list up to date with the
   // plan, then reload it. Changes go first: otherwise the plan could drop an
@@ -226,8 +374,23 @@ export function ListPage({
   // By aisle at the user's store; anything to buy elsewhere (the market, a
   // bakery) under that place's name.
   const placeName = new Map(places.map((p) => [p.id, p.name] as const))
+  // Local first (TYL-71): what favorite local places sell goes to them.
+  const plan =
+    local?.on && localInfo?.key === localKey && localKey
+      ? planLocal(toBuy, {
+          places: local.places,
+          favorites: local.favorites,
+          contains: localInfo.contains,
+          neededBy: localInfo.neededBy,
+          prefer: local.prefer,
+          now: clock,
+        })
+      : null
+  const atLocal = new Set(
+    (plan?.stops ?? []).flatMap((s) => s.items.map((i) => i.id)),
+  )
   const groups = new Map<string, ListItem[]>()
-  for (const i of toBuy) {
+  for (const i of toBuy.filter((i) => !atLocal.has(i.id))) {
     const key = (i.storeId && placeName.get(i.storeId)) || aisleName(i.aisle)
     groups.set(key, [...(groups.get(key) ?? []), i])
   }
@@ -239,7 +402,14 @@ export function ListPage({
   // Share the list as text, or copy it where sharing isn't available.
   async function share() {
     if (!list) return
-    const text = listText(list, title)
+    const text = listText(
+      list,
+      title,
+      (plan?.stops ?? []).map((s) => ({
+        name: s.place.name,
+        ids: s.items.map((i) => i.id),
+      })),
+    )
     try {
       if (navigator.share) await navigator.share({ title, text })
       else {
@@ -251,9 +421,11 @@ export function ListPage({
     }
   }
 
-  // One item: its checkbox, amount, price, and the editor when open.
+  // One item: its checkbox, amount, price, and the editor when open; and
+  // moving it between a local place and the supermarket (TYL-71).
   const row = (i: ListItem) => {
     const price = i.ingredientId ? prices.get(i.ingredientId) : own?.items[i.id]
+    const could = plan?.elsewhere.get(i.id)
     return (
       <li key={i.id} className={i.checked ? 'list-item checked' : 'list-item'}>
         <label className="list-check">
@@ -273,7 +445,16 @@ export function ListPage({
           </span>
         </label>
         {price?.cents != null && !i.checked && (
-          <span className="muted small list-price">
+          // Under a local place, the price is the supermarket's (TYL-71).
+          <span
+            className="muted small list-price"
+            title={
+              atLocal.has(i.id)
+                ? "Your store's price; the local place's may differ"
+                : undefined
+            }
+          >
+            {atLocal.has(i.id) ? 'store ' : ''}
             {price.estimated ? '~' : ''}
             {dollars(price.cents)}
           </span>
@@ -286,6 +467,29 @@ export function ListPage({
         >
           Edit
         </button>
+        {i.ingredientId && atLocal.has(i.id) && (
+          <button
+            type="button"
+            className="link small"
+            aria-label={`Buy ${i.name} at the supermarket`}
+            onClick={() => void preferAt(i.ingredientId!, 'store')}
+          >
+            Supermarket
+          </button>
+        )}
+        {i.ingredientId && could && !i.checked && (
+          <button
+            type="button"
+            className="link small"
+            aria-label={`Buy ${i.name} at ${could.place.name}`}
+            onClick={() => void preferAt(i.ingredientId!, 'local')}
+          >
+            Local
+          </button>
+        )}
+        {could?.why && !i.checked && (
+          <p className="small muted list-local-why">{could.why}</p>
+        )}
         {i.isManual && !i.checked && (
           <button
             type="button"
@@ -390,6 +594,12 @@ export function ListPage({
             With {dollars(own.totalCents)} for items you added
           </p>
         )}
+        {atLocal.size > 0 && (
+          <p className="small">
+            {atLocal.size} item{atLocal.size === 1 ? '' : 's'} from local places
+            this week (priced at your store's prices)
+          </p>
+        )}
         <div className="meter" aria-hidden="true">
           <span
             style={{
@@ -434,6 +644,21 @@ export function ListPage({
           {shown.length ? 'Everything’s in the cart.' : 'Nothing on the list.'}
         </p>
       )}
+      {plan?.stops.map(({ place, items }) => (
+        <section key={place.id} className="list-aisle list-local">
+          <h3 className="kicker">{place.name}</h3>
+          <p className="small muted">{openingText(place, clock)}</p>
+          <ul aria-label={place.name}>{items.map(row)}</ul>
+        </section>
+      ))}
+      {local?.on &&
+        local.favorites.size === 0 &&
+        nearAsheville(local.homeZip) && (
+          <p className="small">
+            <Link to="/local">Find markets and bakeries near you</Link> to shop
+            local first.
+          </p>
+        )}
       {[...groups].map(([aisle, items]) => (
         <section key={aisle} className="list-aisle">
           <h3 className="kicker">{aisle}</h3>

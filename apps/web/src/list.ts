@@ -394,17 +394,28 @@ export function aisleName(aisle: string | null): string {
   return aisle ? (AISLES[aisle] ?? aisle) : 'Other things'
 }
 
-/** The list as plain text, to share or keep: unchecked items by aisle. */
-export function listText(state: ListState, title: string): string {
+/** The list as plain text, to share or keep: unchecked items by aisle,
+ *  after any going to local places. */
+export function listText(
+  state: ListState,
+  title: string,
+  /** Local places and the items to get there (TYL-71), listed first. */
+  stops: { name: string; ids: string[] }[] = [],
+): string {
   const open = state.items.filter((i) => !i.removed && !i.checked)
-  const byAisle = new Map<string, ListItem[]>()
+  const groups = new Map<string, ListItem[]>()
+  const atStop = new Map(
+    stops.flatMap((s) => s.ids.map((id) => [id, s.name] as const)),
+  )
+  for (const s of stops) groups.set(s.name, [])
   for (const i of open) {
-    const key = aisleName(i.aisle)
-    byAisle.set(key, [...(byAisle.get(key) ?? []), i])
+    const key = atStop.get(i.id) ?? aisleName(i.aisle)
+    groups.set(key, [...(groups.get(key) ?? []), i])
   }
   const lines = [title]
-  for (const [aisle, items] of byAisle) {
-    lines.push('', aisle)
+  for (const [group, items] of groups) {
+    if (!items.length) continue
+    lines.push('', group)
     for (const i of items)
       lines.push(`☐ ${i.name}${i.amount ? ` (${i.amount})` : ''}`)
   }

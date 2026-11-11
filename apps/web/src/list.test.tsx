@@ -24,6 +24,8 @@ import {
   type OwnPrices,
 } from './list.ts'
 import { ListPage, type ListApi } from './ListPage.tsx'
+import type { LocalPlace } from './local.ts'
+import { NO_PREFERENCES } from './sous.ts'
 import {
   addDays,
   weekOf,
@@ -380,6 +382,12 @@ function listApi(
     seasons: vi.fn(async () => new Map()),
     ownItemPrices: vi.fn(async () => ({ totalCents: 0, items: {} })),
     itemSizes: vi.fn(async () => []),
+    preferences: vi.fn(async () => NO_PREFERENCES),
+    localPlaces: vi.fn(async () => []),
+    favoritePlaces: vi.fn(async () => []),
+    localPreferences: vi.fn(async () => ({})),
+    setLocalPreference: vi.fn(async () => {}),
+    localInputs: vi.fn(async () => ({ contains: {}, neededBy: {} })),
     ...over,
   } as ListApi & Record<string, ReturnType<typeof vi.fn>>
 }
@@ -1037,5 +1045,219 @@ describe('Home', () => {
     expect(
       screen.getByRole('link', { name: 'See and change the plan' }),
     ).toHaveAttribute('href', '/plan')
+  })
+})
+
+describe('local first on the list (TYL-71)', () => {
+  // Wednesday of the list's week; the market is on Saturday mornings.
+  const NOW = new Date(2026, 9, 14, 10, 0)
+  const market: LocalPlace = {
+    id: 'm1',
+    name: 'City Market',
+    kind: 'farmers_market',
+    address: '52 N Market St',
+    town: 'Asheville',
+    zip: '28801',
+    latitude: 35.6,
+    longitude: -82.55,
+    sells: ['produce', 'eggs'],
+    hours: [{ days: [6], opens: '09:00', closes: '12:00' }],
+    website: null,
+    sourceUrl: 'https://example.org',
+    checkedOn: '2026-11-11',
+  }
+  const local = (over: Partial<ListApi> = {}) =>
+    listApi({
+      localPlaces: vi.fn(async () => [market]),
+      favoritePlaces: vi.fn(async () => ['m1']),
+      localInputs: vi.fn(async () => ({
+        contains: { 'i-eggs': ['egg'] },
+        neededBy: {},
+      })),
+      ...over,
+    })
+
+  it('puts what a favorite sells under it, with when it opens', async () => {
+    const api = local()
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    const stop = await screen.findByRole('list', { name: 'City Market' })
+    expect(within(stop).getByText('eggs')).toBeInTheDocument()
+    expect(screen.getByText('Sat 9 am – 12 pm')).toBeInTheDocument()
+    expect(
+      screen.getByText(/1 item from local places this week/),
+    ).toBeInTheDocument()
+    // Rice isn't something the market sells.
+    expect(within(stop).queryByText('rice')).not.toBeInTheDocument()
+    expect(api.localInputs).toHaveBeenCalledWith(WEEK, ['i-eggs', 'i-rice'])
+  })
+
+  it('says local prices are the store’s, and shares the local places', async () => {
+    const api = local({
+      listCost: vi.fn(async () => ({
+        ...COST,
+        items: [buy('eggs', { aisle: 'dairy_eggs', cents: 399 })],
+      })),
+    })
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    const stop = await screen.findByRole('list', { name: 'City Market' })
+    expect(within(stop).getByText(/store/)).toHaveTextContent('store $3.99')
+    await userEvent.click(screen.getByRole('button', { name: 'Share list' }))
+    const text = writeText.mock.calls[0][0]
+    expect(text).toMatch(/City Market\n☐ eggs/)
+  })
+
+  it('saves moves of an item in the order they were made', async () => {
+    const order: string[] = []
+    let first: () => void = () => {}
+    const api = local({
+      setLocalPreference: vi.fn(async (_id: string, prefer) => {
+        if (prefer === 'store')
+          await new Promise<void>((resolve) => (first = resolve))
+        order.push(String(prefer))
+      }),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Buy eggs at the supermarket',
+      }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Buy eggs at City Market' }),
+    )
+    first()
+    await waitFor(() => expect(order).toEqual(['store', 'local']))
+    expect(
+      screen.getByRole('list', { name: 'City Market' }),
+    ).toBeInTheDocument()
+  })
+
+  it('goes back to what’s saved when queued moves all fail', async () => {
+    let fail: () => void = () => {}
+    const api = local({
+      setLocalPreference: vi.fn(
+        () =>
+          new Promise<void>(
+            (_, reject) => (fail = () => reject(new Error('down'))),
+          ),
+      ),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Buy eggs at the supermarket',
+      }),
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Buy eggs at City Market' }),
+    )
+    fail()
+    await waitFor(() => expect(api.setLocalPreference).toHaveBeenCalledTimes(2))
+    fail()
+    expect(
+      await screen.findByText("We couldn't save where to buy that. Try again."),
+    ).toBeInTheDocument()
+    // Nothing was saved: the list decides, and the market sells eggs.
+    expect(
+      screen.getByRole('list', { name: 'City Market' }),
+    ).toBeInTheDocument()
+  })
+
+  it('moves an item to the supermarket and back, remembering it', async () => {
+    const api = local()
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Buy eggs at the supermarket',
+      }),
+    )
+    expect(api.setLocalPreference).toHaveBeenCalledWith('i-eggs', 'store')
+    expect(
+      screen.queryByRole('list', { name: 'City Market' }),
+    ).not.toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Buy eggs at City Market' }),
+    )
+    expect(api.setLocalPreference).toHaveBeenLastCalledWith('i-eggs', 'local')
+    expect(
+      await screen.findByRole('list', { name: 'City Market' }),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps it at the supermarket when the market is too late for the meal', async () => {
+    const api = local({
+      localInputs: vi.fn(async () => ({
+        contains: { 'i-eggs': ['egg'] },
+        neededBy: { 'i-eggs': { day: '2026-10-15', meal: null } },
+      })),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    expect(
+      await screen.findByText("City Market opens Sat; it's needed Thu"),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('list', { name: 'City Market' }),
+    ).not.toBeInTheDocument()
+    // Asked for there anyway, it goes.
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Buy eggs at City Market' }),
+    )
+    expect(
+      await screen.findByRole('list', { name: 'City Market' }),
+    ).toBeInTheDocument()
+  })
+
+  it('undoes a move that can’t be saved', async () => {
+    const api = local({
+      setLocalPreference: vi.fn(async () => {
+        throw new Error('down')
+      }),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" now={NOW} />)
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Buy eggs at the supermarket',
+      }),
+    )
+    expect(
+      await screen.findByText("We couldn't save where to buy that. Try again."),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('list', { name: 'City Market' }),
+    ).toBeInTheDocument()
+  })
+
+  it('is off with the setting, and offers the directory without favorites', async () => {
+    const off = local({
+      preferences: vi.fn(async () => ({
+        ...NO_PREFERENCES,
+        localFirst: false,
+      })),
+    })
+    const { unmount } = render(
+      <ListPage api={off} week={WEEK} user="u" now={NOW} />,
+    )
+    await screen.findByText('eggs')
+    expect(
+      screen.queryByRole('list', { name: 'City Market' }),
+    ).not.toBeInTheDocument()
+    expect(off.localInputs).not.toHaveBeenCalled()
+    unmount()
+
+    const none = local({
+      favoritePlaces: vi.fn(async () => []),
+      preferences: vi.fn(async () => ({ ...NO_PREFERENCES, homeZip: '28801' })),
+    })
+    render(<ListPage api={none} week={WEEK} user="u" now={NOW} />)
+    expect(
+      await screen.findByRole('link', {
+        name: 'Find markets and bakeries near you',
+      }),
+    ).toHaveAttribute('href', '/local')
   })
 })

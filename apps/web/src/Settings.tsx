@@ -486,6 +486,17 @@ export function Settings({
           zip={prefs.homeZip}
           onZip={(homeZip) => set({ homeZip })}
         />
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={prefs.localFirst}
+            onChange={(e) => set({ localFirst: e.target.checked })}
+          />{' '}
+          Suggest my favorite local places first on the shopping list
+        </label>
+        <Link to="/local" className="small">
+          Local markets, bakeries and butchers around Asheville
+        </Link>
       </Section>
 
       <button type="submit" disabled={status === 'saving'}>
