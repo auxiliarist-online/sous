@@ -486,6 +486,9 @@ export function Settings({
           zip={prefs.homeZip}
           onZip={(homeZip) => set({ homeZip })}
         />
+        <Link to="/local" className="small">
+          Local markets, bakeries and butchers around Asheville
+        </Link>
       </Section>
 
       <button type="submit" disabled={status === 'saving'}>

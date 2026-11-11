@@ -229,7 +229,11 @@ Users get three kinds of control (TYL-32):
 - When a plan is priced, `app/plans/live_prices.py` looks up the matched products for the user's store (their primary store, else the Asheville Harris Teeter during the beta), in batches of 50, and adds `store_api` quotes and the real package sizes to that request only. A sale price is valid until it ends. If Kroger fails, the plan is priced from estimates.
 - Kroger credentials are server-side API env only. Limits: Products 10,000 calls a day.
 
-### Crawling (TYL-26)
+### Local food directory (TYL-69)
+
+- `local_places` lists farmers markets, co-ops, local grocers, bakeries, butchers, fish markets and farm stores, starting with Buncombe County, NC. They're kept apart from `stores`, which are price sources: a local place has no prices (TYL-62), but has opening `hours` (days, times and an optional month-day season, which may wrap the new year) and what it `sells`, in terms the shopping list can match (`produce`, `eggs`, `dairy`, `meat`, `seafood`, `bread`, `honey`, `grains`, or `groceries` for a full grocery).
+- The places are entered by hand in `apps/api/data/local_places.csv` from public listings (ASAP's Local Food Guide, the places' own sites, NCDA), facts only, each with its source and the day it was checked. `apps/api/scripts/build_local_places.py` checks the file and writes a data migration that upserts by `slug`.
+- `user_local_places` holds a user's favorites (owner-only), included in Export my data.
 
 - `crawl_pages` is the queue: one row per sitemap URL with its `lastmod` and what happened when we fetched it. `crawl_enqueue()` adds new URLs and re-queues a page only when its `lastmod` moves forward; blocked and disallowed pages are never re-queued automatically.
 - `crawl_runs` logs each nightly run per site: counts, and why it stopped if it did.
@@ -237,10 +241,10 @@ Users get three kinds of control (TYL-32):
 
 ### Access (row level security)
 
-- **Catalog** (recipes, ingredients, diets, cuisines, stores, products, shared prices): readable by anyone, written only by the API using the service role.
+- **Catalog** (recipes, ingredients, diets, cuisines, stores, local places, products, shared prices): readable by anyone, written only by the API using the service role.
 - **Crawler** (`crawl_pages`, `crawl_runs`): RLS with no policies, so only the service role can see them.
 - **Recipes:** anyone sees public `active` ones; users also see recipes they added. Ingredient lines, cuisines and diet labels follow their recipe.
-- **User data** (profile, favorites, plans, lists, own prices, own stores): only the owner can read or write.
+- **User data** (profile, favorites, plans, lists, own prices, own stores, favorite local places): only the owner can read or write.
 
 ### Other choices
 

@@ -2442,3 +2442,61 @@ button.heart[aria-pressed='true'] {
     grid-column: 1 / -1;
   }
 }
+
+/* Local food (TYL-69): a card per place. */
+.local > .muted {
+  margin: 0 0 0.75rem;
+}
+
+.local button.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.25rem 0;
+}
+
+.places {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.place p {
+  margin: 0.25rem 0 0;
+}
+
+.place-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.place-head h3 {
+  margin: 0.5rem 0 0;
+  font-size: 20px;
+}
+
+.place-head .icon-button {
+  flex: none;
+  margin: -2px -10px 0 0;
+  background: none;
+  color: var(--color-accent);
+}
+
+.place-open {
+  font-weight: 600;
+}
+
+.place-open.on {
+  color: var(--color-accent);
+}
+
+.place .tags {
+  margin: 0.5rem 0;
+  padding: 0;
+  list-style: none;
+}
