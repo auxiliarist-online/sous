@@ -4467,3 +4467,18 @@ describe('fits with swaps (TYL-77)', () => {
     assert.equal(f.count, 2)
   })
 })
+
+describe('weights round 5 (TYL-60)', () => {
+  it('fills cup and item weights that were missing', async () => {
+    const { rows } = await db.query(
+      `select name, grams_per_cup::float as cup, grams_per_each::float as each
+       from ingredients where name in ('oat milk', 'poblano peppers', 'burrata')
+       order by name`,
+    )
+    assert.deepEqual(rows, [
+      { name: 'burrata', cup: null, each: 113 },
+      { name: 'oat milk', cup: 240, each: null },
+      { name: 'poblano peppers', cup: null, each: 110 },
+    ])
+  })
+})
