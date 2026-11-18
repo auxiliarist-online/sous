@@ -399,17 +399,34 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
           <ExternalLink href={recipe.sourceUrl}>
             {recipe.sourceName ?? sourceLabel(null, recipe.sourceUrl)}
           </ExternalLink>
-          {recipe.license.attribution && `, by ${recipe.license.attribution}`},
-          under{' '}
-          {recipe.license.url ? (
-            <ExternalLink href={recipe.license.url}>
-              {recipe.license.name}
-            </ExternalLink>
+          {recipe.license.attribution && `, by ${recipe.license.attribution}`}
+          {recipe.license.name === 'Public domain' ? (
+            // A federal work (TYL-42): nothing to share alike.
+            <>
+              . It's in the{' '}
+              {recipe.license.url ? (
+                <ExternalLink href={recipe.license.url}>
+                  public domain
+                </ExternalLink>
+              ) : (
+                'public domain'
+              )}
+              ; Sous reformatted the ingredients and steps.
+            </>
           ) : (
-            recipe.license.name
+            <>
+              , under{' '}
+              {recipe.license.url ? (
+                <ExternalLink href={recipe.license.url}>
+                  {recipe.license.name}
+                </ExternalLink>
+              ) : (
+                recipe.license.name
+              )}
+              . Sous reformatted the ingredients and steps; this version is
+              shared under the same license.
+            </>
           )}
-          . Sous reformatted the ingredients and steps; this version is shared
-          under the same license.
         </p>
       )}
 

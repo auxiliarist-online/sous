@@ -4396,3 +4396,20 @@ describe('local first on the list (TYL-71)', () => {
     )
   })
 })
+
+describe('NHLBI recipes (TYL-42)', () => {
+  it('is a public-domain source, imported rather than crawled', async () => {
+    const { rows } = await db.query(
+      `select content_rights, crawl_enabled, license_name, attribution
+       from recipe_sources where domain = 'www.nhlbi.nih.gov'`,
+    )
+    assert.deepEqual(rows, [
+      {
+        content_rights: 'public_domain',
+        crawl_enabled: false,
+        license_name: 'Public domain',
+        attribution: 'National Heart, Lung, and Blood Institute (NIH)',
+      },
+    ])
+  })
+})
