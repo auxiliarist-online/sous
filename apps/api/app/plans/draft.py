@@ -362,7 +362,10 @@ def draft_week(
     # Only dinners count (an entry without a meal is one); a planned lunch
     # stays in the week's cost but doesn't fill a night.
     planned_dinners = [e for e in week.planned if (e.get("meal") or "dinner") == "dinner"]
-    open_slots = max(0, dinners - len(planned_dinners) - len(keep))
+    # Leftovers aren't in the inputs' entries (they buy nothing), but a
+    # second dinner from leftovers fills a night too (TYL-67).
+    leftover_dinners = int(inputs.get("leftover_dinners") or 0)
+    open_slots = max(0, dinners - len(planned_dinners) - leftover_dinners - len(keep))
     eligible = [
         c.recipe_id
         for c in week.pool.values()

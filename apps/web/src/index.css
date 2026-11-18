@@ -2685,3 +2685,44 @@ button.swap-option[aria-pressed='true'] {
 .tag.fit {
   background: var(--color-accent-soft);
 }
+
+/* Leftovers on the plan (TYL-67). */
+.leftovers {
+  margin-top: 0.5rem;
+}
+
+.leftovers p {
+  margin: 0;
+}
+
+.leftover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+}
+
+.leftover-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.leftover-ask label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.leftover-ask input {
+  width: 5rem;
+  min-height: 40px;
+}
+
+.leftover-ask button {
+  min-height: 40px;
+}
+
+.leftover-entry {
+  opacity: 0.9;
+}

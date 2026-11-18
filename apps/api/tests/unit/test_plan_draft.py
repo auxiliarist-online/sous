@@ -227,6 +227,16 @@ class TestDraft:
         d = draft_week(week, pool("a", "b"), dinners=2, locked=[], exclude=[], on=MONDAY)
         assert picked(d) == ["a", "b"]
 
+    def test_a_second_dinner_from_leftovers_fills_a_night(self) -> None:
+        # Leftover entries aren't in the inputs (they buy nothing); their
+        # dinners are counted (TYL-67).
+        week = {
+            **inputs(recipe("a", ("rice", 1, "cup")), recipe("b", ("beans", 1, "each"))),
+            "leftover_dinners": 1,
+        }
+        d = draft_week(week, pool("a", "b"), dinners=2, locked=[], exclude=[], on=MONDAY)
+        assert len(picked(d)) == 1
+
     def test_a_weekly_favorite_had_a_week_ago(self) -> None:
         d = draft_week(
             inputs(recipe("fav", ("beans", 1, "each"))),

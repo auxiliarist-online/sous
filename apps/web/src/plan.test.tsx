@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SavedRecipe } from './library.ts'
 import { PlanPage, type PlanApi } from './Plan.tsx'
 import {
+  leftovers,
   addDays,
   addedCosts,
   parseDollars,
@@ -478,6 +479,9 @@ function fakeApi({
         void 0,
     ),
     removeEntry: vi.fn(async (_id: string) => void 0),
+    addLeftover: vi.fn(async () => {}),
+    setMyServings: vi.fn(async () => {}),
+    householdSize: vi.fn(async () => 2),
     removeEntries: vi.fn(async (ids: string[]) => {
       current = current.filter((e) => !ids.includes(e.id))
     }),
@@ -1625,5 +1629,84 @@ describe('variety on the plan (TYL-66)', () => {
     await screen.findByRole('link', { name: 'Penne 1' })
     await waitFor(() => expect(api.variety).toHaveBeenCalled())
     expect(screen.queryByLabelText('Variety')).toBeNull()
+  })
+})
+
+describe('leftovers (TYL-67)', () => {
+  it('works out what a meal leaves, by size and household', () => {
+    const dinner = entry('1', { recipeServings: 6 })
+    const lunch = entry('2', { leftoverOf: '1', meal: 'lunch' })
+    expect(leftovers(dinner, 2, [dinner])).toEqual({
+      made: 6,
+      planned: 0,
+      left: 4,
+    })
+    expect(leftovers(dinner, 2, [dinner, lunch])).toEqual({
+      made: 6,
+      planned: 1,
+      left: 2,
+    })
+    expect(leftovers({ ...dinner, scale: 0.5 }, 2, [dinner])?.left).toBe(1)
+    expect(leftovers({ ...dinner, scale: 2 }, 2, [dinner])?.left).toBe(10)
+    expect(
+      leftovers({ ...dinner, recipeServings: null }, 2, [dinner]),
+    ).toBeNull()
+    expect(leftovers(lunch, 2, [dinner, lunch])).toBeNull()
+  })
+
+  it('shows leftovers and plans them as lunch, or suggests the smaller size', async () => {
+    const api = fakeApi({
+      entries: [entry('1', { recipeServings: 6, day: '2026-10-12' })],
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(await screen.findByText(/Makes 6 · you're 2/)).toBeInTheDocument()
+    expect(screen.getByText('4 leftover servings')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Lunch Tuesday' }))
+    expect(api.addLeftover).toHaveBeenCalledWith('1', '2026-10-13', 'lunch')
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Half makes 3, enough for 2' }),
+    )
+    expect(api.updateEntry).toHaveBeenCalledWith('1', { scale: 0.5 })
+  })
+
+  it('shows leftover meals as their own, with nothing to buy', async () => {
+    const api = fakeApi({
+      entries: [
+        entry('1', { recipeServings: 6, day: '2026-10-12' }),
+        entry('2', {
+          recipeId: 'r-1',
+          title: 'Recipe 1',
+          leftoverOf: '1',
+          meal: 'lunch',
+          day: '2026-10-13',
+        }),
+      ],
+    })
+    render(<PlanPage api={api} week={WEEK} />)
+    expect(
+      await screen.findByRole('link', { name: 'Leftovers: Recipe 1' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Lunch · from Monday · nothing to buy/),
+    ).toBeInTheDocument()
+    // The dinner now leaves 2: one more meal for two.
+    expect(screen.getByText('2 leftover servings')).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove leftovers of Recipe 1 from the plan',
+      }),
+    )
+    expect(api.removeEntry).toHaveBeenCalledWith('2')
+  })
+
+  it('asks how many a recipe serves when it doesn’t say', async () => {
+    const api = fakeApi({ entries: [entry('1', { recipeServings: null })] })
+    render(<PlanPage api={api} week={WEEK} />)
+    await userEvent.type(
+      await screen.findByLabelText('About how many does this serve?'),
+      '4',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(api.setMyServings).toHaveBeenCalledWith('r-1', 4)
   })
 })

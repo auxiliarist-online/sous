@@ -235,6 +235,11 @@ Users get three kinds of control (TYL-32):
 - `user_recipe_swaps` holds the swap a user chose for an ingredient in a recipe (owner-only; the swap must be for that ingredient; included in Export my data). `plan_cost_inputs()` sends them, and the buy list buys the swapped-in ingredients instead.
 - `recipe_swap_fit(recipe, user)` says how many swaps make a recipe that the user's rules exclude fit, and which swaps fix each line: a swap counts only if what it brings in, extras too, clears every rule, and allergies stay strict ("may contain" never clears one). Find shows those recipes as `swaps`, after the ones that fit as they are; plan drafts and "or" lines still use `recipe_fit_for_user()` as before.
 
+### Leftovers (TYL-67)
+
+- A plan entry with `leftover_of` is leftovers of another entry in the same plan with the same recipe (`add_leftover()` plans one; a trigger checks the link). Leftover entries add nothing to the buy list: `plan_cost_inputs()` leaves them out, and counts leftover dinners for Plan my week. Taking the meal off takes its leftovers.
+- `user_recipe_servings` is how many a recipe serves, as a user says, when the recipe doesn't (owner-only); the plan uses it to work out leftovers.
+
 ### Local food directory (TYL-69)
 
 - `local_places` lists farmers markets, co-ops, local grocers, bakeries, butchers, fish markets and farm stores, starting with Buncombe County, NC. They're kept apart from `stores`, which are price sources: a local place has no prices (TYL-62), but has opening `hours` (days, times and an optional month-day season, which may wrap the new year) and what it `sells`, in terms the shopping list can match (`produce`, `eggs`, `dairy`, `meat`, `seafood`, `bread`, `honey`, `grains`, or `groceries` for a full grocery).

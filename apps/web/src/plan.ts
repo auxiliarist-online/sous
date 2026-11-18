@@ -99,6 +99,8 @@ export interface PlanEntry {
   /** Checked against what the user has, so its ingredients are on the list
    *  (TYL-150). Missing in older test data: counted as reviewed. */
   reviewed?: boolean
+  /** The meal it's leftovers of (TYL-67): nothing to buy or cook. */
+  leftoverOf?: string | null
 }
 
 interface EntryRow {
@@ -108,10 +110,12 @@ interface EntryRow {
   position: number
   meal?: string | null
   reviewed?: boolean
+  leftover_of?: string | null
   recipe: {
     id: string
     title: string
     servings: number | null
+    my_servings?: { servings: number }[] | null
     lines?:
       | {
           option_no: number
@@ -134,7 +138,7 @@ export async function loadPlan(
   const { data, error } = await db
     .from('meal_plans')
     .select(
-      'entries:meal_plan_entries(id, scale, planned_for, position, meal, reviewed, recipe:recipes(id, title, servings, lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name)), my_cuisines:user_recipe_cuisines(cuisine:cuisines(name)), saved:user_saved_recipes(tags)))',
+      'entries:meal_plan_entries(id, scale, planned_for, position, meal, reviewed, leftover_of, recipe:recipes(id, title, servings, my_servings:user_recipe_servings(servings), lines:recipe_ingredients(option_no, is_optional, ingredient:ingredients(aisle, contains)), cuisines:recipe_cuisines(cuisine:cuisines(name)), my_cuisines:user_recipe_cuisines(cuisine:cuisines(name)), saved:user_saved_recipes(tags)))',
     )
     .eq('week_start', weekStart)
     .maybeSingle()
@@ -148,7 +152,13 @@ export async function loadPlan(
       recipeId: e.recipe!.id,
       title: e.recipe!.title,
       scale: Number(e.scale) as Scale,
-      recipeServings: e.recipe!.servings,
+      // The recipe's own count, else what the user said it serves (TYL-67).
+      recipeServings:
+        e.recipe!.servings ??
+        (e.recipe!.my_servings?.[0]
+          ? Number(e.recipe!.my_servings[0].servings)
+          : null),
+      leftoverOf: e.leftover_of ?? null,
       day: e.planned_for,
       position: e.position,
       meal: e.meal ?? null,
@@ -200,6 +210,49 @@ export async function addToPlan(
     p_day: day,
   })
   if (error) throw error
+}
+
+/** Plan leftovers of a meal on a day, for lunch or another dinner (TYL-67). */
+export async function addLeftover(
+  db: SupabaseClient,
+  sourceId: string,
+  day: string,
+  meal: 'lunch' | 'dinner',
+): Promise<void> {
+  const { error } = await db.rpc('add_leftover', {
+    p_source: sourceId,
+    p_day: day,
+    p_meal: meal,
+  })
+  if (error) throw error
+}
+
+/** Say how many a recipe serves, when the recipe doesn't (TYL-67). */
+export async function setMyServings(
+  db: SupabaseClient,
+  userId: string,
+  recipeId: string,
+  servings: number,
+): Promise<void> {
+  const { error } = await db
+    .from('user_recipe_servings')
+    .upsert({ user_id: userId, recipe_id: recipeId, servings })
+  if (error) throw error
+}
+
+/** What a meal makes and leaves (TYL-67): servings made at its size, what
+ *  the household eats at that meal and at each leftover meal planned from
+ *  it, and what's left after those. Null when the recipe's servings aren't
+ *  known. */
+export function leftovers(
+  entry: PlanEntry,
+  household: number,
+  entries: PlanEntry[],
+): { made: number; planned: number; left: number } | null {
+  if (!entry.recipeServings || entry.leftoverOf) return null
+  const made = entry.recipeServings * entry.scale
+  const planned = entries.filter((e) => e.leftoverOf === entry.id).length
+  return { made, planned, left: made - household * (1 + planned) }
 }
 
 export async function updateEntry(

@@ -24,6 +24,7 @@ import {
   type PlanCost,
   type PlanEntry,
   type Scale,
+  leftovers,
   unreviewed,
 } from './plan.ts'
 import { CookedButton } from './Cooked.tsx'
@@ -61,6 +62,16 @@ export interface PlanApi extends CookedApi, DraftApi, ReviewApi {
     patch: { scale?: Scale; day?: string | null },
   ): Promise<void>
   removeEntry(id: string): Promise<void>
+  /** Plan leftovers of a meal on a day (TYL-67). */
+  addLeftover(
+    sourceId: string,
+    day: string,
+    meal: 'lunch' | 'dinner',
+  ): Promise<void>
+  /** Say how many a recipe serves, when it doesn't say (TYL-67). */
+  setMyServings(recipeId: string, servings: number): Promise<void>
+  /** How many the user cooks for (Preferences), for leftovers. */
+  householdSize(): Promise<number>
   /** Take several recipes out at once (clearing the week). */
   removeEntries(ids: string[]): Promise<void>
   copyPlan(from: string, to: string): Promise<number>
@@ -109,6 +120,7 @@ export interface PlanApi extends CookedApi, DraftApi, ReviewApi {
  *  and what buying it all is likely to cost against the budget. */
 export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
   const [entries, setEntries] = useState<PlanEntry[] | null>(null)
+  const [household, setHousehold] = useState<number | null>(null)
   const [cost, setCost] = useState<PlanCost | 'error' | null>(null)
   // What's been cooked, by plan entry (TYL-68); null until it's loaded, so a
   // cooked meal never shows "Cooked it" first.
@@ -167,6 +179,11 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
     let live = true
     api.variety().then(
       (v) => live && setVariety(v),
+      () => {},
+    )
+    // For leftovers; without it, none are worked out.
+    api.householdSize().then(
+      (n) => live && setHousehold(n),
       () => {},
     )
     Promise.all([api.pantryCatalog(), api.dismissedSuggestions()]).then(
@@ -435,6 +452,20 @@ export function PlanPage({ api, week }: { api: PlanApi; week: string }) {
                       days={days}
                       api={api}
                       busy={busy}
+                      household={household}
+                      entries={entries}
+                      onLeftover={(day, meal) =>
+                        void change(
+                          () => api.addLeftover(e.id, day, meal),
+                          "We couldn't plan the leftovers. Try again.",
+                        )
+                      }
+                      onServings={(n) =>
+                        void change(
+                          () => api.setMyServings(e.recipeId, n),
+                          "We couldn't save that. Try again.",
+                        )
+                      }
                       onChange={(patch) =>
                         void change(
                           () => api.updateEntry(e.id, patch),
@@ -884,6 +915,10 @@ function Entry({
   busy,
   onChange,
   onRemove,
+  household,
+  entries,
+  onLeftover,
+  onServings,
 }: {
   entry: PlanEntry
   /** Whether it's been cooked, with the rating and note (TYL-68); undefined
@@ -899,10 +934,45 @@ function Entry({
   busy: boolean
   onChange: (patch: { scale?: Scale; day?: string | null }) => void
   onRemove: () => void
+  /** How many the user cooks for, when known (TYL-67). */
+  household: number | null
+  /** The week's plan, for the leftovers planned from this meal. */
+  entries: PlanEntry[]
+  onLeftover: (day: string, meal: 'lunch' | 'dinner') => void
+  onServings: (servings: number) => void
 }) {
   const [recipe, setRecipe] = useState<RecipeDetail | null | undefined>(
     undefined,
   )
+  const [servingsDraft, setServingsDraft] = useState('')
+  if (entry.leftoverOf)
+    return (
+      <LeftoverEntry
+        entry={entry}
+        source={entries.find((e) => e.id === entry.leftoverOf)}
+        days={days}
+        busy={busy}
+        onChange={onChange}
+        onRemove={onRemove}
+      />
+    )
+  const lo = household ? leftovers(entry, household, entries) : null
+  // The days after this meal in the week, for planning its leftovers.
+  const later = entry.day ? days.filter((d) => d > entry.day!) : days
+  const lunchDay = later.find(
+    (d) =>
+      !entries.some(
+        (e) => e.leftoverOf === entry.id && e.day === d && e.meal === 'lunch',
+      ),
+  )
+  const dinnerDay = later.find(
+    (d) =>
+      d !== lunchDay &&
+      !entries.some(
+        (e) => e.day === d && (e.meal == null || e.meal === 'dinner'),
+      ),
+  )
+  const meals = lo && household ? Math.floor(lo.left / household) : 0
   const serves = entry.recipeServings
     ? Math.round(entry.recipeServings * entry.scale * 10) / 10
     : null
@@ -988,6 +1058,93 @@ function Entry({
           Cook
         </Link>
       </div>
+      {/* Leftovers (TYL-67): what it makes, and where the rest can go. */}
+      {household && !entry.recipeServings && (
+        <form
+          className="leftover-ask small"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const n = Number(servingsDraft)
+            if (n > 0) onServings(n)
+          }}
+        >
+          <label htmlFor={`serves-${entry.id}`}>
+            About how many does this serve?
+          </label>
+          <input
+            id={`serves-${entry.id}`}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={100}
+            value={servingsDraft}
+            onChange={(e) => setServingsDraft(e.target.value)}
+          />
+          <button type="submit" className="secondary" disabled={busy}>
+            Save
+          </button>
+        </form>
+      )}
+      {lo && household && (
+        <div className="leftovers small">
+          <p>
+            Makes {formatQuantity(lo.made)} · you're {household}
+            {lo.left > 0 && (
+              <>
+                {' '}
+                ·{' '}
+                <strong>
+                  {formatQuantity(lo.left)} leftover serving
+                  {lo.left === 1 ? '' : 's'}
+                </strong>
+              </>
+            )}
+          </p>
+          {entry.scale === 2 && meals > 0 && (
+            <p className="muted">
+              Double makes {formatQuantity(lo.made)}: dinner plus {meals} more
+              meal{meals === 1 ? '' : 's'} for you.
+            </p>
+          )}
+          {meals > 0 && (
+            <div className="leftover-actions">
+              {lunchDay && (
+                <button
+                  type="button"
+                  className="link"
+                  disabled={busy}
+                  onClick={() => onLeftover(lunchDay, 'lunch')}
+                >
+                  Lunch {dayName(lunchDay)}
+                </button>
+              )}
+              {dinnerDay && (
+                <button
+                  type="button"
+                  className="link"
+                  disabled={busy}
+                  onClick={() => onLeftover(dinnerDay, 'dinner')}
+                >
+                  Second dinner {dayName(dinnerDay)}
+                </button>
+              )}
+              {lo.planned === 0 &&
+                entry.scale > 0.5 &&
+                entry.recipeServings! * 0.5 >= household && (
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={busy}
+                    onClick={() => onChange({ scale: 0.5 })}
+                  >
+                    Half makes {formatQuantity(entry.recipeServings! * 0.5)},
+                    enough for {household}
+                  </button>
+                )}
+            </div>
+          )}
+        </div>
+      )}
       {cooked !== undefined && (
         <CookedButton
           api={api}
@@ -1066,7 +1223,11 @@ function VarietyNotes({
   entries: PlanEntry[]
   settings: VarietySettings
 }) {
-  const notes = varietyNotes(entries, settings)
+  // Leftovers aren't another meal to vary (TYL-67).
+  const notes = varietyNotes(
+    entries.filter((e) => !e.leftoverOf),
+    settings,
+  )
   if (notes.length === 0) return null
   return (
     <p className="small notice" aria-label="Variety">
@@ -1491,5 +1652,65 @@ function AddRecipe({
         </>
       )}
     </section>
+  )
+}
+
+/** Leftovers of another meal on the plan (TYL-67): nothing to buy or cook,
+ *  so just where they come from, the day, and taking them off. */
+function LeftoverEntry({
+  entry,
+  source,
+  days,
+  busy,
+  onChange,
+  onRemove,
+}: {
+  entry: PlanEntry
+  source: PlanEntry | undefined
+  days: string[]
+  busy: boolean
+  onChange: (patch: { day?: string | null }) => void
+  onRemove: () => void
+}) {
+  return (
+    <li className="plan-entry leftover-entry">
+      <div className="entry-head">
+        <div className="entry-text">
+          <Link to={`/recipe/${entry.recipeId}`} className="entry-title">
+            Leftovers: {entry.title}
+          </Link>
+          <span className="muted small">
+            {entry.meal === 'lunch' ? 'Lunch' : 'Dinner'}
+            {source?.day && ` · from ${dayName(source.day)}`} · nothing to buy
+          </span>
+        </div>
+        <label className="visually-hidden" htmlFor={`day-${entry.id}`}>
+          Day for leftovers of {entry.title}
+        </label>
+        <select
+          id={`day-${entry.id}`}
+          className="move-pill"
+          value={entry.day ?? ''}
+          disabled={busy}
+          onChange={(e) => onChange({ day: e.target.value || null })}
+        >
+          <option value="">Any day</option>
+          {days.map((d) => (
+            <option key={d} value={d}>
+              {dayName(d)}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="icon-button plain"
+          disabled={busy}
+          onClick={onRemove}
+          aria-label={`Remove leftovers of ${entry.title} from the plan`}
+        >
+          <X size={20} strokeWidth={2.75} aria-hidden="true" />
+        </button>
+      </div>
+    </li>
   )
 }

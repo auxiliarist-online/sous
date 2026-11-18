@@ -4648,3 +4648,110 @@ describe('weights round 5 (TYL-60)', () => {
     ])
   })
 })
+
+describe('leftovers (TYL-67)', () => {
+  const LEO = '00000000-0000-0000-0000-000000006701'
+
+  it('links leftovers to a meal in the same plan, and buys nothing for them', async () => {
+    await db.query('insert into auth.users (id) values ($1)', [LEO])
+    const rice = await ingredient('rice')
+    const stew = await recipe('Leftover stew (TYL-67)', [[rice]])
+    const other = await recipe('Other dish (TYL-67)', [[rice]])
+    const {
+      rows: [plan],
+    } = await db.query(
+      `insert into meal_plans (user_id, week_start) values ($1, '2026-11-16') returning id`,
+      [LEO],
+    )
+    const entry = async (recipeId, extra = {}) =>
+      (
+        await db.query(
+          `insert into meal_plan_entries (meal_plan_id, recipe_id, scale, reviewed, planned_for, meal, leftover_of)
+           values ($1, $2, 1, true, $3, $4, $5) returning id`,
+          [
+            plan.id,
+            recipeId,
+            extra.day ?? null,
+            extra.meal ?? null,
+            extra.of ?? null,
+          ],
+        )
+      ).rows[0].id
+    const dinner = await entry(stew, { day: '2026-11-16' })
+    const lunch = await entry(stew, {
+      day: '2026-11-17',
+      meal: 'lunch',
+      of: dinner,
+    })
+    // Not from another recipe, nor from leftovers.
+    await assert.rejects(
+      entry(other, { of: dinner }),
+      /same plan, with the same recipe/,
+    )
+    await assert.rejects(
+      entry(stew, { of: lunch }),
+      /same plan, with the same recipe/,
+    )
+
+    const {
+      rows: [{ r }],
+    } = await db.query("select plan_cost_inputs($1, '2026-11-16') as r", [LEO])
+    assert.deepEqual(
+      r.entries.map((e) => e.id),
+      [dinner],
+    )
+    // A lunch from leftovers doesn't fill a night.
+    assert.equal(Number(r.leftover_dinners), 0)
+    // add_leftover() plans one as the user, at the end of the plan.
+    const {
+      rows: [{ id: dinner2 }],
+    } = await as('authenticated', LEO, () =>
+      db.query("select add_leftover($1, '2026-11-18', 'dinner') as id", [
+        dinner,
+      ]),
+    )
+    const {
+      rows: [made],
+    } = await db.query(
+      'select leftover_of, meal, reviewed, scale::int from meal_plan_entries where id = $1',
+      [dinner2],
+    )
+    assert.deepEqual(made, {
+      leftover_of: dinner,
+      meal: 'dinner',
+      reviewed: true,
+      scale: 1,
+    })
+    await assert.rejects(
+      as('authenticated', BOB, () =>
+        db.query("select add_leftover($1, '2026-11-18')", [dinner]),
+      ),
+      /no such meal/,
+    )
+    // Taking the meal off takes its leftovers too.
+    await db.query('delete from meal_plan_entries where id = $1', [dinner])
+    const { rows } = await db.query(
+      'select id from meal_plan_entries where id = $1',
+      [lunch],
+    )
+    assert.equal(rows.length, 0)
+  })
+
+  it('remembers how many a recipe serves, for that user only', async () => {
+    const odd = await recipe('Serves unknown (TYL-67)', [])
+    await as('authenticated', LEO, () =>
+      db.query(
+        'insert into user_recipe_servings (recipe_id, servings) values ($1, 4)',
+        [odd],
+      ),
+    )
+    const { rows: mine } = await as('authenticated', LEO, () =>
+      db.query('select servings::int from user_recipe_servings'),
+    )
+    assert.deepEqual(mine, [{ servings: 4 }])
+    const { rows: seen } = await as('authenticated', BOB, () =>
+      db.query('select * from user_recipe_servings'),
+    )
+    assert.equal(seen.length, 0)
+  })
+})
