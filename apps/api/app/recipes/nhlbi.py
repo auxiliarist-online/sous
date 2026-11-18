@@ -17,10 +17,14 @@ from bs4 import BeautifulSoup, Tag
 
 from app.recipes.extract import Ingredient, RecipeDraft
 
-DOMAIN = "www.nhlbi.nih.gov"
+HOST = "www.nhlbi.nih.gov"
+# The source's domain as import_recipe() stores it (without "www.").
+DOMAIN = "nhlbi.nih.gov"
 SITE_NAME = "NHLBI Healthy Eating Recipes"
 INDEX_PATH = "/health/heart-healthy-living/healthy-foods/healthy-eating-recipes"
-INDEX_URL = f"https://{DOMAIN}{INDEX_PATH}"
+INDEX_URL = f"https://{HOST}{INDEX_PATH}"
+# Headings after the directions that aren't steps ("Nutrition", "Tips").
+NOT_STEPS = ("nutrition", "note", "tip", "serving", "storage", "variation", "source")
 
 # The cookbooks NHLBI and NIH published, as the pages name them (lower case,
 # trademark signs dropped). A recipe from anywhere else is left out.
@@ -53,7 +57,7 @@ def recipe_links(index_html: str) -> list[str]:
     for a in soup.find_all("a", href=True):
         href = str(a["href"]).split("?")[0].split("#")[0]
         if href.startswith(INDEX_PATH + "/") and href.count("/") == INDEX_PATH.count("/") + 1:
-            url = f"https://{DOMAIN}{href}"
+            url = f"https://{HOST}{href}"
             if url not in out:
                 out.append(url)
     return out
@@ -89,7 +93,8 @@ def _body(soup: BeautifulSoup) -> Tag | None:
 
 def _fact(soup: BeautifulSoup, name: str) -> str:
     """A row of the cooking-facts table ("Prep Time", "Yields")."""
-    table = soup.find("table", class_="cooking-facts")
+    article = _recipe(soup)
+    table = article.find("table", class_="cooking-facts") if article else None
     if not isinstance(table, Tag):
         return ""
     for row in table.find_all("tr"):
@@ -143,6 +148,8 @@ def parse(url: str, html: str) -> RecipeDraft | None:
                 current, section = "ingredients", None
             elif low.startswith(("direction", "instruction", "preparation", "method")):
                 current = "steps"
+            elif low.startswith(NOT_STEPS):
+                current = None  # nutrition and notes aren't kept
             elif current == "ingredients":
                 section = heading  # "For the sauce"
             continue

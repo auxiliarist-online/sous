@@ -41,8 +41,18 @@ function api(favorites: string[] = ['m1']): SeasonalApi {
           [
             'i-squash',
             [
-              { id: 'r1', title: 'Squash tacos', saved: true },
-              { id: 'r2', title: 'Squash soup', saved: false },
+              {
+                id: 'r1',
+                title: 'Squash tacos',
+                saved: true,
+                source: 'Grandma’s card',
+              },
+              {
+                id: 'r2',
+                title: 'Squash soup',
+                saved: false,
+                source: 'Open Cookbook',
+              },
             ],
           ],
         ]),
@@ -78,6 +88,7 @@ describe('the Seasonal page (TYL-90)', () => {
       within(squash).getByRole('link', { name: 'Squash tacos' }),
     ).toHaveAttribute('href', '/recipe/r1')
     expect(within(squash).getByText('Yours')).toBeInTheDocument()
+    expect(within(squash).getByText('Open Cookbook')).toBeInTheDocument()
     // Onions are in season all year: not news.
     expect(screen.queryByRole('heading', { name: 'onions' })).toBeNull()
     expect(screen.getByRole('heading', { name: 'kale' })).toBeInTheDocument()
@@ -93,5 +104,21 @@ describe('the Seasonal page (TYL-90)', () => {
     expect(
       await screen.findByRole('link', { name: 'Find markets near you' }),
     ).toHaveAttribute('href', '/local')
+  })
+
+  it('clears a failed load when it loads again', async () => {
+    const failing = {
+      ...api(),
+      seasons: vi.fn(async () => Promise.reject(new Error('down'))),
+    }
+    const { rerender } = render(<SeasonalPage api={failing} now={NOV} />)
+    expect(
+      await screen.findByText("We couldn't load what's in season."),
+    ).toBeInTheDocument()
+    rerender(<SeasonalPage api={api()} now={NOV} />)
+    expect(
+      await screen.findByRole('heading', { name: 'kale' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText("We couldn't load what's in season.")).toBeNull()
   })
 })

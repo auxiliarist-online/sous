@@ -81,8 +81,16 @@ export async function loadSeasonalRecipes(
   db: SupabaseClient,
   ingredientIds: string[],
   per = 4,
-): Promise<Map<string, { id: string; title: string; saved: boolean }[]>> {
-  const out = new Map<string, { id: string; title: string; saved: boolean }[]>()
+): Promise<
+  Map<
+    string,
+    { id: string; title: string; saved: boolean; source: string | null }[]
+  >
+> {
+  const out = new Map<
+    string,
+    { id: string; title: string; saved: boolean; source: string | null }[]
+  >()
   if (!ingredientIds.length) return out
   const { data, error } = await db.rpc('seasonal_recipes', {
     p_ingredients: ingredientIds,
@@ -94,10 +102,16 @@ export async function loadSeasonalRecipes(
     recipe_id: string
     title: string
     saved: boolean
+    source_name: string | null
   }[])
     out.set(r.ingredient_id, [
       ...(out.get(r.ingredient_id) ?? []),
-      { id: r.recipe_id, title: r.title, saved: r.saved },
+      {
+        id: r.recipe_id,
+        title: r.title,
+        saved: r.saved,
+        source: r.source_name,
+      },
     ])
   return out
 }

@@ -10,7 +10,12 @@ export interface SeasonalApi {
   /** A few recipes for each of these ingredients, saved ones first. */
   seasonalRecipes(
     ingredientIds: string[],
-  ): Promise<Map<string, { id: string; title: string; saved: boolean }[]>>
+  ): Promise<
+    Map<
+      string,
+      { id: string; title: string; saved: boolean; source: string | null }[]
+    >
+  >
   /** The local food directory and the user's favorites (TYL-69). */
   localPlaces(): Promise<LocalPlace[]>
   favoritePlaces(): Promise<string[]>
@@ -20,12 +25,24 @@ export interface SeasonalApi {
  *  use it, what's coming next month, and the user's markets that sell
  *  produce. `now` is for tests. */
 export function SeasonalPage({ api, now }: { api: SeasonalApi; now?: Date }) {
-  const [clock] = useState(() => now ?? new Date())
+  // The time, for the month and "open now": kept current while the page is
+  // open (tests fix it).
+  const [clock, setClock] = useState(() => now ?? new Date())
+  useEffect(() => {
+    if (now) return
+    const tick = setInterval(() => setClock(new Date()), 60_000)
+    return () => clearInterval(tick)
+  }, [now])
   const month = clock.getMonth() + 1
   const [seasons, setSeasons] = useState<Seasons | null>(null)
-  const [failed, setFailed] = useState(false)
+  // The api whose load failed: a new one starts without the error.
+  const [failedFor, setFailedFor] = useState<SeasonalApi | null>(null)
+  const failed = failedFor === api
   const [recipes, setRecipes] = useState<
-    Map<string, { id: string; title: string; saved: boolean }[]>
+    Map<
+      string,
+      { id: string; title: string; saved: boolean; source: string | null }[]
+    >
   >(new Map())
   const [markets, setMarkets] = useState<LocalPlace[] | null>(null)
 
@@ -42,7 +59,7 @@ export function SeasonalPage({ api, now }: { api: SeasonalApi; now?: Date }) {
           () => {},
         )
       },
-      () => live && setFailed(true),
+      () => live && setFailedFor(api),
     )
     // The user's places that sell produce; the page works without them.
     Promise.all([api.localPlaces(), api.favoritePlaces()]).then(
@@ -118,6 +135,9 @@ export function SeasonalPage({ api, now }: { api: SeasonalApi; now?: Date }) {
                   {list.map((r) => (
                     <li key={r.id}>
                       <Link to={`/recipe/${r.id}`}>{r.title}</Link>
+                      {r.source && (
+                        <span className="small muted">{r.source}</span>
+                      )}
                       {r.saved && <span className="tag">Yours</span>}
                     </li>
                   ))}

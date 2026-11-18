@@ -9,6 +9,9 @@ URL = f"https://www.nhlbi.nih.gov{INDEX_PATH}/test-bean-soup"
 def page(source: str = "Deliciously Healthy Dinners", body_extra: str = "") -> str:
     return f"""<html><body>
 <div class="field field--name-body"><p>Site news: a banner, not the recipe.</p></div>
+<table class="cooking-facts"><tbody>
+  <tr><th>Yields</th><td><div>99 servings</div></td></tr>
+</tbody></table>
 <main><article class="node node--type-recipe">
 <h1><span>Test Bean Soup</span></h1>
 <div class="clearfix field field--name-body">
@@ -51,7 +54,9 @@ def test_reads_a_recipe_with_its_steps() -> None:
         65,
         75,
     )
-    assert draft.domain == "www.nhlbi.nih.gov"
+    # As import_recipe() stores the source: without "www.".
+    assert draft.domain == "nhlbi.nih.gov"
+    assert draft.source_url.startswith("https://www.nhlbi.nih.gov/")
 
 
 def test_keeps_only_federal_cookbooks() -> None:
@@ -60,6 +65,12 @@ def test_keeps_only_federal_cookbooks() -> None:
     assert not federal("A State University Extension Cookbook")
     assert not federal(None)
     assert parse(URL, page(source="A State University Extension Cookbook")) is None
+
+
+def test_nutrition_after_the_steps_isnt_a_step() -> None:
+    draft = parse(URL, page(body_extra="<h2>Nutrition</h2><ul><li>Calories 196</li></ul>"))
+    assert draft is not None
+    assert draft.instructions == ["Warm the oil.", "Add the beans and simmer 10 minutes."]
 
 
 def test_leaves_out_pages_that_arent_recipes() -> None:

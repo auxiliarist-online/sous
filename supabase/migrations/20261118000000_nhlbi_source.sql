@@ -9,7 +9,8 @@ insert into public.recipe_sources (
 )
 values (
   'NHLBI Healthy Eating Recipes',
-  'www.nhlbi.nih.gov',
+  -- As import_recipe() stores a source's domain: without "www.".
+  'nhlbi.nih.gov',
   'https://www.nhlbi.nih.gov/health/heart-healthy-living/healthy-foods/healthy-eating-recipes',
   'public_domain',
   -- Imported by scripts/import_nhlbi.py, not by the sitemap crawler.

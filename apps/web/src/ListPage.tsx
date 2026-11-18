@@ -20,6 +20,7 @@ import {
 } from './list.ts'
 import {
   addDays,
+  isoDate,
   dollars,
   unreviewed,
   weekLabel,
@@ -373,9 +374,12 @@ export function ListPage({
   )
   // A plan item on sale at the user's store (TYL-22): what it saves, and
   // until when.
+  const today = isoDate(clock)
   const saleOf = (i: ListItem) => {
     const p = i.ingredientId ? prices.get(i.ingredientId) : undefined
-    if (!p?.onSale || p.cents == null) return null
+    // Through its last day, not after (the list may stay open).
+    if (!p?.onSale || p.cents == null || (p.saleEnds && p.saleEnds < today))
+      return null
     return {
       saves: p.regularCents != null ? Math.max(0, p.regularCents - p.cents) : 0,
       until: p.saleEnds ? saleDay(p.saleEnds) : null,
@@ -387,7 +391,8 @@ export function ListPage({
   const over = cost && cost.budgetCents !== null ? total - cost.budgetCents : 0
   const biggest = toBuy
     .flatMap((i) => {
-      const p = i.ingredientId ? prices.get(i.ingredientId) : undefined
+      // As the row prices it: the plan's price, or a typed item's own.
+      const p = i.ingredientId ? prices.get(i.ingredientId) : own?.items[i.id]
       return p?.cents != null ? [{ name: i.name, cents: p.cents }] : []
     })
     .sort((a, b) => b.cents - a.cents)
@@ -650,7 +655,7 @@ export function ListPage({
                 .map((b) => `${b.name} ${dollars(b.cents)}`)
                 .join(', ')}.`}
           </p>
-          <Link to="/plan" className="small">
+          <Link to={`/plan/${week}`} className="small">
             Swap a recipe for a cheaper one on the plan
           </Link>
         </section>

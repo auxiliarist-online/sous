@@ -12,9 +12,11 @@ recipes come from NHLBI (NIH), whose site is public domain unless noted
 cookbooks are kept.
 
 Download: the recipe index's pages are read in turn (?page=0, 1, ...) for
-their recipe links, then each recipe page, one request at a time with a pause,
-as SousBot, within robots.txt (which allows these paths). Pages are kept in
-.cache/nhlbi/ (not in git), and later downloads fetch only new recipes.
+their recipe links, then each recipe page, through app/recipes/fetch.py like
+any import: SousBot, robots.txt checked on every hop, at most one request
+every five seconds (or the site's longer Crawl-delay). When the site is busy
+(429/503) it waits and tries again a few times, then stops; pages are kept in
+.cache/nhlbi/ (not in git), so a stopped download picks up where it left off.
 
 Load: each page goes through app/recipes/nhlbi.py and the catalog's exclusion
 rules, then import_recipes() and publish_licensed_recipes() as for Wikibooks.
@@ -25,9 +27,9 @@ import argparse
 import asyncio
 import json
 import sys
-import time
 from collections import Counter
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx2 as httpx
 
@@ -35,12 +37,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import settings  # noqa: E402
 from app.recipes.curation import excluded  # noqa: E402
-from app.recipes.fetch import user_agent  # noqa: E402
+from app.recipes.fetch import TIMEOUT, FetchError, fetch_page  # noqa: E402
 from app.recipes.nhlbi import DOMAIN, INDEX_URL, parse, recipe_links, source_of  # noqa: E402
 from scripts.import_wikibooks import hide, load  # noqa: E402
 
-PAUSE = 2.0  # seconds between requests
 MAX_INDEX_PAGES = 100
+BACKOFF = 120.0  # seconds to wait when the site is busy
+TRIES = 3
 CACHE = Path(__file__).resolve().parents[1] / ".cache" / "nhlbi"
 
 
@@ -49,34 +52,45 @@ def slug(url: str) -> str:
     return url.rstrip("/").rsplit("/", 1)[-1] + ".html"
 
 
-def download() -> dict[str, str]:
-    """Fetch new recipe pages into the cache; return {url: html} for all."""
+async def _get(client: httpx.AsyncClient, url: str) -> str:
+    """One page through the shared fetcher (robots.txt, throttle). A busy
+    site gets a few tries, waiting longer each time; anything else it
+    refuses ends the download."""
+    for attempt in range(1, TRIES + 1):
+        try:
+            return (await fetch_page(url, client)).html
+        except FetchError as e:
+            if e.code not in ("rate_limited", "unreachable", "timeout") or attempt == TRIES:
+                sys.exit(f"stopped at {url}: {e.code}. Run again later to carry on.")
+            print(f"{url}: {e.code}, waiting {BACKOFF * attempt:.0f}s", file=sys.stderr)
+            await asyncio.sleep(BACKOFF * attempt)
+    raise AssertionError("unreachable")
+
+
+async def _download() -> None:
+    """Fetch the index pages and any recipe pages not cached yet."""
     CACHE.mkdir(parents=True, exist_ok=True)
     links: list[str] = []
-    with httpx.Client(
-        timeout=60.0, headers={"User-Agent": user_agent()}, follow_redirects=True
-    ) as client:
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         for page in range(MAX_INDEX_PAGES):
-            resp = client.get(INDEX_URL, params={"page": str(page)})
-            resp.raise_for_status()
-            time.sleep(PAUSE)
-            found = [u for u in recipe_links(resp.text) if u not in links]
+            html = await _get(client, f"{INDEX_URL}?{urlencode({'page': page})}")
+            found = [u for u in recipe_links(html) if u not in links]
             if not found:
                 break
             links += found
             print(f"index page {page}: {len(links)} recipes so far", file=sys.stderr)
+        (CACHE / "links.json").write_text(json.dumps(links, indent=1))
         for n, url in enumerate(links, 1):
             path = CACHE / slug(url)
             if path.exists():
                 continue
-            resp = client.get(url)
-            time.sleep(PAUSE)
-            if resp.status_code != 200:
-                print(f"skipped {url}: HTTP {resp.status_code}", file=sys.stderr)
-                continue
-            path.write_text(resp.text)
+            path.write_text(await _get(client, url))
             print(f"{n}/{len(links)} {url}", file=sys.stderr)
-    (CACHE / "links.json").write_text(json.dumps(links, indent=1))
+
+
+def download() -> dict[str, str]:
+    """Fetch new recipe pages into the cache; return {url: html} for all."""
+    asyncio.run(_download())
     return read_cache()
 
 

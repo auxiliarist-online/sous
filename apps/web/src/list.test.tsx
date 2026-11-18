@@ -1279,7 +1279,14 @@ describe('sales and the budget on the list (TYL-22)', () => {
         ],
       })),
     })
-    render(<ListPage api={api} week={WEEK} user="u" />)
+    const { unmount } = render(
+      <ListPage
+        api={api}
+        week={WEEK}
+        user="u"
+        now={new Date(2026, 9, 17, 9)}
+      />,
+    )
     expect(
       await screen.findByText(/sale, save \$1\.00 until Sat/),
     ).toBeInTheDocument()
@@ -1287,6 +1294,18 @@ describe('sales and the budget on the list (TYL-22)', () => {
       screen.getByText('Saving $1.00 on sales this week'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Over budget' })).toBeNull()
+    unmount()
+    // The day after it ends, it isn't a sale any more.
+    render(
+      <ListPage
+        api={api}
+        week={WEEK}
+        user="u"
+        now={new Date(2026, 9, 18, 9)}
+      />,
+    )
+    await screen.findByText('rice')
+    expect(screen.queryByText(/sale, save/)).toBeNull()
   })
 
   it('says how far over budget, the biggest costs, and where to cut', async () => {
@@ -1309,6 +1328,39 @@ describe('sales and the budget on the list (TYL-22)', () => {
       within(over).getByRole('link', {
         name: 'Swap a recipe for a cheaper one on the plan',
       }),
-    ).toHaveAttribute('href', '/plan')
+    ).toHaveAttribute('href', `/plan/${WEEK}`)
+  })
+
+  it('counts typed items among the biggest costs', async () => {
+    const api = listApi({
+      loadList: vi.fn(async () =>
+        state(
+          item('rice', { ingredientId: 'i-rice', amount: '2 lb' }),
+          item('roast', {
+            ingredientId: null,
+            name: 'beef roast',
+            isManual: true,
+            position: 1,
+          }),
+        ),
+      ),
+      ownItemPrices: vi.fn(async () => ({
+        totalCents: 3000,
+        items: { roast: { cents: 3000, estimated: false } },
+      })),
+      listCost: vi.fn(async () => ({
+        ...COST,
+        budgetCents: 500,
+        totalCents: 250,
+        items: [buy('rice', { cents: 250 })],
+      })),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    const over = await screen.findByRole('region', { name: 'Over budget' })
+    await waitFor(() =>
+      expect(over).toHaveTextContent(
+        'The biggest costs: beef roast $30.00, rice $2.50.',
+      ),
+    )
   })
 })
