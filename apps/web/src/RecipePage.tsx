@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react'
 import { DietChips } from './Library.tsx'
 import { cleanTag, dietLabels, sourceLabel } from './library.ts'
 import { cookPath, navigate } from './navigation.ts'
@@ -19,7 +19,15 @@ import { Link } from './router.tsx'
 import { ArrowLeft, Leaf } from 'lucide-react'
 import { showToast } from './toast.ts'
 import { ExternalLink } from './ExternalLink.tsx'
-import { ingredientLines, type Option, type RecipeDetail } from './sous.ts'
+import {
+  ingredientLines,
+  type IngredientLine,
+  type Option,
+  type RecipeDetail,
+} from './sous.ts'
+import type { PantryEntry } from './pantry.ts'
+import { SwapSheet } from './SwapSheet.tsx'
+import { swapText, type Swap, type SwapFit } from './swaps.ts'
 
 export interface RecipePageApi extends CookedApi {
   /** How often the user cooked it, when last, and their latest note (TYL-68). */
@@ -46,6 +54,21 @@ export interface RecipePageApi extends CookedApi {
   options(): Promise<{ cuisines: Option[] }>
   /** The user's own cuisines for a recipe; none goes back to the recipe's. */
   setMyCuisines(recipeId: string, slugs: string[]): Promise<void>
+  /** Swaps for these ingredients (TYL-77). */
+  swapsFor(ingredientIds: string[]): Promise<Swap[]>
+  /** The swaps the user chose for a recipe, by the ingredient swapped out. */
+  recipeSwaps(recipeId: string): Promise<Record<string, string>>
+  /** Save the user's swap for an ingredient in a recipe; null goes back to
+   *  the recipe's own. */
+  setRecipeSwap(
+    recipeId: string,
+    fromId: string,
+    swapId: string | null,
+  ): Promise<void>
+  /** How the recipe fits the user's diets with swaps, if it can. */
+  swapFit(recipeId: string): Promise<SwapFit | null>
+  /** The pantry: whether the user has what a swap uses. */
+  pantry(): Promise<PantryEntry[]>
 }
 
 /** "In season: tomatoes, basil" when the recipe's seasonal produce is mostly
@@ -104,6 +127,25 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
   // What's on hand of it (TYL-149: "You have"), and what it would add to
   // this week's shopping; both optional.
   const [have, setHave] = useState<Set<string> | null>(null)
+  // Swaps (TYL-77): those for the recipe's ingredients, the user's choices,
+  // how it fits with swaps, and the line whose swaps are open.
+  const [swaps, setSwaps] = useState<Swap[]>([])
+  const [chosen, setChosen] = useState<Record<string, string>>({})
+  const [swapFit, setSwapFit] = useState<SwapFit | null>(null)
+  const [swapping, setSwapping] = useState<IngredientLine | null>(null)
+  // What the pantry has, for swaps (what's swapped in may not be in the
+  // recipe).
+  const [stocked, setStocked] = useState<Set<string> | null>(null)
+  // Bumped after a swap is saved: the cost and the fit change with it.
+  const [swapVersion, setSwapVersion] = useState(0)
+  // Swaps chosen here, so loading the saved ones doesn't undo them; what's
+  // known to be saved, where a failed save goes back to; and saves on their
+  // way, each waiting for the one before (by ingredient).
+  const touched = useRef(new Set<string>())
+  const confirmed = useRef(new Map<string, string | undefined>())
+  const writes = useRef(new Map<string, Promise<void>>())
+  // Ingredients with a save that went through here: newer than the load.
+  const savedHere = useRef(new Set<string>())
   const [adds, setAdds] = useState<{
     cents: number
     estimated: boolean
@@ -115,6 +157,24 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       (items) => live && setHave(new Set(items.map((i) => i.ingredientId))),
       () => live && setHave(new Set()),
     )
+    api.pantry().then(
+      (p) =>
+        live &&
+        setStocked(
+          new Set(
+            p.filter((e) => e.status === 'have').map((e) => e.ingredientId),
+          ),
+        ),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api, id])
+
+  // What it would add to this week's shopping, again after a swap.
+  useEffect(() => {
+    let live = true
     api.addedCosts(weekOf(), [id]).then(
       (a) => {
         const r = a.recipes[id]
@@ -126,7 +186,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
     return () => {
       live = false
     }
-  }, [api, id])
+  }, [api, id, swapVersion])
 
   useEffect(() => {
     let live = true
@@ -143,6 +203,103 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
       live = false
     }
   }, [api, id])
+
+  // Swaps for the recipe's ingredients, and the user's; the page works
+  // without them.
+  const ingredientKey = (recipe?.ingredients ?? [])
+    .flatMap((l) => (l.ingredientId ? [l.ingredientId] : []))
+    .join(',')
+  useEffect(() => {
+    let live = true
+    if (ingredientKey) {
+      api.swapsFor([...new Set(ingredientKey.split(','))]).then(
+        (s) => live && setSwaps(s),
+        () => {},
+      )
+      api.recipeSwaps(id).then(
+        (saved) => {
+          if (!live) return
+          // What's saved, unless a save here went through since: what a
+          // failed save goes back to.
+          const ids = new Set([
+            ...Object.keys(saved),
+            ...confirmed.current.keys(),
+          ])
+          for (const from of ids)
+            if (!savedHere.current.has(from))
+              confirmed.current.set(from, saved[from])
+          setChosen((now) => {
+            const next = { ...saved }
+            // A choice made here stands while its save is on its way, or
+            // once it went through; after a failed one, what's saved shows.
+            for (const from of touched.current)
+              if (writes.current.has(from) || savedHere.current.has(from)) {
+                if (now[from]) next[from] = now[from]
+                else delete next[from]
+              }
+            return next
+          })
+        },
+        () => {},
+      )
+    }
+    return () => {
+      live = false
+    }
+  }, [api, id, ingredientKey])
+  // Only for a recipe that doesn't fit as it is.
+  useEffect(() => {
+    let live = true
+    if (fit === 'excluded')
+      api.swapFit(id).then(
+        (f) => live && setSwapFit(f),
+        () => {},
+      )
+    return () => {
+      live = false
+    }
+  }, [api, id, fit, swapVersion])
+
+  // Choose a swap for a line's ingredient, or go back to the recipe's.
+  async function chooseSwap(fromId: string, swapId: string | null) {
+    if (!touched.current.has(fromId)) {
+      touched.current.add(fromId)
+      if (!confirmed.current.has(fromId))
+        confirmed.current.set(fromId, chosen[fromId])
+    }
+    // Show this ingredient's swap (or none), leaving the others.
+    const show = (swap: string | undefined) =>
+      setChosen((c) => {
+        const next = { ...c }
+        if (swap) next[fromId] = swap
+        else delete next[fromId]
+        return next
+      })
+    show(swapId ?? undefined)
+    setSwapping(null)
+    const write = (writes.current.get(fromId) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => api.setRecipeSwap(id, fromId, swapId))
+    writes.current.set(fromId, write)
+    try {
+      await write
+      confirmed.current.set(fromId, swapId ?? undefined)
+      savedHere.current.add(fromId)
+      setSwapVersion((v) => v + 1)
+      showToast(
+        swapId
+          ? 'Swapped. Your list will buy that instead.'
+          : 'Back to the recipe’s.',
+      )
+    } catch {
+      // Only the newest change goes back, and to what's saved.
+      if (writes.current.get(fromId) === write)
+        show(confirmed.current.get(fromId))
+      showToast("We couldn't save that swap. Try again.")
+    } finally {
+      if (writes.current.get(fromId) === write) writes.current.delete(fromId)
+    }
+  }
 
   // What's in season, for the badge; the page works without it.
   useEffect(() => {
@@ -221,13 +378,33 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
   ].filter(Boolean)
   const lines = ingredientLines(recipe.ingredients)
 
+  // The swap chosen for a line's ingredient, if any.
+  const swapOf = (ingredientId: string | null | undefined) =>
+    ingredientId ? swaps.find((s) => s.id === chosen[ingredientId]) : undefined
   // "To buy" and "You have" (TYL-149): a line is had when every option of
-  // it is on hand; lines Sous couldn't match stay to buy.
+  // it is on hand; lines Sous couldn't match stay to buy. A swapped line is
+  // had when the pantry has what's swapped in, extras too (TYL-77).
   const isHad = (lineNo: number) => {
+    const options = recipe.ingredients.filter((o) => o.lineNo === lineNo)
+    const swap = swapOf(options[0]?.ingredientId)
+    if (swap)
+      return (
+        !!stocked && [swap.toId, ...swap.extraIds].every((x) => stocked.has(x))
+      )
+    const ids = options.map((o) => o.ingredientId)
+    return !!have && ids.length > 0 && ids.every((x) => x && have.has(x))
+  }
+  // Whether a line needs a swap to fit and none of its options has one
+  // that does.
+  const needsSwap = (lineNo: number) => {
     const ids = recipe.ingredients
       .filter((o) => o.lineNo === lineNo)
-      .map((o) => o.ingredientId)
-    return !!have && ids.length > 0 && ids.every((x) => x && have.has(x))
+      .flatMap((o) => (o.ingredientId ? [o.ingredientId] : []))
+    const fixes = swapFit?.fixes ?? {}
+    return (
+      ids.some((x) => fixes[x]) &&
+      !ids.some((x) => fixes[x]?.includes(chosen[x] ?? ''))
+    )
   }
   const toBuy = lines.filter((l) => !isHad(l.lineNo))
   const had = lines.filter((l) => isHad(l.lineNo))
@@ -244,11 +421,24 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
         ? line.section
         : null
     const haveIt = isHad(line.lineNo)
+    const fromId = line.ingredientId ?? null
+    const swapOptions = fromId ? swaps.filter((s) => s.fromId === fromId) : []
+    const swap = swapOf(fromId)
+    // A swap would make the recipe fit, and none that does is chosen yet.
+    const toFit = !swapFit?.chosen && needsSwap(line.lineNo)
     const item = (
       <li key={line.lineNo} className={haveIt ? 'have' : undefined}>
         <span className="dot" aria-hidden="true" />
         <span className="line-text">
-          {line.rawText}
+          {swap ? (
+            <>
+              <s>{line.rawText}</s> → {swapText(line, swap)}{' '}
+              <span className="muted small">(your swap)</span>
+            </>
+          ) : (
+            line.rawText
+          )}
+          {toFit && <span className="tag swap-to-fit">swap to fit</span>}
           {star && (
             <span className="star" aria-label="check the label">
               {' '}
@@ -258,6 +448,16 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
           {line.isOptional && <span className="muted small"> (optional)</span>}
         </span>
         {haveIt && <span className="small muted">have it</span>}
+        {swapOptions.length > 0 && (
+          <button
+            type="button"
+            className="link small"
+            aria-label={`Swap ${line.name ?? line.rawText}`}
+            onClick={() => setSwapping(line)}
+          >
+            {swap ? 'Change' : 'Swap'}
+          </button>
+        )}
       </li>
     )
     return heading ? (
@@ -415,8 +615,23 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
 
       {fit === 'excluded' && planned !== 'added' && (
         <p className="small warning" role="note">
-          This recipe doesn't fit your diets or allergies.
+          {swapFit
+            ? swapFit.chosen
+              ? 'Fits your diets and allergies with your swaps.'
+              : `Fits your diets and allergies with ${swapFit.count} swap${swapFit.count === 1 ? '' : 's'}: tap Swap on the marked ${swapFit.count === 1 ? 'line' : 'lines'}.`
+            : "This recipe doesn't fit your diets or allergies."}
         </p>
+      )}
+      {swapping?.ingredientId && (
+        <SwapSheet
+          line={swapping}
+          swaps={swaps.filter((s) => s.fromId === swapping.ingredientId)}
+          chosen={chosen[swapping.ingredientId] ?? null}
+          fixes={swapFit?.fixes[swapping.ingredientId] ?? []}
+          have={stocked}
+          onChoose={(swapId) => void chooseSwap(swapping.ingredientId!, swapId)}
+          onClose={() => setSwapping(null)}
+        />
       )}
       {planned === 'error' && (
         <p role="alert" className="error">
@@ -461,7 +676,7 @@ export function RecipePage({ id, api }: { id: string; api: RecipePageApi }) {
           >
             {planned === 'adding'
               ? 'Adding…'
-              : fit === 'excluded'
+              : fit === 'excluded' && !swapFit?.chosen
                 ? "Add to this week's plan anyway"
                 : "Add to this week's plan"}
           </button>

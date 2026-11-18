@@ -188,7 +188,7 @@ Users get three kinds of control (TYL-32):
 
 - `read_search_query()` reads a query into ingredients (via `match_ingredient`), cuisines, diets, courses ("dessert", "breakfast", "soup") and time ("quick", "under 30"); leftover words search titles and summaries (`recipes.search`).
 - `recipe_ingredients.grams` is each line's estimated weight (`line_grams()`: the `units` table, a copy of `app/pricing/units.py` kept in step by a unit test, plus `ingredient_units`, `grams_per_cup` and `grams_per_each`), set by a trigger; `refresh_line_grams()` recomputes after weights change.
-- `search_recipes(query, limit, offset)` ranks public, active recipes for the signed-in user: how much of the dish the searched ingredients are by weight, title and text matches, favorite cuisines and ingredients up, disliked ingredients far down, sauces and drinks down unless asked for. `recipe_fit_for_user` leaves out recipes that break the user's rules; for a user with rules, ones Sous can't fully check come after the rest.
+- `search_recipes(query, limit, offset)` ranks public, active recipes for the signed-in user: how much of the dish the searched ingredients are by weight, title and text matches, favorite cuisines and ingredients up, disliked ingredients far down, sauces and drinks down unless asked for. `recipe_fit_for_user()` says a recipe that breaks the user's rules is `excluded`, even when swaps could make it fit. `search_recipes()` leaves those out, except recipes that `recipe_swap_fit()` says fit with swaps (TYL-77): it shows them as `swaps`, after the ones that fit. For a user with rules, ones Sous can't fully check come after the rest.
 - `recipes.courses` comes from the source's categories (Wikibooks), set by `import_recipes()`.
 - The catalog leaves out what doesn't belong (human placenta, dog meat, pet food, endangered species): `apps/api/data/catalog_exclusions.csv`, applied on import, which also hides excluded recipes already loaded.
 
@@ -229,11 +229,19 @@ Users get three kinds of control (TYL-32):
 - When a plan is priced, `app/plans/live_prices.py` looks up the matched products for the user's store (their primary store, else the Asheville Harris Teeter during the beta), in batches of 50, and adds `store_api` quotes and the real package sizes to that request only. A sale price is valid until it ends. If Kroger fails, the plan is priced from estimates.
 - Kroger credentials are server-side API env only. Limits: Products 10,000 calls a day.
 
+### Substitutions (TYL-77)
+
+- `substitutions` is Sous's own swap guide (`apps/api/data/substitutions.csv`, built by `apps/api/scripts/build_substitutions.py`): from one ingredient to another, with a factor (in the recipe's unit, or "1 tbsp flaxseed per egg" with `to_unit` and `per_unit`), extras used in small amounts, what it's for (any, baking, cooking), how well it works, and a note.
+- `user_recipe_swaps` holds the swap a user chose for an ingredient in a recipe (owner-only; the swap must be for that ingredient; included in Export my data). `plan_cost_inputs()` sends them, and the buy list buys the swapped-in ingredients instead. On an "or" line ("buttermilk or whole milk"), the week settles which option is bought first, from the original ingredients; a swap applies only when the option it's for is the one bought, and a line with no option that fits waits for the user's choice as before.
+- `recipe_swap_fit(recipe, user)` says how many swaps make a recipe that the user's rules exclude fit, and which swaps fix each line: a swap counts only if what it brings in, extras too, clears every rule, and allergies stay strict ("may contain" never clears one). Find shows those recipes as `swaps`, after the ones that fit as they are; it checks every option of an "or" line, so "lamb or chicken" fits a vegetarian with chicken swapped for tofu. Plan drafts and the planner's settling of "or" lines still use `recipe_fit_for_user()` as before.
+
 ### Local food directory (TYL-69)
 
 - `local_places` lists farmers markets, co-ops, local grocers, bakeries, butchers, fish markets and farm stores, starting with Buncombe County, NC. They're kept apart from `stores`, which are price sources: a local place has no prices (TYL-62), but has opening `hours` (days, times and an optional month-day season, which may wrap the new year) and what it `sells`, in terms the shopping list can match (`produce`, `eggs`, `dairy`, `meat`, `seafood`, `bread`, `honey`, `grains`, or `groceries` for a full grocery).
 - The places are entered by hand in `apps/api/data/local_places.csv` from public listings (ASAP's Local Food Guide, the places' own sites, NCDA), facts only, each with its source and the day it was checked. `apps/api/scripts/build_local_places.py` checks the file and writes a data migration that upserts by `slug`.
 - `user_local_places` holds a user's favorites (owner-only), included in Export my data.
+
+### Crawling (TYL-26)
 
 - `crawl_pages` is the queue: one row per sitemap URL with its `lastmod` and what happened when we fetched it. `crawl_enqueue()` adds new URLs and re-queues a page only when its `lastmod` moves forward; blocked and disallowed pages are never re-queued automatically.
 - `crawl_runs` logs each nightly run per site: counts, and why it stopped if it did.
@@ -241,10 +249,10 @@ Users get three kinds of control (TYL-32):
 
 ### Access (row level security)
 
-- **Catalog** (recipes, ingredients, diets, cuisines, stores, local places, products, shared prices): readable by anyone, written only by the API using the service role.
+- **Catalog** (recipes, ingredients, diets, cuisines, stores, local places, substitutions, products, shared prices): readable by anyone, written only by the API using the service role.
 - **Crawler** (`crawl_pages`, `crawl_runs`): RLS with no policies, so only the service role can see them.
 - **Recipes:** anyone sees public `active` ones; users also see recipes they added. Ingredient lines, cuisines and diet labels follow their recipe.
-- **User data** (profile, favorites, plans, lists, own prices, own stores, favorite local places): only the owner can read or write.
+- **User data** (profile, favorites, plans, lists, own prices, own stores, favorite local places, chosen swaps): only the owner can read or write.
 
 ### Other choices
 

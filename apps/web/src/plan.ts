@@ -249,7 +249,7 @@ export async function copyPlan(
 }
 
 /** How a recipe fits the user's diets, allergies and exclusions. */
-export type Fit = 'fits' | 'check_label' | 'unknown' | 'excluded'
+export type Fit = 'fits' | 'check_label' | 'unknown' | 'excluded' | 'swaps'
 
 export async function recipeFits(
   db: SupabaseClient,

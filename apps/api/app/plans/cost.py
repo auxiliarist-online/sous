@@ -241,6 +241,50 @@ def plan_cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) 
     return cost
 
 
+def _swapped(
+    line: dict[str, Any],
+    swaps: dict[str, dict[str, Any]],
+    info: dict[str, dict[str, Any]],
+    conversions: dict[str, Ingredient],
+    own_units: dict[str, dict[str, float]],
+) -> list[dict[str, Any]]:
+    """A line the user swapped out (TYL-77) becomes the swap's lines: what
+    replaces it, at the recipe's amount times the factor (in the swap's unit
+    per its "per" unit: 2 eggs at 1 tbsp flaxseed each is 2 tbsp), and its
+    extras without an amount. Other lines, and swaps to something not in the
+    inputs, stay as they are."""
+    swap = swaps.get(line.get("ingredient_id") or "")
+    if not swap or swap.get("to") not in info:
+        return [line]
+    from_id = line["ingredient_id"]
+    quantity = _float(line.get("quantity"))
+    factor = _float(swap.get("factor")) or 1.0
+    unit = line.get("unit")
+    if quantity is not None and swap.get("to_unit"):
+        # Already in the swap's "per" unit (a can of tomatoes), or converted.
+        per = (
+            quantity
+            if (unit or "each") == swap["per_unit"]
+            else _convert(
+                quantity,
+                unit or "each",
+                swap["per_unit"],
+                conversions[from_id],
+                own_units.get(from_id),
+            )
+        )
+        quantity, unit = (per * factor, swap["to_unit"]) if per is not None else (None, None)
+    elif quantity is not None:
+        quantity *= factor
+    main = {**line, "ingredient_id": swap["to"], "quantity": quantity, "unit": unit}
+    extras = [
+        {**line, "ingredient_id": x, "quantity": None, "unit": None}
+        for x in swap.get("extras") or []
+        if x in info
+    ]
+    return [main, *extras]
+
+
 def _cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) -> PlanCost:
     """The week's cost and buy list, for entries whose "or" lines are settled."""
     info: dict[str, dict[str, Any]] = inputs.get("ingredients", {})
@@ -273,7 +317,13 @@ def _cost(inputs: dict[str, Any], *, on: date, store_id: str | None = None) -> P
     for entry in planned:
         entry_id = str(entry.get("id"))
         scale = float(entry.get("scale") or 1)
-        for line in entry["lines"]:
+        swaps = entry.get("swaps") or {}
+        lines = [
+            out
+            for line in entry["lines"]
+            for out in _swapped(line, swaps, info, conversions, own_units)
+        ]
+        for line in lines:
             ingredient_id = line.get("ingredient_id")
             if not ingredient_id or ingredient_id not in info:
                 unmatched.append(Item(name=line.get("raw_text") or "?", amount_unknown=True))

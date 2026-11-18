@@ -516,3 +516,55 @@ class TestRoute:
 
     def test_needs_sign_in(self) -> None:
         assert TestClient(app).get("/plans/2026-10-12/cost").status_code == 401
+
+
+class TestSwaps:
+    """The user's swaps change what's bought (TYL-77)."""
+
+    def test_a_swap_with_its_own_unit_is_bought_instead(self) -> None:
+        swaps = {
+            EGGS: {
+                "to": CARROTS,
+                "factor": 0.5,
+                "to_unit": "cup",
+                "per_unit": "each",
+                "extras": [SALT],
+            }
+        }
+        cost = cost_of(entry([line(EGGS, 2, None)], swaps=swaps))
+        names = {i.name for i in cost.items}
+        assert "eggs" not in names
+        carrots = item(cost, "carrots")
+        # 2 eggs at half a cup each, as the carrots' cups.
+        assert carrots.quantity == pytest.approx(1)
+        assert carrots.unit == "cup"
+        assert item(cost, "salt").amount_unknown
+
+    def test_a_swap_in_the_same_unit_scales_with_the_recipe(self) -> None:
+        swaps = {
+            RICE: {"to": CARROTS, "factor": 0.5, "to_unit": None, "per_unit": None, "extras": []}
+        }
+        cost = cost_of(entry([line(RICE, 2, "cup")], scale=2, swaps=swaps))
+        assert item(cost, "carrots").quantity == pytest.approx(2)
+        assert "white rice" not in {i.name for i in cost.items}
+
+    def test_a_swap_to_something_unknown_leaves_the_line(self) -> None:
+        swaps = {RICE: {"to": "nowhere", "factor": 1, "extras": []}}
+        cost = cost_of(entry([line(RICE, 1, "cup")], swaps=swaps))
+        assert item(cost, "white rice").quantity is not None
+
+    def test_an_amount_that_cant_convert_is_unknown(self) -> None:
+        swaps = {
+            BASIL: {"to": CARROTS, "factor": 1, "to_unit": "cup", "per_unit": "cup", "extras": []}
+        }
+        cost = cost_of(entry([line(BASIL, 1, "bunch")], swaps=swaps))
+        assert item(cost, "carrots").amount_unknown
+
+    def test_a_swap_per_can_needs_no_conversion(self) -> None:
+        swaps = {
+            RICE: {"to": CARROTS, "factor": 1.5, "to_unit": "lb", "per_unit": "can", "extras": []}
+        }
+        cost = cost_of(entry([line(RICE, 2, "can")], swaps=swaps))
+        carrots = item(cost, "carrots")
+        assert carrots.quantity == pytest.approx(3)
+        assert carrots.unit == "lb"
