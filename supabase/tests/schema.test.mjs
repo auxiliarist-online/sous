@@ -4269,3 +4269,130 @@ describe('past choices in recommendations (TYL-16)', () => {
     )
   })
 })
+
+describe('local food directory (TYL-69)', () => {
+  const LOU = '00000000-0000-0000-0000-000000006901'
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1)', [LOU])
+  })
+
+  it('loads the Buncombe places, readable by anyone', async () => {
+    const { rows } = await as('anon', null, () =>
+      db.query(
+        `select kind, count(*)::int as n from local_places group by kind order by kind`,
+      ),
+    )
+    const kinds = Object.fromEntries(rows.map((r) => [r.kind, r.n]))
+    assert.ok(kinds.farmers_market >= 10)
+    assert.ok(kinds.bakery >= 1 && kinds.butcher >= 1 && kinds.co_op >= 1)
+    const {
+      rows: [market],
+    } = await db.query(
+      "select sells, hours from local_places where slug = 'asheville-city-market'",
+    )
+    assert.ok(market.sells.includes('eggs'))
+    assert.deepEqual(market.hours[0], {
+      days: [6],
+      opens: '09:00',
+      closes: '12:00',
+      from: '04-04',
+      to: '11-28',
+    })
+  })
+
+  it('takes only what the shopping list can match, and only the API writes', async () => {
+    await assert.rejects(
+      db.query(
+        `insert into local_places (slug, name, kind, address, town, zip, latitude,
+           longitude, sells, source_url, checked_on)
+         values ('candles', 'Candles', 'bakery', '1 Main St', 'Asheville', '28801',
+           35.6, -82.5, '{candles}', 'https://example.org', '2026-11-11')`,
+      ),
+      /check constraint/,
+    )
+    // No write policy: a user's update matches nothing.
+    await as('authenticated', LOU, () =>
+      db.query(
+        "update local_places set name = 'Mine' where slug = 'city-bakery'",
+      ),
+    )
+    const { rows } = await db.query(
+      "select name from local_places where slug = 'city-bakery'",
+    )
+    assert.equal(rows[0].name, 'City Bakery')
+  })
+
+  it('keeps favorites private to the user, and exports them', async () => {
+    const {
+      rows: [{ id }],
+    } = await db.query(
+      "select id from local_places where slug = 'west-asheville-tailgate-market'",
+    )
+    await as('authenticated', LOU, () =>
+      db.query('insert into user_local_places (place_id) values ($1)', [id]),
+    )
+    await assert.rejects(
+      as('authenticated', LOU, () =>
+        db.query(
+          'insert into user_local_places (user_id, place_id) values ($1, $2)',
+          [BOB, id],
+        ),
+      ),
+      /row-level security/,
+    )
+    const { rows: seen } = await as('authenticated', BOB, () =>
+      db.query('select * from user_local_places'),
+    )
+    assert.equal(seen.length, 0)
+    const { rows } = await as('authenticated', LOU, () =>
+      db.query('select export_my_data() as d'),
+    )
+    assert.deepEqual(rows[0].d.local_places, ['West Asheville Tailgate Market'])
+  })
+})
+
+describe('local first on the list (TYL-71)', () => {
+  const LIV = '00000000-0000-0000-0000-000000007101'
+
+  before(async () => {
+    await db.query('insert into auth.users (id) values ($1)', [LIV])
+  })
+
+  it('is on by default, and remembers where to buy things, privately', async () => {
+    const eggs = await ingredient('eggs (TYL-71)', ['egg'])
+    const rows = await as('authenticated', LIV, async () => {
+      await db.query('insert into profiles (user_id) values ($1)', [LIV])
+      await db.query(
+        "insert into user_local_preferences (ingredient_id, prefer) values ($1, 'store')",
+        [eggs],
+      )
+      await assert.rejects(
+        db.query(
+          "insert into user_local_preferences (ingredient_id, prefer) values ($1, 'sometimes') on conflict (user_id, ingredient_id) do update set prefer = excluded.prefer",
+          [eggs],
+        ),
+        /check constraint/,
+      )
+      return (await db.query('select export_my_data() as d')).rows
+    })
+    assert.equal(rows[0].d.profile.local_first, true)
+    assert.deepEqual(rows[0].d.where_to_buy, [
+      { ingredient: 'eggs (TYL-71)', at: 'store' },
+    ])
+    assert.deepEqual(rows[0].d.local_places, [])
+    const { rows: seen } = await as('authenticated', BOB, () =>
+      db.query('select * from user_local_preferences'),
+    )
+    assert.equal(seen.length, 0)
+    await assert.rejects(
+      as('authenticated', BOB, () =>
+        db.query(
+          "insert into user_local_preferences (user_id, ingredient_id, prefer) values ($1, $2, 'local')",
+          [LIV, eggs],
+        ),
+      ),
+      /row-level security/,
+    )
+  })
+})
