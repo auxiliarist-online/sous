@@ -59,7 +59,11 @@ export function SeasonalPage({ api, now }: { api: SeasonalApi; now?: Date }) {
         setSeasons(s)
         const ids = inSeasonNow(s, month).map((i) => i.ingredientId)
         api.seasonalRecipes(ids).then(
-          (r) => live && setRecipes(r),
+          (r) => {
+            if (!live) return
+            setRecipes(r)
+            setRecipesFailedAt(null)
+          },
           () => live && setRecipesFailedAt(attempt),
         )
       },

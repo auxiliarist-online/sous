@@ -135,4 +135,19 @@ describe('the Seasonal page (TYL-90)', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/We couldn't load the recipes/)).toBeNull()
   })
+
+  it('clears a recipes error when they load again without Try again', async () => {
+    const failing = api()
+    vi.mocked(failing.seasonalRecipes).mockRejectedValueOnce(new Error('down'))
+    const { rerender } = render(<SeasonalPage api={failing} now={NOV} />)
+    expect(
+      await screen.findByText(/We couldn't load the recipes/),
+    ).toBeInTheDocument()
+    // A fresh load (another account's api, or a new month) that works.
+    rerender(<SeasonalPage api={api()} now={NOV} />)
+    expect(
+      await screen.findByRole('link', { name: 'Squash tacos' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/We couldn't load the recipes/)).toBeNull()
+  })
 })
