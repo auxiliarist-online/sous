@@ -13,6 +13,7 @@ import { CookMode, TimerBar } from './CookMode.tsx'
 import { offlineCooked } from './cookedQueue.ts'
 import { PantryPage, type PantryApi } from './PantryPage.tsx'
 import { LocalPage, type LocalApi } from './LocalPage.tsx'
+import { SeasonalPage, type SeasonalApi } from './SeasonalPage.tsx'
 import {
   loadFavoritePlaces,
   loadLocalPlaces,
@@ -72,7 +73,7 @@ import {
 } from './list.ts'
 import { RecipeForm, type RecipeFormApi } from './RecipeForm.tsx'
 import { History, type HistoryApi } from './History.tsx'
-import { loadSeasons, type Seasons } from './seasons.ts'
+import { loadSeasonalRecipes, loadSeasons, type Seasons } from './seasons.ts'
 import {
   dismissedSuggestions,
   dismissSuggestion,
@@ -143,7 +144,8 @@ export type SousApi = LibraryApi &
   BrowseApi &
   FeedbackApi &
   HistoryApi &
-  LocalApi & {
+  LocalApi &
+  SeasonalApi & {
     /** Forget the cached seasons: the home zip (the region) may have changed. */
     resetSeasons(): void
   }
@@ -244,6 +246,7 @@ function liveApi(db: SupabaseClient, session: Session): SousApi {
     addPlace: (name) => addPlace(db, userId, name),
     pantry: () => loadPantry(db),
     localPlaces: () => loadLocalPlaces(db),
+    seasonalRecipes: (ids) => loadSeasonalRecipes(db, ids),
     favoritePlaces: () => loadFavoritePlaces(db),
     setFavoritePlace: (id, favorite) =>
       setFavoritePlace(db, userId, id, favorite),
@@ -399,13 +402,23 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
         <PantryPage api={api} prefs={prefs ?? undefined} />
       )}
       {at.page === 'history' && <History api={api} />}
+      {at.page === 'seasonal' && (
+        <>
+          <Link to="/browse" className="back">
+            <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
+            Find
+          </Link>
+          {/* Per account: another one signing in starts it afresh. */}
+          <SeasonalPage key={session.user.id} api={api} />
+        </>
+      )}
       {at.page === 'local' && (
         <>
           <Link to="/" className="back">
             <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
             This week
           </Link>
-          <LocalPage api={api} />
+          <LocalPage key={session.user.id} api={api} />
         </>
       )}
       {at.page === 'settings' && (

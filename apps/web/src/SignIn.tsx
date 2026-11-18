@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import type { Auth } from './auth.ts'
+import { googleSignIn, type Auth } from './auth.ts'
 import { Link } from './router.tsx'
 import { codeError, sendError } from './signInErrors.ts'
 
@@ -9,10 +9,30 @@ type Status =
   | { state: 'sent'; email: string }
   | { state: 'error'; message: string }
 
-/** Sign in with a code emailed to you; links to the privacy page. */
-export function SignIn({ auth }: { auth: Auth }) {
+/** Sign in with Google (when it's set up, TYL-48) or a code emailed to
+ *  you; links to the privacy page. `google` is for tests. */
+export function SignIn({
+  auth,
+  google = googleSignIn,
+}: {
+  auth: Auth
+  google?: boolean
+}) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<Status>({ state: 'idle' })
+  const [googleFailed, setGoogleFailed] = useState(false)
+
+  // Off to Google; it comes back to the page you started on, signed in.
+  async function withGoogle() {
+    setGoogleFailed(false)
+    const { error } = await auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin + window.location.pathname,
+      },
+    })
+    if (error) setGoogleFailed(true)
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -46,6 +66,23 @@ export function SignIn({ auth }: { auth: Auth }) {
   return (
     <form className="card screen sign-in" onSubmit={submit}>
       <h2 className="screen-title">Sign in</h2>
+      {google && (
+        <>
+          <button
+            type="button"
+            className="secondary google"
+            onClick={() => void withGoogle()}
+          >
+            Continue with Google
+          </button>
+          {googleFailed && (
+            <p role="alert" className="error small">
+              We couldn't reach Google. Try again, or use your email below.
+            </p>
+          )}
+          <p className="or small muted">or</p>
+        </>
+      )}
       <p className="muted">We'll email you a code. No password needed.</p>
       <label htmlFor="email">Email</label>
       <input

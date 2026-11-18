@@ -74,3 +74,98 @@ export function seasonsFrom(zip: string | null): string {
     ? `North Carolina's chart, from your zip ${zip}.`
     : `The USDA's national guide (no state chart for ${zip} yet).`
 }
+
+/** A few recipes for each ingredient in season (TYL-90): by ingredient id,
+ *  the user's saved ones first. */
+export async function loadSeasonalRecipes(
+  db: SupabaseClient,
+  ingredientIds: string[],
+  per = 4,
+): Promise<
+  Map<
+    string,
+    { id: string; title: string; saved: boolean; source: string | null }[]
+  >
+> {
+  const out = new Map<
+    string,
+    { id: string; title: string; saved: boolean; source: string | null }[]
+  >()
+  if (!ingredientIds.length) return out
+  const { data, error } = await db.rpc('seasonal_recipes', {
+    p_ingredients: ingredientIds,
+    p_per: per,
+  })
+  if (error) throw error
+  for (const r of data as {
+    ingredient_id: string
+    recipe_id: string
+    title: string
+    saved: boolean
+    source_name: string | null
+  }[])
+    out.set(r.ingredient_id, [
+      ...(out.get(r.ingredient_id) ?? []),
+      {
+        id: r.recipe_id,
+        title: r.title,
+        saved: r.saved,
+        source: r.source_name,
+      },
+    ])
+  return out
+}
+
+/** What arrives next month and isn't in season now: by name. */
+export function comingNext(
+  seasons: Seasons,
+  month: number,
+): { ingredientId: string; name: string }[] {
+  const next = (month % 12) + 1
+  return [...seasons]
+    .filter(
+      ([id]) =>
+        seasonOf(seasons, id, next) === 'in' &&
+        seasonOf(seasons, id, month) === 'out',
+    )
+    .map(([ingredientId, s]) => ({ ingredientId, name: s.name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]
+
+/** A season in words: [6,7,8,9] -> "Jun–Sep", [11,12,1,2] -> "Nov–Feb",
+ *  [4,5,9,10] -> "Apr–May, Sep–Oct". */
+export function monthsText(months: number[]): string {
+  const set = new Set(months)
+  if (set.size >= 12) return 'all year'
+  // Start each run at a month whose month before isn't in season.
+  const runs: [number, number][] = []
+  for (let m = 1; m <= 12; m++) {
+    const before = m === 1 ? 12 : m - 1
+    if (!set.has(m) || set.has(before)) continue
+    let end = m
+    while (set.has((end % 12) + 1) && (end % 12) + 1 !== m) end = (end % 12) + 1
+    runs.push([m, end])
+  }
+  return runs
+    .map(([a, b]) =>
+      a === b
+        ? MONTH_NAMES[a - 1]
+        : `${MONTH_NAMES[a - 1]}–${MONTH_NAMES[b - 1]}`,
+    )
+    .join(', ')
+}

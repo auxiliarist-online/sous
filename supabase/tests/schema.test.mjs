@@ -4396,3 +4396,101 @@ describe('local first on the list (TYL-71)', () => {
     )
   })
 })
+
+describe('NHLBI recipes (TYL-42)', () => {
+  it('publishes what the importer sends, under its source', async () => {
+    const { id, published, visibility, instructions } = await as(
+      'service_role',
+      null,
+      async () => {
+        const {
+          rows: [{ r }],
+        } = await db.query('select import_recipe($1) as r', [
+          {
+            added_by: null,
+            // As app/recipes/nhlbi.py sends it.
+            source: {
+              domain: 'nhlbi.nih.gov',
+              name: 'NHLBI Healthy Eating Recipes',
+            },
+            recipe: {
+              source_url:
+                'https://www.nhlbi.nih.gov/health/heart-healthy-living/healthy-foods/healthy-eating-recipes/test-soup',
+              title: 'Test soup (TYL-42)',
+              servings: 4,
+              instructions: ['Warm it.', 'Serve it.'],
+            },
+            ingredients: [{ line_no: 0, raw_text: '2 C white beans' }],
+          },
+        ])
+        const {
+          rows: [src],
+        } = await db.query(
+          "select id from recipe_sources where domain = 'nhlbi.nih.gov'",
+        )
+        const {
+          rows: [{ n }],
+        } = await db.query('select publish_licensed_recipes($1) as n', [src.id])
+        const {
+          rows: [rec],
+        } = await db.query(
+          'select visibility, instructions from recipes where id = $1',
+          [r.recipe_id],
+        )
+        return { id: r.recipe_id, published: n, ...rec }
+      },
+    )
+    assert.ok(id)
+    assert.equal(published, 1)
+    assert.equal(visibility, 'public')
+    // Public domain: the steps are kept.
+    assert.deepEqual(instructions, ['Warm it.', 'Serve it.'])
+  })
+
+  it('is a public-domain source, imported rather than crawled', async () => {
+    const { rows } = await db.query(
+      `select content_rights, crawl_enabled, license_name, attribution
+       from recipe_sources where domain = 'nhlbi.nih.gov'`,
+    )
+    assert.deepEqual(rows, [
+      {
+        content_rights: 'public_domain',
+        crawl_enabled: false,
+        license_name: 'Public domain',
+        attribution: 'National Heart, Lung, and Blood Institute (NIH)',
+      },
+    ])
+  })
+})
+
+describe('the Seasonal page (TYL-90)', () => {
+  const SEA = '00000000-0000-0000-0000-000000009001'
+
+  it('offers recipes for what’s in season, saved ones first, only what the user sees', async () => {
+    await db.query('insert into auth.users (id) values ($1)', [SEA])
+    const squash = await ingredient('delicata test squash (TYL-90)')
+    const salt = await ingredient('salt')
+    const soup = await recipe('Squash soup (TYL-90)', [[squash], [salt]])
+    const saved = await recipe('Squash tacos (TYL-90)', [[squash]])
+    await recipe('Someone’s squash (TYL-90)', [[squash]], {
+      visibility: 'private',
+      addedBy: ALICE,
+    })
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+      [SEA, saved],
+    )
+    const { rows } = await as('authenticated', SEA, () =>
+      db.query('select * from seasonal_recipes($1, 4)', [[squash]]),
+    )
+    assert.deepEqual(
+      rows.map((r) => [r.title, r.saved]),
+      [
+        ['Squash tacos (TYL-90)', true],
+        ['Squash soup (TYL-90)', false],
+      ],
+    )
+    assert.ok(rows.every((r) => r.ingredient_id === squash))
+    assert.ok(rows.some((r) => r.recipe_id === soup))
+  })
+})

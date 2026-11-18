@@ -167,9 +167,12 @@ async def hide(urls: list[str]) -> None:
         resp.raise_for_status()
 
 
-async def load(drafts: list[RecipeDraft], batch: int, concurrency: int) -> int:
+async def load(
+    drafts: list[RecipeDraft], batch: int, concurrency: int, domain: str = DOMAIN
+) -> int:
     """Save drafts in batches through import_recipes(), a few batches at a
-    time, then publish them."""
+    time, then publish their source's recipes (Wikibooks unless `domain`
+    says otherwise)."""
     key = settings.supabase_service_role_key
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
     base = f"{settings.supabase_url}/rest/v1"
@@ -200,7 +203,7 @@ async def load(drafts: list[RecipeDraft], batch: int, concurrency: int) -> int:
         for f in failed:
             print(f"failed: {f['source_url']}: {f['error']}", file=sys.stderr)
         source = await client.get(
-            f"{base}/recipe_sources", params={"select": "id", "domain": f"eq.{DOMAIN}"}
+            f"{base}/recipe_sources", params={"select": "id", "domain": f"eq.{domain}"}
         )
         source.raise_for_status()
         published = await client.post(

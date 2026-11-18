@@ -1,0 +1,153 @@
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+import type { LocalPlace } from './local.ts'
+import { SeasonalPage, type SeasonalApi } from './SeasonalPage.tsx'
+import { comingNext, monthsText, type Seasons } from './seasons.ts'
+
+const SEASONS: Seasons = new Map([
+  ['i-squash', { name: 'winter squash', months: [9, 10, 11, 12, 1, 2] }],
+  ['i-kale', { name: 'kale', months: [10, 11, 12] }],
+  ['i-peas', { name: 'peas', months: [12, 1] }],
+  [
+    'i-onion',
+    { name: 'onions', months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+  ],
+])
+// November 18, 2026.
+const NOV = new Date(2026, 10, 18, 10, 0)
+
+const market: LocalPlace = {
+  id: 'm1',
+  name: 'City Market',
+  kind: 'farmers_market',
+  address: '52 N Market St',
+  town: 'Asheville',
+  zip: '28801',
+  latitude: 35.6,
+  longitude: -82.55,
+  sells: ['produce', 'eggs'],
+  hours: [{ days: [6], opens: '09:00', closes: '12:00' }],
+  website: null,
+  sourceUrl: 'https://example.org',
+  checkedOn: '2026-11-11',
+}
+
+function api(favorites: string[] = ['m1']): SeasonalApi {
+  return {
+    seasons: vi.fn(async () => SEASONS),
+    seasonalRecipes: vi.fn(
+      async () =>
+        new Map([
+          [
+            'i-squash',
+            [
+              {
+                id: 'r1',
+                title: 'Squash tacos',
+                saved: true,
+                source: 'Grandma’s card',
+              },
+              {
+                id: 'r2',
+                title: 'Squash soup',
+                saved: false,
+                source: 'Open Cookbook',
+              },
+            ],
+          ],
+        ]),
+    ),
+    localPlaces: vi.fn(async () => [market]),
+    favoritePlaces: vi.fn(async () => favorites),
+  }
+}
+
+describe('seasons in words (TYL-90)', () => {
+  it('says a season as month ranges, across the new year', () => {
+    expect(monthsText([6, 7, 8, 9])).toBe('Jun–Sep')
+    expect(monthsText([11, 12, 1, 2])).toBe('Nov–Feb')
+    expect(monthsText([4, 5, 9, 10])).toBe('Apr–May, Sep–Oct')
+    expect(monthsText([7])).toBe('Jul')
+    expect(monthsText([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])).toBe('all year')
+  })
+
+  it('knows what’s coming next month', () => {
+    expect(comingNext(SEASONS, 11).map((i) => i.name)).toEqual(['peas'])
+  })
+})
+
+describe('the Seasonal page (TYL-90)', () => {
+  it('lists what’s in season with recipes, what’s next, and your markets', async () => {
+    const a = api()
+    render(<SeasonalPage api={a} now={NOV} />)
+    const squash = (
+      await screen.findByRole('heading', { name: 'winter squash' })
+    ).closest('li')!
+    expect(within(squash).getByText('In season Sep–Feb')).toBeInTheDocument()
+    expect(
+      within(squash).getByRole('link', { name: 'Squash tacos' }),
+    ).toHaveAttribute('href', '/recipe/r1')
+    expect(within(squash).getByText('Yours')).toBeInTheDocument()
+    expect(within(squash).getByText('Open Cookbook')).toBeInTheDocument()
+    // Onions are in season all year: not news.
+    expect(screen.queryByRole('heading', { name: 'onions' })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'kale' })).toBeInTheDocument()
+    expect(screen.getByText('peas')).toBeInTheDocument()
+    expect(
+      await screen.findByText(/City Market \(Sat 9 am – 12 pm\)/),
+    ).toBeInTheDocument()
+    expect(a.seasonalRecipes).toHaveBeenCalledWith(['i-kale', 'i-squash'])
+  })
+
+  it('points to the directory without favorite markets', async () => {
+    render(<SeasonalPage api={api([])} now={NOV} />)
+    expect(
+      await screen.findByRole('link', { name: 'Find markets near you' }),
+    ).toHaveAttribute('href', '/local')
+  })
+
+  it('clears a failed load when it loads again', async () => {
+    const failing = {
+      ...api(),
+      seasons: vi.fn(async () => Promise.reject(new Error('down'))),
+    }
+    const { rerender } = render(<SeasonalPage api={failing} now={NOV} />)
+    expect(
+      await screen.findByText("We couldn't load what's in season."),
+    ).toBeInTheDocument()
+    rerender(<SeasonalPage api={api()} now={NOV} />)
+    expect(
+      await screen.findByRole('heading', { name: 'kale' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText("We couldn't load what's in season.")).toBeNull()
+  })
+
+  it('says when the recipes can’t load, and tries again', async () => {
+    const a = api()
+    vi.mocked(a.seasonalRecipes).mockRejectedValueOnce(new Error('down'))
+    render(<SeasonalPage api={a} now={NOV} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Try again' }),
+    )
+    expect(
+      await screen.findByRole('link', { name: 'Squash tacos' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/We couldn't load the recipes/)).toBeNull()
+  })
+
+  it('clears a recipes error when they load again without Try again', async () => {
+    const failing = api()
+    vi.mocked(failing.seasonalRecipes).mockRejectedValueOnce(new Error('down'))
+    const { rerender } = render(<SeasonalPage api={failing} now={NOV} />)
+    expect(
+      await screen.findByText(/We couldn't load the recipes/),
+    ).toBeInTheDocument()
+    // A fresh load (another account's api, or a new month) that works.
+    rerender(<SeasonalPage api={api()} now={NOV} />)
+    expect(
+      await screen.findByRole('link', { name: 'Squash tacos' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/We couldn't load the recipes/)).toBeNull()
+  })
+})

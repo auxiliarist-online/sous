@@ -1,5 +1,5 @@
-// Supabase Auth in the browser: email magic links for now (ADR 0001 also
-// plans Google). Only the public anon key is used here.
+// Supabase Auth in the browser: a code by email, and Google (TYL-48) once
+// it's set up. Only the public anon key is used here.
 import {
   createClient,
   type Session,
@@ -10,8 +10,17 @@ import { useEffect, useState } from 'react'
 /** The parts of Supabase Auth the app uses; tests pass a fake. */
 export type Auth = Pick<
   SupabaseClient['auth'],
-  'getSession' | 'onAuthStateChange' | 'signInWithOtp' | 'verifyOtp' | 'signOut'
+  | 'getSession'
+  | 'onAuthStateChange'
+  | 'signInWithOtp'
+  | 'verifyOtp'
+  | 'signInWithOAuth'
+  | 'signOut'
 >
+
+/** Whether "Continue with Google" is offered (TYL-48): on once the Google
+ *  provider is set up in Supabase (VITE_GOOGLE_SIGN_IN=on). */
+export const googleSignIn = import.meta.env.VITE_GOOGLE_SIGN_IN === 'on'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
