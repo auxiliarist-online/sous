@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { LocalPlace } from './local.ts'
 import { SeasonalPage, type SeasonalApi } from './SeasonalPage.tsx'
@@ -120,5 +121,18 @@ describe('the Seasonal page (TYL-90)', () => {
       await screen.findByRole('heading', { name: 'kale' }),
     ).toBeInTheDocument()
     expect(screen.queryByText("We couldn't load what's in season.")).toBeNull()
+  })
+
+  it('says when the recipes can’t load, and tries again', async () => {
+    const a = api()
+    vi.mocked(a.seasonalRecipes).mockRejectedValueOnce(new Error('down'))
+    render(<SeasonalPage api={a} now={NOV} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Try again' }),
+    )
+    expect(
+      await screen.findByRole('link', { name: 'Squash tacos' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/We couldn't load the recipes/)).toBeNull()
   })
 })

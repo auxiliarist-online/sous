@@ -38,6 +38,10 @@ export function SeasonalPage({ api, now }: { api: SeasonalApi; now?: Date }) {
   // The api whose load failed: a new one starts without the error.
   const [failedFor, setFailedFor] = useState<SeasonalApi | null>(null)
   const failed = failedFor === api
+  // Loads so far (Try again adds one), and the one whose recipes failed.
+  const [attempt, setAttempt] = useState(0)
+  const [recipesFailedAt, setRecipesFailedAt] = useState<number | null>(null)
+  const recipesFailed = recipesFailedAt === attempt
   const [recipes, setRecipes] = useState<
     Map<
       string,
@@ -56,7 +60,7 @@ export function SeasonalPage({ api, now }: { api: SeasonalApi; now?: Date }) {
         const ids = inSeasonNow(s, month).map((i) => i.ingredientId)
         api.seasonalRecipes(ids).then(
           (r) => live && setRecipes(r),
-          () => {},
+          () => live && setRecipesFailedAt(attempt),
         )
       },
       () => live && setFailedFor(api),
@@ -77,7 +81,7 @@ export function SeasonalPage({ api, now }: { api: SeasonalApi; now?: Date }) {
     return () => {
       live = false
     }
-  }, [api, month])
+  }, [api, month, attempt])
 
   const now_ = seasons ? inSeasonNow(seasons, month) : []
   const next = seasons ? comingNext(seasons, month) : []
@@ -114,6 +118,18 @@ export function SeasonalPage({ api, now }: { api: SeasonalApi; now?: Date }) {
       {!failed && !seasons && <p className="muted">Loading…</p>}
       {seasons && now_.length === 0 && (
         <p className="muted">Nothing seasonal this month.</p>
+      )}
+      {recipesFailed && (
+        <p role="alert" className="error small">
+          We couldn't load the recipes for these.{' '}
+          <button
+            type="button"
+            className="link"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            Try again
+          </button>
+        </p>
       )}
       <ul className="seasonal-list">
         {now_.map((item) => {
