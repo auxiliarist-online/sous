@@ -2621,3 +2621,29 @@ button.heart[aria-pressed='true'] {
   padding: 0;
   list-style: none;
 }
+
+/* Sales and the budget on the list (TYL-22). */
+.on-sale {
+  color: var(--color-accent-2);
+  font-weight: 700;
+}
+
+.over-budget {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0 0 1rem;
+  padding: 12px 16px;
+  border-radius: 24px;
+  background: var(--color-brown-soft);
+  color: var(--color-brown-ink);
+  font-size: 14px;
+}
+
+.over-budget p {
+  margin: 0;
+}
+
+.over-budget a {
+  color: var(--color-brown-ink);
+}

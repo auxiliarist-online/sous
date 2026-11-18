@@ -1261,3 +1261,54 @@ describe('local first on the list (TYL-71)', () => {
     ).toHaveAttribute('href', '/local')
   })
 })
+
+describe('sales and the budget on the list (TYL-22)', () => {
+  it('marks what’s on sale, with what it saves and until when', async () => {
+    const api = listApi({
+      listCost: vi.fn(async () => ({
+        ...COST,
+        items: [
+          buy('eggs', {
+            aisle: 'dairy_eggs',
+            cents: 299,
+            onSale: true,
+            regularCents: 399,
+            saleEnds: '2026-10-17',
+          }),
+          buy('rice', { cents: 250 }),
+        ],
+      })),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    expect(
+      await screen.findByText(/sale, save \$1\.00 until Sat/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Saving $1.00 on sales this week'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Over budget' })).toBeNull()
+  })
+
+  it('says how far over budget, the biggest costs, and where to cut', async () => {
+    const api = listApi({
+      listCost: vi.fn(async () => ({
+        ...COST,
+        budgetCents: 500,
+        totalCents: 649,
+        items: [
+          buy('eggs', { aisle: 'dairy_eggs', cents: 399 }),
+          buy('rice', { cents: 250 }),
+        ],
+      })),
+    })
+    render(<ListPage api={api} week={WEEK} user="u" />)
+    const over = await screen.findByRole('region', { name: 'Over budget' })
+    expect(over).toHaveTextContent('$1.49 over your budget.')
+    expect(over).toHaveTextContent('The biggest costs: eggs $3.99, rice $2.50.')
+    expect(
+      within(over).getByRole('link', {
+        name: 'Swap a recipe for a cheaper one on the plan',
+      }),
+    ).toHaveAttribute('href', '/plan')
+  })
+})

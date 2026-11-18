@@ -371,6 +371,27 @@ export function ListPage({
   const prices = new Map(
     (cost?.items ?? []).map((i) => [i.ingredientId, i] as const),
   )
+  // A plan item on sale at the user's store (TYL-22): what it saves, and
+  // until when.
+  const saleOf = (i: ListItem) => {
+    const p = i.ingredientId ? prices.get(i.ingredientId) : undefined
+    if (!p?.onSale || p.cents == null) return null
+    return {
+      saves: p.regularCents != null ? Math.max(0, p.regularCents - p.cents) : 0,
+      until: p.saleEnds ? saleDay(p.saleEnds) : null,
+    }
+  }
+  const saved = toBuy.reduce((sum, i) => sum + (saleOf(i)?.saves ?? 0), 0)
+  // Over the week's budget: by how much, and the biggest costs still to buy.
+  const total = (cost?.totalCents ?? 0) + (own?.totalCents ?? 0)
+  const over = cost && cost.budgetCents !== null ? total - cost.budgetCents : 0
+  const biggest = toBuy
+    .flatMap((i) => {
+      const p = i.ingredientId ? prices.get(i.ingredientId) : undefined
+      return p?.cents != null ? [{ name: i.name, cents: p.cents }] : []
+    })
+    .sort((a, b) => b.cents - a.cents)
+    .slice(0, 3)
   // By aisle at the user's store; anything to buy elsewhere (the market, a
   // bakery) under that place's name.
   const placeName = new Map(places.map((p) => [p.id, p.name] as const))
@@ -426,6 +447,7 @@ export function ListPage({
   const row = (i: ListItem) => {
     const price = i.ingredientId ? prices.get(i.ingredientId) : own?.items[i.id]
     const could = plan?.elsewhere.get(i.id)
+    const sale = saleOf(i)
     return (
       <li key={i.id} className={i.checked ? 'list-item checked' : 'list-item'}>
         <label className="list-check">
@@ -441,6 +463,14 @@ export function ListPage({
             {i.amount && <span className="muted small"> · {i.amount}</span>}
             {seasons && seasonOf(seasons, i.ingredientId, month) === 'in' && (
               <span className="small in-season"> · in season</span>
+            )}
+            {sale && !i.checked && (
+              <span className="small on-sale">
+                {' '}
+                · sale
+                {sale.saves > 0 && `, save ${dollars(sale.saves)}`}
+                {sale.until && ` until ${sale.until}`}
+              </span>
             )}
           </span>
         </label>
@@ -594,6 +624,9 @@ export function ListPage({
             With {dollars(own.totalCents)} for items you added
           </p>
         )}
+        {saved > 0 && (
+          <p className="small">Saving {dollars(saved)} on sales this week</p>
+        )}
         {atLocal.size > 0 && (
           <p className="small">
             {atLocal.size} item{atLocal.size === 1 ? '' : 's'} from local places
@@ -608,6 +641,20 @@ export function ListPage({
           />
         </div>
       </section>
+      {over > 0 && (
+        <section className="over-budget" aria-label="Over budget">
+          <p>
+            <strong>{dollars(over)} over your budget.</strong>{' '}
+            {biggest.length > 0 &&
+              `The biggest costs: ${biggest
+                .map((b) => `${b.name} ${dollars(b.cents)}`)
+                .join(', ')}.`}
+          </p>
+          <Link to="/plan" className="small">
+            Swap a recipe for a cheaper one on the plan
+          </Link>
+        </section>
+      )}
       <PendingNotice entries={waiting} onReview={() => setReviewing(true)} />
       {reviewing && (
         <ReviewSheet
@@ -975,4 +1022,11 @@ function SizePicker({
       ))}
     </div>
   )
+}
+
+/** "Sat" for a sale's last day ("YYYY-MM-DD"). */
+function saleDay(iso: string): string {
+  return new Date(`${iso}T12:00`).toLocaleDateString('en-US', {
+    weekday: 'short',
+  })
 }
