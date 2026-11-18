@@ -2698,3 +2698,13 @@ button.heart[aria-pressed='true'] {
   margin: 0;
   text-transform: capitalize;
 }
+
+/* Sign in with Google (TYL-48), and the "or" before the email form. */
+.sign-in .google {
+  width: 100%;
+}
+
+.sign-in .or {
+  margin: 0.25rem 0;
+  text-align: center;
+}
