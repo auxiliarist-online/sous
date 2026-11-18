@@ -2647,3 +2647,54 @@ button.heart[aria-pressed='true'] {
 .over-budget a {
   color: var(--color-brown-ink);
 }
+
+/* The Seasonal page (TYL-90): a card per item in season. */
+.seasonal-markets {
+  margin: 0 0 1rem;
+}
+
+.seasonal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seasonal-list h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  font-size: 20px;
+  text-transform: capitalize;
+}
+
+.seasonal-list h3 svg {
+  color: var(--color-accent);
+}
+
+.seasonal-list .small {
+  margin: 0.25rem 0 0;
+}
+
+.seasonal-recipes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seasonal-recipes li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.seasonal-next {
+  margin: 0;
+  text-transform: capitalize;
+}

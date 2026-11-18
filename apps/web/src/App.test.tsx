@@ -68,6 +68,7 @@ const library = (
   savePreferences: vi.fn(async () => {}),
   options: vi.fn(async () => ({ diets: [], cuisines: [] })),
   localPlaces: vi.fn(async () => []),
+  seasonalRecipes: vi.fn(async () => new Map()),
   favoritePlaces: vi.fn(async () => []),
   setFavoritePlace: vi.fn(async () => {}),
   localPreferences: vi.fn(async () => ({})),

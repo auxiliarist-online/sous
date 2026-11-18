@@ -12,7 +12,7 @@ export interface BrowseApi extends QuickAddApi {
 type Results = BrowseResults
 
 // The quick filters: words the search already understands. ("In season"
-// isn't one yet, so it isn't offered here.)
+// opens the Seasonal page instead, TYL-90.)
 const SHORTCUTS: [string, string][] = [
   ['Under 30 min', 'under 30'],
   ['Vegetarian', 'vegetarian'],
@@ -179,6 +179,9 @@ export function Browse({ api }: { api: BrowseApi }) {
             {label}
           </button>
         ))}
+        <Link to="/seasonal" className="chip">
+          In season
+        </Link>
       </div>
       {results && results.items.length > 0 && (
         <p className="small muted">

@@ -4413,3 +4413,35 @@ describe('NHLBI recipes (TYL-42)', () => {
     ])
   })
 })
+
+describe('the Seasonal page (TYL-90)', () => {
+  const SEA = '00000000-0000-0000-0000-000000009001'
+
+  it('offers recipes for what’s in season, saved ones first, only what the user sees', async () => {
+    await db.query('insert into auth.users (id) values ($1)', [SEA])
+    const squash = await ingredient('delicata test squash (TYL-90)')
+    const salt = await ingredient('salt')
+    const soup = await recipe('Squash soup (TYL-90)', [[squash], [salt]])
+    const saved = await recipe('Squash tacos (TYL-90)', [[squash]])
+    await recipe('Someone’s squash (TYL-90)', [[squash]], {
+      visibility: 'private',
+      addedBy: ALICE,
+    })
+    await db.query(
+      'insert into user_saved_recipes (user_id, recipe_id) values ($1, $2)',
+      [SEA, saved],
+    )
+    const { rows } = await as('authenticated', SEA, () =>
+      db.query('select * from seasonal_recipes($1, 4)', [[squash]]),
+    )
+    assert.deepEqual(
+      rows.map((r) => [r.title, r.saved]),
+      [
+        ['Squash tacos (TYL-90)', true],
+        ['Squash soup (TYL-90)', false],
+      ],
+    )
+    assert.ok(rows.every((r) => r.ingredient_id === squash))
+    assert.ok(rows.some((r) => r.recipe_id === soup))
+  })
+})
