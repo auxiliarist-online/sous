@@ -408,7 +408,8 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
             <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
             Find
           </Link>
-          <SeasonalPage api={api} />
+          {/* Per account: another one signing in starts it afresh. */}
+          <SeasonalPage key={session.user.id} api={api} />
         </>
       )}
       {at.page === 'local' && (
@@ -417,7 +418,7 @@ function App({ auth = defaultAuth, libraryApi }: Props) {
             <ArrowLeft size={18} strokeWidth={2.75} aria-hidden="true" />
             This week
           </Link>
-          <LocalPage api={api} />
+          <LocalPage key={session.user.id} api={api} />
         </>
       )}
       {at.page === 'settings' && (

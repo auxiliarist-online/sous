@@ -387,13 +387,30 @@ export function ListPage({
   }
   const saved = toBuy.reduce((sum, i) => sum + (saleOf(i)?.saves ?? 0), 0)
   // Over the week's budget: by how much, and the biggest costs still to buy.
-  const total = (cost?.totalCents ?? 0) + (own?.totalCents ?? 0)
+  // A sale that ended while the list was open: back to the regular price,
+  // in the row and the total.
+  const expired = (p: {
+    onSale?: boolean
+    saleEnds?: string | null
+    regularCents?: number | null
+  }) =>
+    !!p.onSale && !!p.saleEnds && p.saleEnds < today && p.regularCents != null
+  const expiredExtra = (cost?.items ?? []).reduce(
+    (sum, p) =>
+      p.buy && p.cents != null && expired(p)
+        ? sum + p.regularCents! - p.cents
+        : sum,
+    0,
+  )
+  const total = (cost?.totalCents ?? 0) + expiredExtra + (own?.totalCents ?? 0)
   const over = cost && cost.budgetCents !== null ? total - cost.budgetCents : 0
   const biggest = toBuy
     .flatMap((i) => {
       // As the row prices it: the plan's price, or a typed item's own.
       const p = i.ingredientId ? prices.get(i.ingredientId) : own?.items[i.id]
-      return p?.cents != null ? [{ name: i.name, cents: p.cents }] : []
+      if (p?.cents == null) return []
+      const cents = 'onSale' in p && expired(p) ? p.regularCents! : p.cents
+      return [{ name: i.name, cents }]
     })
     .sort((a, b) => b.cents - a.cents)
     .slice(0, 3)
@@ -491,7 +508,11 @@ export function ListPage({
           >
             {atLocal.has(i.id) ? 'store ' : ''}
             {price.estimated ? '~' : ''}
-            {dollars(price.cents)}
+            {dollars(
+              'onSale' in price && expired(price)
+                ? price.regularCents!
+                : price.cents,
+            )}
           </span>
         )}
         <button
@@ -610,7 +631,7 @@ export function ListPage({
             <span>
               <strong>
                 {cost.estimated || ownEstimated ? '~' : ''}
-                {dollars(cost.totalCents + (own?.totalCents ?? 0))}
+                {dollars(total)}
               </strong>
               {cost.budgetCents !== null && (
                 <span className="small">

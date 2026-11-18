@@ -1304,8 +1304,12 @@ describe('sales and the budget on the list (TYL-22)', () => {
         now={new Date(2026, 9, 18, 9)}
       />,
     )
-    await screen.findByText('rice')
+    // Once the prices are in: no sale, the regular price, and a total that
+    // counts it ($48.00 + $1.00).
+    await screen.findByText('$2.50')
     expect(screen.queryByText(/sale, save/)).toBeNull()
+    expect(screen.getByText('$3.99')).toBeInTheDocument()
+    expect(screen.getByText('~$49.00')).toBeInTheDocument()
   })
 
   it('says how far over budget, the biggest costs, and where to cut', async () => {
