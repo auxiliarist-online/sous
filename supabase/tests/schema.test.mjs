@@ -4436,7 +4436,10 @@ describe('substitutions (TYL-77)', () => {
   })
 
   it('keeps a user’s swaps per recipe, for that ingredient only', async () => {
-    const buttermilk = await ingredient('buttermilk')
+    // The seeded buttermilk, read as it is (its categories stay).
+    const buttermilk = (
+      await db.query("select id from ingredients where name = 'buttermilk'")
+    ).rows[0].id
     const stew = await recipe('Buttermilk biscuits (TYL-77)', [[buttermilk]])
     const {
       rows: [swap],
@@ -4477,10 +4480,24 @@ describe('substitutions (TYL-77)', () => {
     assert.deepEqual(d.recipe_swaps, [
       {
         recipe: 'Buttermilk biscuits (TYL-77)',
+        recipe_id: stew,
         swapped: 'buttermilk',
         for: 'whole milk',
+        swap: 'buttermilk > whole milk + lemon juice',
       },
     ])
+    // A recipe taken down keeps the user's swap in the export, by id.
+    await db.query("update recipes set status = 'removed' where id = $1", [
+      stew,
+    ])
+    const {
+      rows: [{ d: after }],
+    } = await as('authenticated', SAM, () =>
+      db.query('select export_my_data() as d'),
+    )
+    assert.equal(after.recipe_swaps[0].recipe, null)
+    assert.equal(after.recipe_swaps[0].recipe_id, stew)
+    await db.query("update recipes set status = 'active' where id = $1", [stew])
     assert.deepEqual(d.local_places, [])
 
     // The buy list gets the swap, and what it swaps in.
@@ -4615,14 +4632,19 @@ describe('fits with swaps (TYL-77)', () => {
   })
 
   it('shows them in Find, after what fits, saying how many swaps', async () => {
+    // Its own recipe: no swaps chosen, whatever ran before.
+    await recipe('Honey butter loaf (TYL-77)', [
+      [await id('butter')],
+      [await id('honey')],
+    ])
     const rows = await as(
       'authenticated',
       VI,
       async () =>
-        (await db.query("select * from search_recipes('honey butter cake')"))
+        (await db.query("select * from search_recipes('honey butter loaf')"))
           .rows,
     )
-    const cake = rows.find((r) => r.title === 'Honey butter cake (TYL-77)')
+    const cake = rows.find((r) => r.title === 'Honey butter loaf (TYL-77)')
     assert.equal(cake.fit, 'swaps')
     assert.ok(cake.why.includes('fits with 2 swaps'))
     const {

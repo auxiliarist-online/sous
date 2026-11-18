@@ -108,11 +108,15 @@ language sql stable as $$
                               from public.user_local_preferences lp
                               join public.ingredients i on i.id = lp.ingredient_id
                               where lp.user_id = auth.uid()), '[]'),
+    -- Each swap by its key ("half-and-half > whole milk + butter"): two can
+    -- share their names. A recipe the user can't see any more (removed)
+    -- keeps its swap, by id.
     'recipe_swaps', coalesce((select jsonb_agg(jsonb_build_object(
-                                'recipe', r.title, 'swapped', f.name, 'for', t.name)
+                                'recipe', r.title, 'recipe_id', us.recipe_id,
+                                'swapped', f.name, 'for', t.name, 'swap', s.key)
                               order by r.title, f.name)
                               from public.user_recipe_swaps us
-                              join public.recipes r on r.id = us.recipe_id
+                              left join public.recipes r on r.id = us.recipe_id
                               join public.ingredients f on f.id = us.from_ingredient_id
                               join public.substitutions s on s.id = us.substitution_id
                               join public.ingredients t on t.id = s.to_ingredient_id
