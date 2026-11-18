@@ -39,7 +39,7 @@ export function InstallOffer({
   }
 
   return (
-    <aside className="card install-offer" aria-label="Install Sous">
+    <aside className="install-offer" aria-label="Install Sous">
       <p>
         <strong>Install Sous on your phone</strong> for one-tap opening and your
         shopping list offline.

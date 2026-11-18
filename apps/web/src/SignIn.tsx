@@ -44,8 +44,8 @@ export function SignIn({ auth }: { auth: Auth }) {
   }
 
   return (
-    <form className="card" onSubmit={submit}>
-      <h2>Sign in</h2>
+    <form className="card screen sign-in" onSubmit={submit}>
+      <h2 className="screen-title">Sign in</h2>
       <p className="muted">We'll email you a code. No password needed.</p>
       <label htmlFor="email">Email</label>
       <input
@@ -100,8 +100,8 @@ function EnterCode({
   }
 
   return (
-    <form className="card" onSubmit={verify} aria-live="polite">
-      <h2>Check your email</h2>
+    <form className="card screen sign-in" onSubmit={verify} aria-live="polite">
+      <h2 className="screen-title">Check your email</h2>
       <p>
         We sent a code to <strong>{email}</strong>. Enter it here to sign in.
       </p>
@@ -127,7 +127,7 @@ function EnterCode({
           {error}
         </p>
       )}
-      <p className="muted small">
+      <p className="panel muted small">
         The email also has a link. On a phone, the code is better: the link may
         open in your email app instead of Sous.
       </p>
