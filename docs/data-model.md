@@ -232,8 +232,14 @@ Users get three kinds of control (TYL-32):
 ### Substitutions (TYL-77)
 
 - `substitutions` is Sous's own swap guide (`apps/api/data/substitutions.csv`, built by `apps/api/scripts/build_substitutions.py`): from one ingredient to another, with a factor (in the recipe's unit, or "1 tbsp flaxseed per egg" with `to_unit` and `per_unit`), extras used in small amounts, what it's for (any, baking, cooking), how well it works, and a note.
-- `user_recipe_swaps` holds the swap a user chose for an ingredient in a recipe (owner-only; the swap must be for that ingredient). `plan_cost_inputs()` sends them, and the buy list buys the swapped-in ingredients instead.
+- `user_recipe_swaps` holds the swap a user chose for an ingredient in a recipe (owner-only; the swap must be for that ingredient; included in Export my data). `plan_cost_inputs()` sends them, and the buy list buys the swapped-in ingredients instead.
 - `recipe_swap_fit(recipe, user)` says how many swaps make a recipe that the user's rules exclude fit, and which swaps fix each line: a swap counts only if what it brings in, extras too, clears every rule, and allergies stay strict ("may contain" never clears one). Find shows those recipes as `swaps`, after the ones that fit as they are; plan drafts and "or" lines still use `recipe_fit_for_user()` as before.
+
+### Local food directory (TYL-69)
+
+- `local_places` lists farmers markets, co-ops, local grocers, bakeries, butchers, fish markets and farm stores, starting with Buncombe County, NC. They're kept apart from `stores`, which are price sources: a local place has no prices (TYL-62), but has opening `hours` (days, times and an optional month-day season, which may wrap the new year) and what it `sells`, in terms the shopping list can match (`produce`, `eggs`, `dairy`, `meat`, `seafood`, `bread`, `honey`, `grains`, or `groceries` for a full grocery).
+- The places are entered by hand in `apps/api/data/local_places.csv` from public listings (ASAP's Local Food Guide, the places' own sites, NCDA), facts only, each with its source and the day it was checked. `apps/api/scripts/build_local_places.py` checks the file and writes a data migration that upserts by `slug`.
+- `user_local_places` holds a user's favorites (owner-only), included in Export my data.
 
 ### Crawling (TYL-26)
 
@@ -243,10 +249,10 @@ Users get three kinds of control (TYL-32):
 
 ### Access (row level security)
 
-- **Catalog** (recipes, ingredients, diets, cuisines, stores, products, shared prices): readable by anyone, written only by the API using the service role.
+- **Catalog** (recipes, ingredients, diets, cuisines, stores, local places, substitutions, products, shared prices): readable by anyone, written only by the API using the service role.
 - **Crawler** (`crawl_pages`, `crawl_runs`): RLS with no policies, so only the service role can see them.
 - **Recipes:** anyone sees public `active` ones; users also see recipes they added. Ingredient lines, cuisines and diet labels follow their recipe.
-- **User data** (profile, favorites, plans, lists, own prices, own stores): only the owner can read or write.
+- **User data** (profile, favorites, plans, lists, own prices, own stores, favorite local places, chosen swaps): only the owner can read or write.
 
 ### Other choices
 

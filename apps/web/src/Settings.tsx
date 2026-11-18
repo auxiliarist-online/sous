@@ -325,11 +325,8 @@ export function Settings({
   }
 
   return (
-    <form className="card settings" onSubmit={submit}>
-      <Link to="/" className="small">
-        ← This week
-      </Link>
-      <h2>Your preferences</h2>
+    <form className="card screen settings" onSubmit={submit}>
+      <h2 className="screen-title">Your preferences</h2>
 
       <Section title="Diets" hint="Recipes are labelled and filtered by these.">
         <ChipGroup
@@ -486,18 +483,33 @@ export function Settings({
           zip={prefs.homeZip}
           onZip={(homeZip) => set({ homeZip })}
         />
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={prefs.localFirst}
+            onChange={(e) => set({ localFirst: e.target.checked })}
+          />{' '}
+          Suggest my favorite local places first on the shopping list
+        </label>
+        <Link to="/local" className="small">
+          Local markets, bakeries and butchers around Asheville
+        </Link>
       </Section>
 
-      <button type="submit" disabled={status === 'saving'}>
-        {status === 'saving' ? 'Saving…' : 'Save preferences'}
-      </button>
-      <p
-        aria-live="polite"
-        className={status === 'error' ? 'error' : 'muted small'}
-      >
-        {status === 'saved' && 'Saved.'}
-        {status === 'error' && "We couldn't save your preferences. Try again."}
-      </p>
+      {/* The result shows with the button, which stays in view. */}
+      <div className="settings-save">
+        <p
+          aria-live="polite"
+          className={status === 'error' ? 'error small' : 'small'}
+        >
+          {status === 'saved' && 'Saved.'}
+          {status === 'error' &&
+            "We couldn't save your preferences. Try again."}
+        </p>
+        <button type="submit" disabled={status === 'saving'}>
+          {status === 'saving' ? 'Saving…' : 'Save preferences'}
+        </button>
+      </div>
       {offer.length > 0 && (
         <KitOffer
           // A new offer starts over, all of it checked.
@@ -514,7 +526,7 @@ export function Settings({
         />
       )}
 
-      <section className="account">
+      <section className="panel account" aria-label="Your account">
         <p className="muted small">
           Signed in as <strong>{email}</strong>
         </p>
