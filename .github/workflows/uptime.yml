@@ -1,6 +1,7 @@
-# Uptime check (TYL-74): every 30 minutes, the web app and the API's health
-# check must answer. A failed run is emailed by GitHub to whoever last changed
-# this schedule (Settings → Notifications → Actions, "failed workflows only").
+# Uptime check (TYL-74): every 30 minutes, the web app, the API's health
+# check and Supabase must answer. The Supabase read also keeps the free-tier
+# project from being paused for inactivity (it pauses after 7 idle days).
+# A failed run is emailed by GitHub to whoever last changed this schedule (Settings → Notifications → Actions, "failed workflows only").
 name: Uptime
 
 on:
@@ -22,3 +23,11 @@ jobs:
           body=$(curl --fail --silent --show-error --retry 2 --retry-delay 20 --max-time 20 https://sous-tawny.vercel.app/api/health)
           echo "$body"
           [ "$body" = '{"status":"ok"}' ]
+      - name: Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl --fail --silent --show-error --retry 2 --retry-delay 20 --max-time 20 -o /dev/null \
+            -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/recipes?select=id&limit=1"
